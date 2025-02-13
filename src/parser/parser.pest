@@ -1,0 +1,106 @@
+singleQuery = { SOI ~ queryPrimary ~ EOI}
+singleDataType = { SOI ~ dataType ~ EOI}
+
+queryPrimary = {
+    selectClause
+    ~ fromClause
+}
+
+selectClause = { ^"select" ~ namedExpressionSeq}
+fromClause = { ^"from" ~ identifier }
+
+relationPrimary = { identifier ~ (^"as"? ~ !mainKeyword ~ identifier)? }
+
+namedExpressionSeq = { namedExpression ~ ("," ~ namedExpression)*}
+namedExpression = {
+    expression ~ (^"as")?  ~ !mainKeyword  ~ identifier
+    | expression
+}
+expression = { valueExpression }
+
+/*
+predicate
+    : NOT? kind=BETWEEN lower=valueExpression AND upper=valueExpression
+    | NOT? kind=IN '(' expression (',' expression)* ')'
+    | NOT? kind=RLIKE pattern=valueExpression
+    | NOT? kind=LIKE quantifier=(ANY | SOME | ALL) ('('')' | '(' expression (',' expression)* ')')
+    | NOT? kind=LIKE pattern=valueExpression (ESCAPE escapeChar=STRING)?
+    | IS NOT? kind=NULL
+    | IS NOT? kind=(TRUE | FALSE | UNKNOWN)
+    ;
+*/
+
+valueExpression = {
+   unaryExpression
+    | comparisonExpression
+    | primaryExpression
+}
+
+unaryExpression = { (MINUS | PLUS | TILDE) ~ valueExpression }
+
+primaryExpression = {
+    functionCall
+    | constant
+    | columnReference
+}
+
+comparisonExpression = {"(" ~  valueExpression ~ comparisonOperator ~ valueExpression ~ ")" }
+
+columnReference = { identifier }
+
+functionCall = {
+    identifier ~ functionArgs
+}
+
+functionArgs = {
+    "(" ~ (expression ~ ("," ~ expression)*)? ~ ")"
+}
+
+dataType = {
+    arrayDataType
+    | structDataType
+    | primitiveDataType
+}
+arrayDataType = { ^"array" ~ "<"  ~ dataType ~ ">" }
+structDataType = { ^"struct" ~ "<"  ~ complexColType ~ ("," ~ complexColType)* ~ ">" }
+primitiveDataType = { identifier }
+complexColType = { identifier ~ ":" ~ dataType }
+
+constant = { NULL | number | STRING }
+
+qualifiedName = { identifier ~ ("." ~ identifier)* }
+identifier = {unquotedIdentifier | quotedIdentifier}
+unquotedIdentifier = @{ (ASCII_ALPHA | ASCII_DIGIT | "_")+ } // [a-zA-Z0-9_]+
+quotedIdentifier = { "`" ~ (!"`" ~ ANY)* ~ "`"}
+
+number = @{
+    MINUS?
+    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+    ~ ("." ~ ASCII_DIGIT*)?
+}
+
+booleanValue = { ^"true" | ^"false" }
+STRING = ${
+    "'" ~ (!"'" ~ ANY)*  ~ "'"
+    | "\"" ~ (!"\"" ~ ANY)*  ~ "\""
+}
+
+NULL = { ^"null" }
+MINUS = { "-" }
+PLUS = { "+" }
+TILDE = { "~" }
+
+comparisonOperator = { EQ | NEQ | NEQJ | NSEQ | LT | LTE | GT | GTE  }
+EQ = { "=" | "=="}
+NEQ = { "<>"}
+NEQJ = { "!="}
+NSEQ = { "<=>"}
+LT = { "<" }
+LTE = { "<=" | "!>"}
+GT = { ">" }
+GTE = { ">=" | "!<"}
+
+mainKeyword = { ^"from" | ^"where" | ^"order" }
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
