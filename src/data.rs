@@ -39,9 +39,48 @@ pub enum Value {
     Array(Arc<Vec<Value>>),
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Null => write!(f, "null"),
+            Value::Int(v) => write!(f, "{v}"),
+            Value::Long(v) => write!(f, "{v}"),
+            Value::Float(v) => write!(f, "{v}"),
+            Value::Double(v) => write!(f, "{v}"),
+            Value::String(v) => write!(f, "'{v}'"),
+            Value::Boolean(v) => write!(f, "{v}"),
+            Value::Binary(v) => {
+                write!(f, "[")?;
+                let mut first = true;
+                for x in v.as_ref() {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{x}")?;
+                }
+                write!(f, "]")
+            },
+            Value::Struct(v) => write!(f, "{v}"),
+            Value::Array(v) => {
+                write!(f, "[")?;
+                let mut first = true;
+                for x in v.as_ref() {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{x}")?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
+}
+
 impl Value {
-    pub fn string(s: &str) -> Self {
-        Value::String(Arc::new(s.to_string()))
+    pub fn string(s: impl Into<String>) -> Self {
+        Value::String(Arc::new(s.into()))
     }
     pub fn int(i: i32) -> Self {
         Value::Int(i)
@@ -225,7 +264,7 @@ impl PartialOrd for Value {
     }
 }
 
-pub trait Row: Debug + Send + Sync {
+pub trait Row: Debug + Display + Send + Sync {
     fn size(&self) -> usize;
     fn len(&self) -> usize;
     fn is_null(&self, i: usize) -> bool;
@@ -241,6 +280,18 @@ pub trait Row: Debug + Send + Sync {
     fn get_binary(&self, i: usize) -> Arc<Vec<u8>>;
     fn get_struct(&self, i: usize) -> Arc<dyn Row>;
     fn get_array(&self, i: usize) -> Arc<Vec<Value>>;
+
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        let len = self.len();
+        for i in 0..len {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", self.get(i))?;
+        }
+        write!(f, "]")
+    }
 }
 
 pub fn empty_row() -> &'static dyn Row {
@@ -264,25 +315,19 @@ impl PartialEq for dyn Row {
 
 impl PartialOrd for dyn Row {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        use Value::*;
         let len = self.len();
         if len != other.len() {
             return None;
         }
         for i in 0..len {
-            let ord = self.get(i).partial_cmp(other.get(i));
-            match ord {
-                None => {
-                    return None;
-                }
-                Some(o) => {
-                    if o != Ordering::Equal {
-                        return ord;
-                    }
-                }
+            match self.get(i).partial_cmp(other.get(i)) {
+                None => return None, // 某个元素无法比较
+                Some(Ordering::Equal) => continue, // 继续比较下一个元素
+                Some(ord) => return Some(ord), // 返回当前元素的比较结果
             }
         }
-        None
+        // 所有元素都相等
+        Some(Ordering::Equal)
     }
 }
 
@@ -303,6 +348,20 @@ pub struct GenericRow {
 impl GenericRow {
     pub fn new(values: Vec<Value>) -> GenericRow {
         GenericRow { values }
+    }
+}
+
+impl Display for GenericRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        let len = self.len();
+        for i in 0..len {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", self.get(i))?;
+        }
+        write!(f, "]")
     }
 }
 
@@ -467,6 +526,7 @@ mod tests {
         println!("Active: {}", row.get_boolean(2));
         println!("cnt: {}", row.get_int(3));
         println!("row: {:?}", row);
+        println!("row: {}", row);
 
         // 判断字段是否为 null
         println!("{}", row.is_null(0));

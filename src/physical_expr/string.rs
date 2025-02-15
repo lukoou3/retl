@@ -7,7 +7,7 @@ use crate::types::DataType;
 
 #[derive(Debug, Clone)]
 pub struct Length {
-    child: Arc<dyn PhysicalExpr>,
+    pub child: Arc<dyn PhysicalExpr>,
 }
 
 impl Length {
@@ -44,7 +44,7 @@ impl PhysicalExpr for Length {
         if value.is_null() {
             return Value::Null;
         }
-        match self.data_type() {
+        match self.child.data_type() {
             DataType::String => Value::Int(value.get_string().chars().count() as i32),
             DataType::Binary => Value::Int(value.get_binary().len() as i32),
             _ => Value::Null
@@ -107,7 +107,7 @@ impl PhysicalExpr for Substring {
 
         let str = str.get_string();
         let start = pos.get_int();
-        let count = pos.get_int();
+        let count = len.get_int();
         let (start, end) = get_true_start_end(
             str,
             start,

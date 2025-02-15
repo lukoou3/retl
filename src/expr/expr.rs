@@ -1,8 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::any::Any;
+use std::cmp::Ordering;
+use std::fmt::Debug;
+use std::hash::Hash;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::binary_expr;
+use crate::physical_expr::PhysicalExpr;
 use crate::tree_node::{Transformed, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::DataType;
 
@@ -12,27 +15,56 @@ pub enum Expr {
     BoundReference(BoundReference),
     AttributeReference(AttributeReference),
     Alias(Alias),
+    Cast(Cast),
     Literal(Literal),
     UnresolvedFunction(UnresolvedFunction),
     BinaryOperator(BinaryOperator),
     Like(Like),
     RLike(Like),
+    ScalarFunction(Box<dyn ScalarFunction>),
 }
 
 impl Expr {
+    fn data_type(&self) -> Result<DataType> {
+        match self {
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) =>
+                Err("UnresolvedException".to_string()),
+            Expr::BoundReference(b) => Ok(b.data_type.clone()),
+            Expr::AttributeReference(a) => Ok(a.data_type.clone()),
+            Expr::Alias(e) => e.child.data_type(),
+            Expr::Literal(l) => Ok(l.data_type.clone()),
+            Expr::Cast(c) => Ok(c.data_type.clone()),
+            Expr::BinaryOperator(BinaryOperator{left, op, right}) =>  match op {
+                Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo =>
+                    left.data_type(),
+                Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
+                    Ok(DataType::Boolean),
+                Operator::And =>
+                    Ok(DataType::Boolean),
+                Operator::Or =>
+                    Ok(DataType::Boolean),
+            },
+            Expr::Like(_) => Ok(DataType::Boolean),
+            Expr::RLike(_) => Ok(DataType::Boolean),
+            Expr::ScalarFunction(f) => Ok(f.data_type())
+        }
+    }
+
     pub fn children(&self) -> Vec<&Expr> {
         match self {
             Expr::UnresolvedAttribute(_)
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
             | Expr::Literal(_) => Vec::new(),
-            Expr::Alias(Alias{ child, ..}) =>
+            Expr::Alias(Alias{ child, ..})
+            | Expr::Cast(Cast{ child, ..})  =>
                 vec![child],
             Expr::BinaryOperator(BinaryOperator { left, right, .. }) =>
                 vec![left, right],
             Expr::Like(Like{expr, pattern})
             | Expr::RLike(Like{expr, pattern}) =>
                 vec![expr, pattern],
+            Expr::ScalarFunction(f) => f.args(),
             Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) =>
                 arguments.iter().map(|a| a).collect(),
         }
@@ -42,12 +74,28 @@ impl Expr {
         Expr::Alias(Alias::new(self, name.into()))
     }
 
+    pub fn cast(self, data_type: DataType) -> Expr {
+        Expr::Cast(Cast::new(self, data_type))
+    }
+
     pub fn col(ordinal: usize, data_type: DataType) -> Expr {
         Expr::BoundReference(BoundReference::new(ordinal, data_type))
     }
 
     pub fn lit(value: Value, data_type: DataType) -> Expr {
         Expr::Literal(Literal::new(value, data_type))
+    }
+
+    pub fn int_lit(v: i32) -> Expr {
+        Expr::Literal(Literal::new(Value::Int(v), DataType::Int))
+    }
+
+    pub fn long_lit(v: i64) -> Expr {
+        Expr::Literal(Literal::new(Value::Long(v), DataType::Long))
+    }
+
+    pub fn string_lit(s:impl  Into<String>) -> Expr {
+        Expr::Literal(Literal::new(Value::string(s), DataType::Long))
     }
 
     /// Return `self == other`
@@ -112,6 +160,18 @@ impl Alias {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
+pub struct Cast {
+    pub child: Box<Expr>,
+    pub data_type: DataType,
+}
+
+impl Cast {
+    pub fn new(expr: Expr, data_type: DataType) -> Self {
+        Self{child: Box::new(expr), data_type}
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub struct AttributeReference {
     pub name: String,
     pub data_type: DataType,
@@ -134,15 +194,15 @@ impl AttributeReference {
 }
 
 struct ExprIdGenerator {
-    counter: AtomicU32,
+    counter: std::sync::atomic::AtomicU32,
 }
 
 impl ExprIdGenerator {
     fn get_next_expr_id() -> u32 {
         static INSTANCE: ExprIdGenerator = ExprIdGenerator {
-            counter: AtomicU32::new(0),
+            counter: std::sync::atomic::AtomicU32::new(0),
         };
-        INSTANCE.counter.fetch_add(1, Ordering::SeqCst)
+        INSTANCE.counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -209,3 +269,69 @@ impl Like {
     }
 }
 
+pub trait ScalarFunction: Debug + CloneScalarFunction {
+    fn as_any(&self) -> &dyn Any;
+    fn name(&self) -> &str;
+    fn data_type(&self) -> DataType;
+    fn args(&self) -> Vec<&Expr>;
+    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction>;
+}
+
+pub trait CloneScalarFunction {
+    fn clone_box(&self) -> Box<dyn ScalarFunction>;
+}
+
+impl<T: ScalarFunction + Clone + 'static> CloneScalarFunction for T {
+    fn clone_box(&self) -> Box<dyn ScalarFunction> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn ScalarFunction> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
+impl PartialEq for Box<dyn ScalarFunction> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.as_any().type_id() != other.as_any().type_id() {
+            return false;
+        }
+        let args1 = self.args();
+        let args2 = other.args();
+        if args1.len() != args2.len() {
+            return false;
+        };
+        args1.iter().zip(args2.iter()).all(|(a, b)| a == b)
+    }
+}
+
+impl Eq for Box<dyn ScalarFunction> {}
+
+impl PartialOrd for Box<dyn ScalarFunction> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let args1 = self.args();
+        let args2 = other.args();
+        if args1.len() != args2.len() {
+            return None;
+        };
+        for i in 0..args1.len() {
+            match args1[i].partial_cmp(args2[i]) {
+                None => return None, // 某个元素无法比较
+                Some(Ordering::Equal) => continue, // 继续比较下一个元素
+                Some(ord) => return Some(ord), // 返回当前元素的比较结果
+            }
+        }
+        // 所有元素都相等
+        Some(Ordering::Equal)
+    }
+}
+
+impl Hash for Box<dyn ScalarFunction> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for x in self.args() {
+            x.hash(state);
+        }
+    }
+}

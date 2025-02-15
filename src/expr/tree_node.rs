@@ -17,6 +17,7 @@ impl TreeNode for Expr {
             | Expr::AttributeReference(_)
             | Expr::Literal(_) => Transformed::no(self),
             Expr::Alias(Alias{ child, name}) => f(*child)?.update_data(|e| e.alias(name)),
+            Expr::Cast(Cast{ child, data_type}) => f(*child)?.update_data(|e| e.cast(data_type)),
             Expr::BinaryOperator(BinaryOperator { left, op, right }) => (left, right)
                 .map_elements(f)?
                 .update_data(|(new_left, new_right)| {
@@ -34,6 +35,11 @@ impl TreeNode for Expr {
                 }),
             Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) =>
                 panic!("Unresolved function {}: {:?}", name, arguments),
+            Expr::ScalarFunction(func) => {
+                let args = func.args().into_iter().map(|x| x.clone()).collect::<Vec<_>>();
+                args.map_elements(f)?
+                    .update_data(|args|  Expr::ScalarFunction(func.rewrite_args(args)))
+            },
         })
     }
 }

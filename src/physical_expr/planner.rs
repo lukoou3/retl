@@ -1,7 +1,8 @@
+use std::any::Any;
 use std::sync::Arc;
 use chrono::Utc;
 use crate::expr::{self, Expr};
-use crate::physical_expr::{And, BinaryArithmetic, BinaryComparison, BoundReference, Like, Literal, Or, PhysicalExpr, RLike};
+use crate::physical_expr::*;
 use crate::{Operator, Result};
 
 pub fn create_physical_expr(
@@ -14,6 +15,8 @@ pub fn create_physical_expr(
             create_physical_expr(child),
         Expr::Literal(expr::Literal{value, data_type}) =>
             Ok(Arc::new(Literal::new(value.clone(), data_type.clone()))),
+        Expr::Cast(expr::Cast{child, data_type}) =>
+            Ok(Arc::new(Cast::new(create_physical_expr(child)?, data_type.clone()))),
         Expr::BinaryOperator(expr::BinaryOperator{left, op, right}) => match op {
             Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo => {
                 let l = create_physical_expr(left)?;
@@ -31,6 +34,16 @@ pub fn create_physical_expr(
             Ok(Arc::new(Like::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
         Expr::RLike(expr::Like{expr, pattern}) =>
             Ok(Arc::new(RLike::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
+        Expr::ScalarFunction(func) => {
+            let any = func.as_any();
+            if let Some(expr::Substring{str, pos, len}) = any.downcast_ref::<expr::Substring>() {
+                Ok(Arc::new(Substring::new(create_physical_expr(str)?, create_physical_expr(pos)?, create_physical_expr(len)?)))
+            } else if let Some(expr::Length{child}) = any.downcast_ref::<expr::Length>() {
+                Ok(Arc::new(Length::new(create_physical_expr(child)?)))
+            } else {
+                Err(format!("Not implemented:{:?}", func))
+            }
+        },
         _ => Err(format!("Not implemented:{:?}", e)),
     }
 
@@ -79,4 +92,43 @@ mod tests {
         println!("time:{}", end - start);
     }
 
+    #[test]
+    fn test_create_scalar_func_physical_expr() {
+        let col1 = Expr::col(0, DataType::String);
+        let expr = Expr::ScalarFunction(Box::new(expr::Substring::new(Box::new(col1.clone()), Box::new(Expr::int_lit(2)), Box::new(Expr::int_lit(3)))));
+        let expr2 = Expr::ScalarFunction(Box::new(expr::Length::new(Box::new(col1.clone()))));
+        println!("{:#?}", expr);
+        println!("{:#?}", expr2);
+        let expr = create_physical_expr(&expr).unwrap();
+        let expr2 = create_physical_expr(&expr2).unwrap();
+        println!("{:#?}", expr);
+        println!("{:#?}", expr2);
+
+        let mut row:Box<dyn Row> = Box::new(GenericRow::new(vec![Value::string("123456") ]));
+        let rst = expr.eval(&*row);
+        let rst2 = expr2.eval(&*row);
+        println!("row:{}", &*row);
+        println!("rst:{}", rst);
+        println!("rst2:{}", rst2);
+        row.update(0, Value::string("12"));
+        let rst = expr.eval(&*row);
+        let rst2 = expr2.eval(&*row);
+        println!("row:{}", &*row);
+        println!("rst:{}", rst);
+        println!("rst2:{}", rst2);
+
+        row.update(0, Value::string(""));
+        let rst = expr.eval(&*row);
+        let rst2 = expr2.eval(&*row);
+        println!("row:{}", &*row);
+        println!("rst:{}", rst);
+        println!("rst2:{}", rst2);
+
+        row.update(0, Value::string("一二三四五六"));
+        let rst = expr.eval(&*row);
+        let rst2 = expr2.eval(&*row);
+        println!("row:{}", &*row);
+        println!("rst:{}", rst);
+        println!("rst2:{}", rst2);
+    }
 }
