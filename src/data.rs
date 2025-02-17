@@ -349,6 +349,16 @@ impl GenericRow {
     pub fn new(values: Vec<Value>) -> GenericRow {
         GenericRow { values }
     }
+
+    pub fn new_with_size(size: usize) -> GenericRow {
+        let mut values = Vec::with_capacity(size);
+        values.resize(size, Value::Null);
+        GenericRow { values }
+    }
+
+    pub fn fill_null(&mut self) {
+        self.values.fill(Value::Null);
+    }
 }
 
 impl Display for GenericRow {
@@ -474,6 +484,46 @@ impl Row for GenericRow {
         } else {
             EMPTY_VALUES.clone()
         }
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for Value {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>
+    {
+        struct ValueVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ValueVisitor {
+            type Value = Value;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("any valid JSON value")
+            }
+
+            #[inline]
+            fn visit_bool<E>(self, value: bool) -> Result<Value, E> {
+                Ok(Value::Boolean(value))
+            }
+
+            #[inline]
+            fn visit_i64<E>(self, value: i64) -> Result<Value, E> {
+                Ok(Value::long(value))
+            }
+
+            #[inline]
+            fn visit_u64<E>(self, value: u64) -> Result<Value, E> {
+                Ok(Value::long(value as i64))
+            }
+
+            #[inline]
+            fn visit_f64<E>(self, value: f64) -> Result<Value, E> {
+                Ok(Value::double(value))
+            }
+
+        }
+
+        deserializer.deserialize_any(ValueVisitor)
     }
 }
 

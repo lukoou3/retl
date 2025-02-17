@@ -7,5 +7,8 @@ pub mod expr;
 pub mod physical_expr;
 pub mod analysis;
 pub mod logical_plan;
+pub mod connector;
+pub mod transform;
+pub mod format;
 
 pub use common::*;

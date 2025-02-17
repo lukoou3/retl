@@ -67,6 +67,12 @@ pub struct Schema {
     pub fields: Vec<Field>,
 }
 
+impl Schema {
+    pub fn new(fields: Vec<Field>) -> Schema {
+        Schema { fields }
+    }
+}
+
 impl Display for Schema {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Schema[")?;
