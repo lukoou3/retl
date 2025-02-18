@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 use crate::data::{Row, Value};
 use crate::Operator;
-use crate::physical_expr::{BoundReference, PhysicalExpr};
+use crate::physical_expr::{PhysicalExpr};
 use crate::types::DataType;
 
 pub type BinaryFunc = dyn Fn(Value, Value) -> Value + Send + Sync;

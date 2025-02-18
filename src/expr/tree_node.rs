@@ -5,7 +5,9 @@ use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursi
 impl TreeNode for Expr {
     fn apply_children<'n, F: FnMut(&'n Self) -> Result<TreeNodeRecursion>>(&'n self, mut f: F) -> Result<TreeNodeRecursion> {
         for x in self.children() {
-            f(x);
+            if f(x)? == TreeNodeRecursion::Stop {
+                return Ok(TreeNodeRecursion::Stop);
+            }
         };
         Ok(TreeNodeRecursion::Continue)
     }

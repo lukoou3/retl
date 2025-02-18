@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
 use std::fmt::{Debug, Display, Formatter};
-use crate::data::Value::{Int, Null};
 
 // static EMPTY_BINARY:Arc<Vec<u8>> = Arc::new(Vec::new());
 static EMPTY_BINARY: LazyLock<Arc<Vec<u8>>> = LazyLock::new(|| Arc::new(Vec::new()));
@@ -238,7 +237,6 @@ impl PartialEq for Value {
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         use Value::*;
-        use Value::*;
         match (self, other) {
             (Int(v1), Int(v2)) => v1.partial_cmp(v2),
             (Int(_), _) => None,
@@ -398,7 +396,7 @@ impl Row for GenericRow {
     }
 
     fn set_null_at(&mut self, i: usize) {
-        self.values[i] = Null;
+        self.values[i] = Value::Null;
     }
 
     fn update(&mut self, i: usize, value: Value) {

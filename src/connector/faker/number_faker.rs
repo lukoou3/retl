@@ -52,7 +52,7 @@ pub struct OptionIntFaker {
 
 impl OptionIntFaker {
     pub fn new(options: Vec<i32>, random: bool) -> Self {
-        let mut options = options.into_boxed_slice();
+        let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
 }
@@ -130,7 +130,7 @@ pub struct OptionLongFaker {
 
 impl OptionLongFaker {
     pub fn new(options: Vec<i64>, random: bool) -> Self {
-        let mut options = options.into_boxed_slice();
+        let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
 }
@@ -194,7 +194,7 @@ pub struct OptionDoubleFaker {
 
 impl OptionDoubleFaker {
     pub fn new(options: Vec<f64>, random: bool) -> Self {
-        let mut options = options.into_boxed_slice();
+        let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
 }

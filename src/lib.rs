@@ -10,5 +10,6 @@ pub mod logical_plan;
 pub mod connector;
 pub mod transform;
 pub mod format;
+pub mod config;
 
 pub use common::*;

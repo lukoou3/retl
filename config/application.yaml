@@ -1,0 +1,47 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: inline
+    results: [ inline_source ]
+    schema: "id:bigint, name:string, score:int, money:int"
+    options:
+      data: |
+        [
+          {"id": 1, "name": "Alice", "score": 100, "money": 1000},
+          {"id": 2, "name": "Bob", "score": 200, "money": 2000},
+          {"id": 3, "name": "Charlie", "score": 300, "money": 3000}
+        ]
+      rows_per_second: 10
+      number_of_rows: 100
+      format: json
+
+  - type: faker
+    results: [ faker_source ]
+    schema: "id:bigint, name:string, score:int, money:int"
+    options:
+      rows_per_second: 10
+      number_of_rows: 100
+      fields: |
+        [
+          {"name": "id", "type": "int", "min": 1, "max": 100},
+          {"name": "name", "type": "string", "min": 1, "max": 10},
+          {"name": "score", "type": "int", "min": 1, "max": 100},
+          {"name": "money", "type": "int", "min": 1, "max": 100}
+        ]
+
+transforms:
+  - type: filter
+    dependencies: [ inline_source ]
+    results: [ filter ]
+    options:
+      condition: "id % 2 = 1"
+
+sinks:
+  - type: print
+    dependencies: [ filter ]
+    options:
+      mode: stdout
+      format: json

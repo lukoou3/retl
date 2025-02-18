@@ -192,7 +192,7 @@ mod test {
             Box::new(RegexStringFaker::new("12[a-z]{2,4}")),
         ];
         for f in &mut fakes {
-            f.init();
+            f.init().unwrap();
         }
         for _ in 0..30 {
             let values:Vec<_> = fakes.iter_mut().map(| f| f.gene_value()).collect();

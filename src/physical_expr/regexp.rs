@@ -1,5 +1,5 @@
 use std::any::Any;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 use std::hash::Hash;
 use std::iter::zip;
 use std::sync::Arc;

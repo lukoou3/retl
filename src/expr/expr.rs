@@ -34,7 +34,7 @@ impl Expr {
             Expr::Alias(e) => e.child.data_type(),
             Expr::Literal(l) => Ok(l.data_type.clone()),
             Expr::Cast(c) => Ok(c.data_type.clone()),
-            Expr::BinaryOperator(BinaryOperator{left, op, right}) =>  match op {
+            Expr::BinaryOperator(BinaryOperator{left, op, right:_ }) =>  match op {
                 Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo =>
                     left.data_type(),
                 Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
@@ -65,7 +65,7 @@ impl Expr {
             | Expr::RLike(Like{expr, pattern}) =>
                 vec![expr, pattern],
             Expr::ScalarFunction(f) => f.args(),
-            Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) =>
+            Expr::UnresolvedFunction(UnresolvedFunction{name: _, arguments}) =>
                 arguments.iter().map(|a| a).collect(),
         }
     }

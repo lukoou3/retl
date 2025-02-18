@@ -2,7 +2,7 @@ use std::any::Any;
 use std::hash::Hash;
 use std::sync::Arc;
 use crate::data::{Row, Value};
-use crate::physical_expr::{BinaryArithmetic, PhysicalExpr};
+use crate::physical_expr::{PhysicalExpr};
 use crate::types::DataType;
 
 #[derive(Debug, Clone)]
