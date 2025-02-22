@@ -1,10 +1,7 @@
 use std::io::Write;
-use serde_json::Serializer as JsonSerializer;
-use serde::{Serialize, Serializer};
-use crate::Result;
+use serde::Serializer;
 use crate::data::{Row, Value};
-use crate::format::Serialization;
-use crate::types::{DataType, Field, Schema};
+use crate::types::{DataType, Field};
 
 macro_rules! tri {
     ($e:expr $(,)?) => {
@@ -15,35 +12,13 @@ macro_rules! tri {
     };
 }
 
-#[derive(Debug, Clone)]
-pub struct JsonSerialization {
-    pub schema: Schema,
-    pub bytes: Vec<u8>,
-}
-
-impl JsonSerialization {
-    pub fn new(schema: Schema) -> Self {
-        Self { schema, bytes: Vec::new() }
-    }
-}
-
-impl Serialization for JsonSerialization {
-    fn serialize(&mut self, row: &dyn Row) -> Result<&[u8]> {
-        self.bytes.clear();
-        match serde_json::to_writer(&mut self.bytes, &RowWriter::new(row, &self.schema.fields)) {
-            Ok(_) => Ok(&self.bytes),
-            Err(e) => Err(e.to_string())
-        }
-    }
-}
-
-struct RowWriter<'a>{
+pub struct RowWriter<'a>{
     row: &'a dyn Row,
     fields: &'a Vec<Field>
 }
 
 impl RowWriter<'_>{
-    fn new<'a>(row: &'a dyn Row, fields: &'a Vec<Field>) -> RowWriter<'a> {
+    pub fn new<'a>(row: &'a dyn Row, fields: &'a Vec<Field>) -> RowWriter<'a> {
         RowWriter{row, fields}
     }
 }
@@ -72,7 +47,7 @@ impl serde::ser::Serialize for RowWriter<'_> {
                 DataType::Array(dt) => {
                     compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref()))?;
                 },
-                DataType::Binary => return Err(serde::ser::Error::custom("JSON does not support binary type")),
+                DataType::Binary => return Err(serde::ser::Error::custom("does not support binary type")),
             }
         }
 
@@ -147,7 +122,7 @@ impl serde::ser::Serialize for ArrayWriter<'_> {
     }
 }
 
-fn write_struct<T: Write>(serializer: &mut JsonSerializer<T>, row: &dyn Row, fields: &Vec<Field>) -> Result<()> {
+fn write_struct<T: Write>(serializer: &mut serde_json::Serializer<T>, row: &dyn Row, fields: &Vec<Field>) -> crate::Result<()> {
     use serde::ser::SerializeMap;
     if row.len() != fields.len() {
         return Err("field length mismatch".into());
@@ -181,7 +156,7 @@ fn write_struct<T: Write>(serializer: &mut JsonSerializer<T>, row: &dyn Row, fie
     compound.end().map_err(|e| e.to_string())
 }
 
-fn write_array<T: Write>(serializer: &mut JsonSerializer<T>, array: &Vec<Value>, data_type: &DataType) -> Result<()> {
+fn write_array<T: Write>(serializer: &mut serde_json::Serializer<T>, array: &Vec<Value>, data_type: &DataType) -> crate::Result<()> {
     use serde::ser::SerializeSeq;
     let mut compound = tri!(serializer.serialize_seq(None));
 
@@ -233,14 +208,14 @@ fn write_array<T: Write>(serializer: &mut JsonSerializer<T>, array: &Vec<Value>,
 }
 
 trait ValueWriter {
-    fn write<T: Write>(&self, serializer: &mut JsonSerializer<T>, row: &dyn Row, i: usize) -> Result<()>;
+    fn write<T: Write>(&self, serializer: &mut serde_json::Serializer<T>, row: &dyn Row, i: usize) -> crate::Result<()>;
 }
 
 #[derive(Debug, Clone)]
 struct IntWriter;
 
 impl ValueWriter for IntWriter {
-    fn write<T: Write>(&self, serializer: &mut JsonSerializer<T>, row: &dyn Row, i: usize) -> Result<()> {
+    fn write<T: Write>(&self, serializer: &mut serde_json::Serializer<T>, row: &dyn Row, i: usize) -> crate::Result<()> {
         serializer.serialize_i32(row.get_int(i)).map_err(|e| e.to_string())
     }
 }
@@ -249,7 +224,7 @@ impl ValueWriter for IntWriter {
 struct LongWriter;
 
 impl ValueWriter for LongWriter {
-    fn write<T: Write>(&self, serializer: &mut JsonSerializer<T>, row: &dyn Row, i: usize) -> Result<()> {
+    fn write<T: Write>(&self, serializer: &mut serde_json::Serializer<T>, row: &dyn Row, i: usize) -> crate::Result<()> {
         serializer.serialize_i64(row.get_long(i)).map_err(|e| e.to_string())
     }
 }
@@ -278,7 +253,7 @@ mod tests {
         ]));
         let mut bytes = Vec::new();
         for i in 0..10 {
-            let mut serializer = JsonSerializer::new(&mut bytes);
+            let mut serializer = serde_json::Serializer::new(&mut bytes);
             row.update(0, Value::long(i));
             write_struct(&mut serializer, row.as_ref(), &fields).unwrap();
             println!("{}", std::str::from_utf8(&bytes).expect("Invalid UTF-8 data"));
@@ -318,7 +293,7 @@ mod tests {
         let mut bytes = Vec::new();
         let len = 100;
         for i in 0..len {
-            let mut serializer = JsonSerializer::new(&mut bytes);
+            let mut serializer = serde_json::Serializer::new(&mut bytes);
             row.update(0, Value::long(i));
             write_struct(&mut serializer, row.as_ref(), &fields).unwrap();
             if len - i <= 5 {
@@ -330,39 +305,4 @@ mod tests {
 
     }
 
-    #[test]
-    fn test_json_serialization() {
-        let fields = vec![
-            Field::new("id", DataType::Long),
-            Field::new("name", DataType::String),
-            Field::new("age", DataType::Int),
-            Field::new("score", DataType::Double),
-            Field::new("struct", DataType::Struct(Fields(vec![
-                Field::new("id", DataType::Long),
-                Field::new("name", DataType::String),
-            ]))),
-            Field::new("array", DataType::Array(Box::new(DataType::Long))),
-        ];
-        let mut  serialization = JsonSerialization::new(Schema { fields });
-        let mut row: Box<dyn Row> = Box::new(GenericRow::new(vec![
-            Value::long(1),
-            Value::string("莫南"),
-            Value::int(18),
-            Value::double(60.0),
-            Value::Struct(Arc::new( GenericRow::new(vec![
-                Value::long(2),
-                Value::string("燕青丝"),
-            ]))),
-            Value::Array(Arc::new( vec![Value::long(1), Value::long(2), Value::long(3),] ))
-        ]));
-        let len = 100;
-        for i in 0..len {
-            row.update(0, Value::long(i));
-            let s = serialization.serialize(row.as_ref()).unwrap();
-            if len - i <= 5 {
-                println!("{}", std::str::from_utf8(s).expect("Invalid UTF-8 data"));
-                // println!("{}", String::from_utf8(bytes.clone()).unwrap());
-            }
-        }
-    }
 }

@@ -9,7 +9,8 @@ pub mod analysis;
 pub mod logical_plan;
 pub mod connector;
 pub mod transform;
-pub mod format;
+pub mod codecs;
 pub mod config;
+pub mod execution;
 
 pub use common::*;

@@ -9,13 +9,13 @@ use rand_regex::Regex;
 
 #[derive(Debug, Clone)]
 pub struct OptionStringFaker {
-    options: Box<[Arc<String>]>,
+    options: Box<[Value]>,
     random: bool,
     index: usize,
 }
 
 impl OptionStringFaker {
-    pub fn new(options: Vec<Arc<String>>, random: bool) -> Self {
+    pub fn new(options: Vec<Value>, random: bool) -> Self {
         let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
@@ -29,17 +29,17 @@ impl Faker for OptionStringFaker {
         if self.options.len() == 0 {
             Value::Null
         } else if self.options.len() == 1 {
-            Value::String(self.options[0].clone())
+            self.options[0].clone()
         } else {
             if !self.random {
                 if self.index == self.options.len() {
                     self.index = 0;
                 }
-                let value = Value::String(self.options[self.index].clone());
+                let value = self.options[self.index].clone();
                 self.index += 1;
                 value
             } else {
-                Value::String(self.options[rand::thread_rng().gen_range(0..self.options.len())].clone())
+                self.options[rand::thread_rng().gen_range(0..self.options.len())].clone()
             }
         }
     }
@@ -111,6 +111,7 @@ impl Faker for RegexStringFaker {
 
 #[cfg(test)]
 mod test {
+    use crate::data::Value;
     use std::sync::Arc;
     use itertools::Itertools;
     use rand::distr::Iter;
@@ -118,7 +119,7 @@ mod test {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use crate::connector::faker::Faker;
-    use crate::connector::faker::string_faker::{CharsStringFaker, OptionStringFaker, RegexStringFaker};
+    use crate::connector::faker::string::{CharsStringFaker, OptionStringFaker, RegexStringFaker};
 
     #[test]
     fn test_rand_regex() {
@@ -185,7 +186,7 @@ mod test {
     #[test]
     fn test_string_faker() {
         let mut fakes:Vec<Box<dyn Faker>> = vec![
-            Box::new(OptionStringFaker::new(vec![Arc::new("ab".to_string()), Arc::new("12".to_string()), Arc::new("哈哈".to_string())], true)),
+            Box::new(OptionStringFaker::new(vec![Value::string("ab"), Value::string("12"), Value::string("哈哈")], true)),
             Box::new(CharsStringFaker::new(vec!['a', 'b', 'c', 'd', 'e', 'f', 'g'], 4)),
             Box::new(CharsStringFaker::new("123456".chars().collect(), 4)),
             Box::new(RegexStringFaker::new("12[a-z]{2}")),

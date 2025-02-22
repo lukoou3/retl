@@ -17,7 +17,7 @@ pub struct Cast {
 
 impl Cast {
     pub fn new(child: Arc<dyn PhysicalExpr>, data_type: DataType) -> Self {
-        let cast = get_cast_func(child.data_type(), data_type.clone());
+        let cast = Arc::from(get_cast_func(child.data_type(), data_type.clone()));
         Cast { child, data_type,  cast}
     }
 }
@@ -200,47 +200,47 @@ fn boolean_to_double(v: Value) -> Value {
     }
 }
 
-fn get_cast_func(from: DataType, to: DataType) -> Arc<CastFunc> {
+pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
     match to {
-        dt if dt == from => Arc::new(identity),
+        dt if dt == from => Box::new(identity),
         DataType::String => match from {
-            DataType::Int => Arc::new(int_to_string),
-            DataType::Long => Arc::new(long_to_string),
-            DataType::Float => Arc::new(float_to_string),
-            DataType::Double => Arc::new(double_to_string),
-            DataType::Boolean => Arc::new(boolean_to_string),
-            _ =>  Arc::new(value_to_string),
+            DataType::Int => Box::new(int_to_string),
+            DataType::Long => Box::new(long_to_string),
+            DataType::Float => Box::new(float_to_string),
+            DataType::Double => Box::new(double_to_string),
+            DataType::Boolean => Box::new(boolean_to_string),
+            _ =>  Box::new(value_to_string),
         },
         DataType::Int => match from {
-            DataType::Long => Arc::new(long_to_int),
-            DataType::Float => Arc::new(float_to_int),
-            DataType::Double => Arc::new(double_to_int),
-            DataType::String => Arc::new(string_to_int),
-            DataType::Boolean => Arc::new(boolean_to_int),
+            DataType::Long => Box::new(long_to_int),
+            DataType::Float => Box::new(float_to_int),
+            DataType::Double => Box::new(double_to_int),
+            DataType::String => Box::new(string_to_int),
+            DataType::Boolean => Box::new(boolean_to_int),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
         DataType::Long => match from {
-            DataType::Int => Arc::new(int_to_long),
-            DataType::Float => Arc::new(float_to_long),
-            DataType::Double => Arc::new(double_to_long),
-            DataType::String => Arc::new(string_to_long),
-            DataType::Boolean => Arc::new(boolean_to_long),
+            DataType::Int => Box::new(int_to_long),
+            DataType::Float => Box::new(float_to_long),
+            DataType::Double => Box::new(double_to_long),
+            DataType::String => Box::new(string_to_long),
+            DataType::Boolean => Box::new(boolean_to_long),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
         DataType::Float => match from {
-            DataType::Int => Arc::new(int_to_float),
-            DataType::Long => Arc::new(long_to_float),
-            DataType::Double => Arc::new(double_to_float),
-            DataType::String => Arc::new(string_to_float),
-            DataType::Boolean => Arc::new(boolean_to_float),
+            DataType::Int => Box::new(int_to_float),
+            DataType::Long => Box::new(long_to_float),
+            DataType::Double => Box::new(double_to_float),
+            DataType::String => Box::new(string_to_float),
+            DataType::Boolean => Box::new(boolean_to_float),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
         DataType::Double => match from {
-            DataType::Int => Arc::new(int_to_double),
-            DataType::Long => Arc::new(long_to_double),
-            DataType::Float => Arc::new(float_to_double),
-            DataType::String => Arc::new(string_to_double),
-            DataType::Boolean => Arc::new(boolean_to_double),
+            DataType::Int => Box::new(int_to_double),
+            DataType::Long => Box::new(long_to_double),
+            DataType::Float => Box::new(float_to_double),
+            DataType::String => Box::new(string_to_double),
+            DataType::Boolean => Box::new(boolean_to_double),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
         _ =>  panic!("Cannot cast {from} to {to}.")

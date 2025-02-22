@@ -1,13 +1,16 @@
 use std::fmt::Debug;
 use crate::data::Row;
+use crate::execution::Collector;
 use crate::Result;
+use crate::types::Schema;
 
 pub trait Source: Debug + CloneSource {
     fn name(&self) -> &str;
+    fn schema(&self) -> &Schema;
     fn open(&mut self) -> Result<()> {
         Ok(())
     }
-    fn run(&mut self, out: &dyn Collector);
+    fn run(&mut self, out: &mut dyn Collector);
 
     fn close(&mut self) -> Result<()> {
         Ok(())
@@ -24,14 +27,4 @@ impl<T: Source + Clone + 'static> CloneSource for T {
     }
 }
 
-pub trait Collector{
-    fn collect(&self, row: &dyn Row);
-}
 
-pub struct PrintCollector;
-
-impl Collector for PrintCollector {
-    fn collect(&self, row: &dyn Row) {
-        println!("{}", row);
-    }
-}

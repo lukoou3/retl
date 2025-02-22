@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use crate::Result;
-use crate::connector::Collector;
 use crate::data::Row;
+use crate::execution::Collector;
 
 pub trait Transform: Debug {
     fn name(&self) -> &str;

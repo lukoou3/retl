@@ -5,5 +5,4 @@ pub mod print;
 
 pub use source::*;
 pub use sink::*;
-pub use print::*;
 

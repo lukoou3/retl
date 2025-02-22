@@ -3,26 +3,26 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::vec;
 use serde::de::MapAccess;
-use serde::Deserializer;
+use serde::Deserializer as SerdeDeserializer;
 use serde_json::Value as JsonValue;
 use crate::Result;
 use crate::data::{GenericRow, Row, Value};
-use crate::format::Deserialization;
+use crate::codecs::Deserializer;
 use crate::types::{DataType, Field, Fields, Schema};
 
 #[derive(Debug, Clone)]
-pub struct JsonDeserialization {
+pub struct JsonDeserializer {
     pub row_visitor: RowVisitor,
 }
 
-impl JsonDeserialization {
+impl JsonDeserializer {
     pub fn new(schema: Schema) -> Self {
         let row_visitor = RowVisitor::new(schema.fields);
-        JsonDeserialization{ row_visitor }
+        JsonDeserializer { row_visitor }
     }
 }
 
-impl Deserialization for JsonDeserialization {
+impl Deserializer for JsonDeserializer {
     fn deserialize(&mut self, bytes: &[u8]) -> Result<&dyn Row> {
         self.row_visitor.row.fill_null();
         let mut de = serde_json::Deserializer::from_slice(bytes);
@@ -240,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialization() {
+    fn test_deserializer() {
         let text = r#"
         {
             "id": 1,
@@ -262,8 +262,8 @@ mod tests {
             ]))),
             Field::new("array", DataType::Array(Box::new(DataType::Long))),
         ];
-        let mut deserialization = JsonDeserialization::new(Schema::new(fields));
-        match deserialization.deserialize(text.as_bytes()) {
+        let mut deserializer = JsonDeserializer::new(Schema::new(fields));
+        match deserializer.deserialize(text.as_bytes()) {
             Ok(row) => {
                 println!("row: {:?}", row);
                 println!("row: {}", row);

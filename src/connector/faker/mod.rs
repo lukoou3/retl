@@ -1,9 +1,12 @@
-pub mod faker_source;
+pub mod source;
 pub mod faker;
-pub mod number_faker;
-pub mod string_faker;
+pub mod number;
+pub mod string;
+mod parse;
+mod config;
 
-pub use faker_source::*;
+pub use source::*;
+pub use config::*;
 pub use faker::*;
-pub use number_faker::*;
-pub use string_faker::*;
+pub use number::*;
+pub use string::*;

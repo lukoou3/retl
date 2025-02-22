@@ -45,13 +45,13 @@ impl Faker for RangeIntFaker {
 
 #[derive(Debug, Clone)]
 pub struct OptionIntFaker {
-    options: Box<[i32]>,
+    options: Box<[Value]>,
     random: bool,
     index: usize,
 }
 
 impl OptionIntFaker {
-    pub fn new(options: Vec<i32>, random: bool) -> Self {
+    pub fn new(options: Vec<Value>, random: bool) -> Self {
         let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
@@ -65,17 +65,17 @@ impl Faker for OptionIntFaker {
         if self.options.len() == 0 {
             Value::Null
         } else if self.options.len() == 1 {
-            Value::Int(self.options[0])
+            self.options[0].clone()
         } else {
             if !self.random {
                 if self.index == self.options.len() {
                     self.index = 0;
                 }
-                let value = Value::Int(self.options[self.index]);
+                let value = self.options[self.index].clone();
                 self.index += 1;
                 value
             } else {
-                Value::Int(self.options[rand::thread_rng().gen_range(0..self.options.len())])
+                self.options[rand::thread_rng().gen_range(0..self.options.len())].clone()
             }
         }
     }
@@ -123,13 +123,13 @@ impl Faker for RangeLongFaker {
 
 #[derive(Debug, Clone)]
 pub struct OptionLongFaker {
-    options: Box<[i64]>,
+    options: Box<[Value]>,
     random: bool,
     index: usize,
 }
 
 impl OptionLongFaker {
-    pub fn new(options: Vec<i64>, random: bool) -> Self {
+    pub fn new(options: Vec<Value>, random: bool) -> Self {
         let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
@@ -144,17 +144,17 @@ impl Faker for OptionLongFaker {
         if self.options.len() == 0 {
             Value::Null
         } else if self.options.len() == 1 {
-            Value::Long(self.options[0])
+            self.options[0].clone()
         } else {
             if !self.random {
                 if self.index == self.options.len() {
                     self.index = 0;
                 }
-                let value = Value::Long(self.options[self.index]);
+                let value = self.options[self.index].clone();
                 self.index += 1;
                 value
             } else {
-                Value::Long(self.options[rand::thread_rng().gen_range(0..self.options.len())])
+                self.options[rand::thread_rng().gen_range(0..self.options.len())].clone()
             }
         }
     }
@@ -187,13 +187,13 @@ impl Faker for RangeDoubleFaker {
 
 #[derive(Debug, Clone)]
 pub struct OptionDoubleFaker {
-    options: Box<[f64]>,
+    options: Box<[Value]>,
     random: bool,
     index: usize,
 }
 
 impl OptionDoubleFaker {
-    pub fn new(options: Vec<f64>, random: bool) -> Self {
+    pub fn new(options: Vec<Value>, random: bool) -> Self {
         let options = options.into_boxed_slice();
         Self{options, random, index: 0}
     }
@@ -208,17 +208,17 @@ impl Faker for OptionDoubleFaker {
         if self.options.len() == 0 {
             Value::Null
         } else if self.options.len() == 1 {
-            Value::Double(self.options[0])
+            self.options[0].clone()
         } else {
             if !self.random {
                 if self.index == self.options.len() {
                     self.index = 0;
                 }
-                let value = Value::Double(self.options[self.index]);
+                let value = self.options[self.index].clone();
                 self.index += 1;
                 value
             } else {
-                Value::Double(self.options[rand::thread_rng().gen_range(0..self.options.len())])
+                self.options[rand::thread_rng().gen_range(0..self.options.len())].clone()
             }
         }
     }
@@ -233,15 +233,15 @@ mod test {
         let mut fakes:Vec<Box<dyn Faker>> = vec![
             Box::new(RangeIntFaker::new(0, 20, true)),
             Box::new(RangeIntFaker::new(0, 20, false)),
-            Box::new(OptionIntFaker::new(vec![1, 3, 5, 7, 9], true)),
-            Box::new(OptionIntFaker::new(vec![1, 3, 5, 7, 9], false)),
+            Box::new(OptionIntFaker::new(vec![1, 3, 5, 7, 9].into_iter().map(|x| Value::Int(x)).collect(), true)),
+            Box::new(OptionIntFaker::new(vec![1, 3, 5, 7, 9].into_iter().map(|x| Value::Int(x)).collect(), false)),
             Box::new(RangeLongFaker::new(0, 20, true)),
             Box::new(RangeLongFaker::new(0, 20, false)),
-            Box::new(OptionLongFaker::new(vec![1, 3, 5, 7, 9], true)),
-            Box::new(OptionLongFaker::new(vec![1, 3, 5, 7, 9], false)),
+            Box::new(OptionLongFaker::new(vec![1, 3, 5, 7, 9].into_iter().map(|x| Value::Long(x)).collect(), true)),
+            Box::new(OptionLongFaker::new(vec![1, 3, 5, 7, 9].into_iter().map(|x| Value::Long(x)).collect(), false)),
             Box::new(RangeDoubleFaker::new(0.0, 10000.0)),
-            Box::new(OptionDoubleFaker::new(vec![1.0, 3.0, 5.0, 7.0, 9.0], true)),
-            Box::new(OptionDoubleFaker::new(vec![1.0, 3.0, 5.0, 7.0, 9.0], false)),
+            Box::new(OptionDoubleFaker::new(vec![1.0, 3.0, 5.0, 7.0, 9.0].into_iter().map(|x| Value::Double(x)).collect(), true)),
+            Box::new(OptionDoubleFaker::new(vec![1.0, 3.0, 5.0, 7.0, 9.0].into_iter().map(|x| Value::Double(x)).collect(), false)),
         ];
         for _ in 0..30 {
             let values:Vec<_> = fakes.iter_mut().map(| f| f.gene_value()).collect();

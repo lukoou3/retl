@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::hash::Hash;
 use itertools::Itertools;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
@@ -62,14 +64,38 @@ pub struct Fields(pub Vec<Field>);
 
 
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
+#[derive(Clone, Debug)]
 pub struct Schema {
     pub fields: Vec<Field>,
+    pub name_to_index: HashMap<String, usize>,
+    pub name_to_field: HashMap<String, Field>,
 }
 
 impl Schema {
     pub fn new(fields: Vec<Field>) -> Schema {
-        Schema { fields }
+        let name_to_field = fields.iter().map(|field| (field.name.clone(), field.clone())).collect();
+        let name_to_index = fields.iter().enumerate().map(|(i, field)| (field.name.clone(), i)).collect();
+        Schema {fields, name_to_index, name_to_field }
+    }
+
+    pub fn field_names(&self) -> Vec<String> {
+        self.fields.iter().map(|field| field.name.clone()).collect()
+    }
+
+    pub fn get_filed_by_name(&self, name: &str) -> Option<&Field> {
+        self.name_to_field.get(name)
+    }
+
+    pub fn field_types(&self) -> HashMap<String, DataType> {
+        self.fields.iter().map(|field| (field.name.clone(), field.data_type.clone())).collect()
+    }
+
+    pub fn field_index(&self, name: &str) -> Option<usize> {
+        self.name_to_index.get(name).cloned()
+    }
+
+    pub fn field_type(&self, name: &str) -> Option<DataType> {
+        self.name_to_field.get(name).map(|field| field.data_type.clone())
     }
 }
 
@@ -86,6 +112,27 @@ impl Display for Schema {
     }
 }
 
+
+impl PartialEq for Schema {
+    fn eq(&self, other: &Self) -> bool {
+        self.fields == other.fields
+    }
+}
+
+impl Eq for Schema {}
+
+impl PartialOrd for Schema {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.fields.partial_cmp(&other.fields)
+    }
+}
+
+impl Hash for Schema {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.fields.hash(state);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,7 +140,7 @@ mod tests {
     #[test]
     fn test_types() {
         let fields = vec![Field::new("id", DataType::Int), Field::new("name", DataType::String)];
-        let schema = Schema { fields:fields.clone() };
+        let schema = Schema::new(fields.clone());
         println!("{:?}", schema);
         println!("{}", schema);
         let struct_type = DataType::Struct(Fields(fields.clone()));
