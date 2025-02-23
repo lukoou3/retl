@@ -47,7 +47,7 @@ impl serde::ser::Serialize for RowWriter<'_> {
                 DataType::Array(dt) => {
                     compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref()))?;
                 },
-                DataType::Binary => return Err(serde::ser::Error::custom("does not support binary type")),
+                _ => return Err(serde::ser::Error::custom(format!("does not support {} type", field.data_type))),
             }
         }
 
@@ -115,7 +115,7 @@ impl serde::ser::Serialize for ArrayWriter<'_> {
                     compound.serialize_element(&ArrayWriter::new(v.get_array().as_ref(), dt.as_ref()))?;
                 }
             },
-            DataType::Binary => return Err(serde::ser::Error::custom("JSON does not support binary type")),
+            _ => return Err(serde::ser::Error::custom(format!("does not support {} type", self.data_type))),
         }
 
         compound.end()
@@ -149,7 +149,7 @@ fn write_struct<T: Write>(serializer: &mut serde_json::Serializer<T>, row: &dyn 
                 tri!(compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref())));
                 //write_array(serializer, row.get_array(i).as_ref(), dt)?;
             },
-            DataType::Binary => return Err("not support binary".into()),
+            _ => return Err(format!("does not support {} type", field.data_type)),
         }
     }
 
@@ -201,7 +201,7 @@ fn write_array<T: Write>(serializer: &mut serde_json::Serializer<T>, array: &Vec
                 tri!(compound.serialize_element(&ArrayWriter::new(v.get_array().as_ref(), dt.as_ref())));
             }
         },
-        DataType::Binary => return Err("not support binary".into()),
+        _ => return Err(format!("does not support {} type", data_type)),
     }
 
     compound.end().map_err(|e| e.to_string())

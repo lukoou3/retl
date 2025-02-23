@@ -29,7 +29,7 @@ impl Sink for PrintSink {
         "PrintSink"
     }
 
-    fn invoke(&mut self, row: &dyn Row) {
+    fn invoke(&mut self, row: &dyn Row) -> Result<()>  {
         match self.serializer.serialize(row) {
             Ok(bytes) => match self.print_mode {
                 PrintMode::Stdout => {
@@ -62,6 +62,7 @@ impl Sink for PrintSink {
                 PrintMode::Null => {}
             }
         }
+        Ok(())
     }
 }
 

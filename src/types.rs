@@ -2,9 +2,21 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use itertools::Itertools;
+use crate::expr::AttributeReference;
+
+static NULL_TYPE: DataType = DataType::Null;
+static INT_TYPE: DataType = DataType::Int;
+static LONG_TYPE: DataType = DataType::Long;
+static FLOAT_TYPE: DataType = DataType::Float;
+static DOUBLE_TYPE: DataType = DataType::Double;
+static BOOLEAN_TYPE: DataType = DataType::Boolean;
+static STRING_TYPE: DataType = DataType::String;
+static BINARY_TYPE: DataType = DataType::Binary;
+
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum DataType {
+    Null,
     Int,
     Long,
     Float,
@@ -23,11 +35,44 @@ impl DataType {
             _ => false
         }
     }
+
+    pub fn null_type() -> &'static DataType {
+        &NULL_TYPE
+    }
+
+    pub fn int_type() -> &'static DataType {
+        &INT_TYPE
+    }
+
+    pub fn long_type() -> &'static DataType {
+        &LONG_TYPE
+    }
+
+    pub fn float_type() -> &'static DataType {
+        &FLOAT_TYPE
+    }
+
+    pub fn double_type() -> &'static DataType {
+        &DOUBLE_TYPE
+    }
+
+    pub fn string_type() -> &'static DataType {
+        &STRING_TYPE
+    }
+
+    pub fn boolean_type() -> &'static DataType {
+        &BOOLEAN_TYPE
+    }
+
+    pub fn binary_type() -> &'static DataType {
+        &BINARY_TYPE
+    }
 }
 
 impl Display for DataType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            DataType::Null => write!(f, "null"),
             DataType::Int => write!(f, "int"),
             DataType::Long => write!(f, "long"),
             DataType::Float => write!(f, "float"),
@@ -96,6 +141,10 @@ impl Schema {
 
     pub fn field_type(&self, name: &str) -> Option<DataType> {
         self.name_to_field.get(name).map(|field| field.data_type.clone())
+    }
+
+    pub fn to_attributes(&self) -> Vec<AttributeReference> {
+        self.fields.iter().map(|field| AttributeReference::new(field.name.clone(), field.data_type.clone())).collect()
     }
 }
 

@@ -247,7 +247,7 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
     }
 }
 
-pub fn can_cast(from: DataType, to: DataType) -> bool {
+pub fn can_cast(from: &DataType, to: &DataType) -> bool {
     match (from, to) {
         (from_type, to_type) if from_type == to_type => true,
         (_, DataType::String) => true,

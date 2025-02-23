@@ -10,7 +10,7 @@ pub trait Source: Debug + CloneSource {
     fn open(&mut self) -> Result<()> {
         Ok(())
     }
-    fn run(&mut self, out: &mut dyn Collector);
+    fn run(&mut self, out: &mut dyn Collector) -> Result<()>;
 
     fn close(&mut self) -> Result<()> {
         Ok(())

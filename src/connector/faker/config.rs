@@ -48,6 +48,6 @@ impl SourceProvider for FakerSourceProvider {
                 fakers.push((i, config.build()?))
             }
         }
-        Ok(Box::new(FakerSource::new(self.schema.clone(), fakers, *rows_per_second)))
+        Ok(Box::new(FakerSource::new(self.schema.clone(), fakers, *rows_per_second, *number_of_rows, *millis_per_row)))
     }
 }

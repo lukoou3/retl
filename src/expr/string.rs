@@ -1,4 +1,5 @@
 use std::any::Any;
+use crate::Result;
 use crate::expr::{Expr, ScalarFunction};
 use crate::types::DataType;
 
@@ -22,12 +23,20 @@ impl ScalarFunction for Length {
         "Length"
     }
 
-    fn data_type(&self) -> DataType {
-        DataType::Int
+    fn data_type(&self) -> &DataType {
+        DataType::int_type()
     }
 
     fn args(&self) -> Vec<&Expr> {
         vec![&self.child]
+    }
+
+    fn check_input_data_types(&self) -> Result<()> {
+        if self.child.data_type() != DataType::string_type() {
+            Err(format!("{:?} requires string type, not {}", self.child, self.child.data_type()))
+        } else {
+            Ok(())
+        }
     }
 
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
@@ -62,12 +71,24 @@ impl ScalarFunction for Substring {
         "Substring"
     }
 
-    fn data_type(&self) -> DataType {
-        DataType::String
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
     }
 
     fn args(&self) -> Vec<&Expr> {
         vec![&self.str, &self.pos, &self.len]
+    }
+
+    fn check_input_data_types(&self) -> Result<()> {
+        if self.str.data_type() != DataType::string_type() {
+            Err(format!("{:?} requires string type, not {}", self.str, self.str.data_type()))
+        } else if self.pos.data_type() != DataType::int_type() {
+            Err(format!("{:?} requires int type, not {}", self.str, self.pos.data_type()))
+        } else if self.len.data_type() != DataType::int_type() {
+            Err(format!("{:?} requires int type, not {}", self.str, self.pos.data_type()))
+        }  else {
+            Ok(())
+        }
     }
 
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {

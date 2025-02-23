@@ -32,6 +32,7 @@ predicate
 
 valueExpression = {
    unaryExpression
+    | arithmeticExpression
     | comparisonExpression
     | primaryExpression
 }
@@ -44,6 +45,7 @@ primaryExpression = {
     | columnReference
 }
 
+arithmeticExpression = {"(" ~  valueExpression ~ arithmeticOperator ~ valueExpression ~ ")" }
 comparisonExpression = {"(" ~  valueExpression ~ comparisonOperator ~ valueExpression ~ ")" }
 
 columnReference = { identifier }
@@ -66,7 +68,7 @@ structDataType = { ^"struct" ~ "<"  ~ complexColType ~ ("," ~ complexColType)* ~
 primitiveDataType = { identifier }
 complexColType = { identifier ~ ":" ~ dataType }
 
-constant = { NULL | number | STRING }
+constant = { NULL | number | booleanValue | STRING }
 
 qualifiedName = { identifier ~ ("." ~ identifier)* }
 identifier = {unquotedIdentifier | quotedIdentifier}
@@ -85,9 +87,13 @@ STRING = ${
     | "\"" ~ (!"\"" ~ ANY)*  ~ "\""
 }
 
+arithmeticOperator = { PLUS | MINUS | ASTERISK | SLASH | PERCENT }
 NULL = { ^"null" }
-MINUS = { "-" }
 PLUS = { "+" }
+MINUS = { "-" }
+ASTERISK = { "*" }
+SLASH = { "/" }
+PERCENT = { "%" }
 TILDE = { "~" }
 
 comparisonOperator = { EQ | NEQ | NEQJ | NSEQ | LT | LTE | GT | GTE  }

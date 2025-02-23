@@ -23,3 +23,9 @@ impl<T: Faker + Clone + 'static> CloneFaker for T {
         Box::new(self.clone())
     }
 }
+
+impl Clone for Box<dyn Faker> {
+    fn clone(&self) -> Box<dyn Faker> {
+        self.clone_box()
+    }
+}

@@ -1,11 +1,11 @@
 use std::any::Any;
-use std::cmp::Ordering;
+use std::cmp::{Ordering, PartialEq};
 use std::fmt::Debug;
 use std::hash::Hash;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::binary_expr;
-use crate::physical_expr::PhysicalExpr;
+use crate::physical_expr::{can_cast, PhysicalExpr};
 use crate::tree_node::{Transformed, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::DataType;
 
@@ -25,28 +25,99 @@ pub enum Expr {
 }
 
 impl Expr {
-    fn data_type(&self) -> Result<DataType> {
+    pub fn data_type(&self) -> &DataType {
         match self {
             Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) =>
-                Err("UnresolvedException".to_string()),
-            Expr::BoundReference(b) => Ok(b.data_type.clone()),
-            Expr::AttributeReference(a) => Ok(a.data_type.clone()),
+                panic!("UnresolvedException"),
+            Expr::BoundReference(b) => &b.data_type,
+            Expr::AttributeReference(a) => &a.data_type,
             Expr::Alias(e) => e.child.data_type(),
-            Expr::Literal(l) => Ok(l.data_type.clone()),
-            Expr::Cast(c) => Ok(c.data_type.clone()),
+            Expr::Literal(l) => &l.data_type,
+            Expr::Cast(c) => &c.data_type,
             Expr::BinaryOperator(BinaryOperator{left, op, right:_ }) =>  match op {
                 Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo =>
                     left.data_type(),
                 Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
-                    Ok(DataType::Boolean),
-                Operator::And =>
-                    Ok(DataType::Boolean),
-                Operator::Or =>
-                    Ok(DataType::Boolean),
+                    DataType::boolean_type(),
+                Operator::And | Operator::Or =>
+                    DataType::boolean_type(),
             },
-            Expr::Like(_) => Ok(DataType::Boolean),
-            Expr::RLike(_) => Ok(DataType::Boolean),
-            Expr::ScalarFunction(f) => Ok(f.data_type())
+            Expr::Like(_) => DataType::boolean_type(),
+            Expr::RLike(_) => DataType::boolean_type(),
+            Expr::ScalarFunction(f) => f.data_type(),
+        }
+    }
+
+    pub fn resolved(&self) -> bool {
+        match self {
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) =>
+                false,
+            _ => self.children_resolved() && self.check_input_data_types().is_ok()
+        }
+    }
+
+    pub fn children_resolved(&self) -> bool {
+        self.children().iter().all(|c| c.resolved())
+    }
+
+    pub fn check_input_data_types(&self) -> Result<()> {
+        match self {
+            Expr::UnresolvedAttribute(_)
+             | Expr::UnresolvedFunction(_)
+             | Expr::BoundReference(_)
+             | Expr::AttributeReference(_)
+             | Expr::Literal(_)
+             | Expr::Alias(_)=>
+                Ok(()),
+            Expr::Cast(Cast{child, data_type}) =>{
+                let from = child.data_type();
+                if can_cast(from, data_type) {
+                    Ok(())
+                } else {
+                    Err(format!("cannot cast {} to {}", from, data_type))
+                }
+            },
+            Expr::BinaryOperator(BinaryOperator{left, op, right}) => {
+                if left.data_type() != right.data_type() {
+                    return Err(format!("differing types in {:?}", self));
+                }
+                match op {
+                    Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo => {
+                        if !left.data_type().is_numeric_type() {
+                            Err(format!("{:?} requires numeric type, not {}", self, left.data_type()))
+                        } else if *op == Operator::Divide && left.data_type() != DataType::long_type() && left.data_type() != DataType::double_type() {
+                            Err(format!("{:?} requires long/double type, not {}", self, left.data_type()))
+                        } else {
+                            Ok(())
+                        }
+                    },
+                    Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
+                        if !left.data_type().is_numeric_type() && left.data_type() != DataType::string_type()  {
+                            Err(format!("{:?} requires numeric/string type, not {}", self, left.data_type()))
+                        } else {
+                            Ok(())
+                        },
+                    Operator::And | Operator::Or =>
+                        if left.data_type() != DataType::boolean_type() {
+                            Err(format!("{:?} requires boolean type, not {}", self, left.data_type()))
+                        } else {
+                            Ok(())
+                        },
+                }
+            },
+            Expr::Like(Like{expr, pattern})
+             | Expr::RLike(Like{expr, pattern}) => {
+                if expr.data_type() != DataType::string_type(){
+                    Err(format!("{:?} requires string type, not {}", self, expr.data_type()))
+                } else if pattern.data_type() != DataType::string_type() {
+                    Err(format!("{:?} requires string type, not {}", self, pattern.data_type()))
+                } else {
+                    Ok(())
+                }
+            },
+            Expr::ScalarFunction(f) => {
+                f.check_input_data_types()
+            },
         }
     }
 
@@ -145,6 +216,7 @@ impl BoundReference {
 pub struct Alias {
     pub child: Box<Expr>,
     pub name: String,
+    pub expr_id: u32,
 }
 
 impl Alias {
@@ -155,6 +227,15 @@ impl Alias {
         Self {
             child: Box::new(expr),
             name: name.into(),
+            expr_id: ExprIdGenerator::get_next_expr_id(),
+        }
+    }
+
+    pub fn new_with_expr_id(expr: Expr, name: impl Into<String>, expr_id: u32, )-> Self{
+        Self {
+            child: Box::new(expr),
+            name: name.into(),
+            expr_id,
         }
     }
 }
@@ -269,11 +350,12 @@ impl Like {
     }
 }
 
-pub trait ScalarFunction: Debug + CloneScalarFunction {
+pub trait ScalarFunction: Debug + Send + Sync + CloneScalarFunction {
     fn as_any(&self) -> &dyn Any;
     fn name(&self) -> &str;
-    fn data_type(&self) -> DataType;
+    fn data_type(&self) -> &DataType;
     fn args(&self) -> Vec<&Expr>;
+    fn check_input_data_types(&self) -> Result<()>;
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction>;
 }
 
