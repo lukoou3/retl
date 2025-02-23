@@ -7,10 +7,10 @@ use crate::types::Schema;
 
 #[derive(Clone, Debug, Serialize,Deserialize)]
 pub struct TransformOuter {
-    inputs: Vec<String>,
-    outputs: Vec<String>,
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
     #[serde(flatten)]
-    inner: BoxedTransformConfig,
+    pub inner: BoxedTransformConfig,
 }
 
 pub type BoxedTransformConfig = Box<dyn TransformConfig>;

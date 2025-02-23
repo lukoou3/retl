@@ -5,7 +5,6 @@ use crate::Result;
 use crate::types::Schema;
 
 pub trait Source: Debug + CloneSource {
-    fn name(&self) -> &str;
     fn schema(&self) -> &Schema;
     fn open(&mut self) -> Result<()> {
         Ok(())

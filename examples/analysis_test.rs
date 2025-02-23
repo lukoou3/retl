@@ -21,7 +21,8 @@ fn main() {
     match analyzer.analyze(plan) {
         Ok(new_plan) => {
             println!("\n{:?}", new_plan);
-            println!("\n{:?}", new_plan.output());
+            let out_schema = Schema::from_attributes(new_plan.output());
+            println!("\n{}", out_schema);
         },
         Err(e) => println!("\n{}", e)
     }

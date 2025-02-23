@@ -7,9 +7,9 @@ use crate::types::Schema;
 
 #[derive(Clone, Debug, Serialize,Deserialize)]
 pub struct SinkOuter {
-    inputs: Vec<String>,
+    pub inputs: Vec<String>,
     #[serde(flatten)]
-    inner: BoxedSinkConfig,
+    pub inner: BoxedSinkConfig,
 }
 
 pub type BoxedSinkConfig = Box<dyn SinkConfig>;

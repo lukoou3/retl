@@ -7,10 +7,10 @@ use crate::types::Schema;
 
 #[derive(Clone, Debug, Serialize,Deserialize)]
 pub struct SourceOuter {
-    outputs: Vec<String>,
-    schema: String,
+    pub outputs: Vec<String>,
+    pub schema: String,
     #[serde(flatten)]
-    inner: BoxedSourceConfig,
+    pub inner: BoxedSourceConfig,
 }
 
 pub type BoxedSourceConfig = Box<dyn SourceConfig>;

@@ -32,9 +32,20 @@ pub fn parse_query(sql: &str) -> Result<LogicalPlan> {
     }
 }
 
-pub fn parse_data_type(sql: &str) -> Result<Ast> {
+pub fn parse_data_type(sql: &str) -> Result<DataType> {
     let pair = SqlParser::parse(Rule::singleDataType, sql).map_err(|e| format!("{:?}", e))?.next().unwrap();
-    parse_ast(pair)
+    match parse_ast(pair)? {
+        Ast::DataType(dt) => Ok(dt),
+        x => Err(format!("not a data type:{:?}", x)),
+    }
+}
+
+pub fn parse_schema(sql: &str) -> Result<Schema> {
+    if let DataType::Struct(fields) =  parse_data_type(sql)? {
+        Ok(Schema::new(fields.0))
+    } else {
+        Err(format!("not a struct type: {}", sql))
+    }
 }
 
 pub fn parse_ast(pair: Pair<Rule>) -> Result<Ast> {

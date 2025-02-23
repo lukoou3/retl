@@ -53,10 +53,6 @@ impl Debug for FakerSource {
 
 
 impl Source for FakerSource  {
-    fn name(&self) -> &str {
-        "FakerSource"
-    }
-
     fn schema(&self) -> &Schema {
         &self.schema
     }

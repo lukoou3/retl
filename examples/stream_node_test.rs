@@ -20,14 +20,14 @@ fn main() {
         Field::new("in_bytes", DataType::Long),
         Field::new("out_bytes", DataType::Long),
     ]);
-    let out_schema = Schema::new(vec![
+    /*let out_schema = Schema::new(vec![
         Field::new("id", DataType::Int),
         Field::new("cate", DataType::String),
         Field::new("text", DataType::String),
         Field::new("in_bytes", DataType::Long),
         Field::new("out_bytes", DataType::Long),
         Field::new("bytes", DataType::Long),
-    ]);
+    ]);*/
     let source_text = r#"
     {
         "fields": [
@@ -43,7 +43,7 @@ fn main() {
     "#;
     let transform_text = r#"
     {
-        "sql": "log_warn"
+        "sql": "select id, cate, text, in_bytes, out_bytes, (in_bytes + out_bytes) bytes, (10 + out_bytes) bytes2 from tbl"
     }
     "#;
     let sink_text = r#"
@@ -59,9 +59,9 @@ fn main() {
     let transform_config: QueryTransformConfig = serde_json::from_str(transform_text).unwrap();
     let source_config: FakerSourceConfig = serde_json::from_str(source_text).unwrap();
 
-    let mut source = source_config.build(in_schema.clone()).unwrap().create_source().unwrap();
-    let transform = transform_config.build(in_schema.clone()).unwrap().create_transform().unwrap();
-    let sink = sink_config.build(out_schema.clone()).unwrap().create_sink().unwrap();
+    let mut source = source_config.build(in_schema).unwrap().create_source().unwrap();
+    let transform = transform_config.build(source.schema().clone()).unwrap().create_transform().unwrap();
+    let sink = sink_config.build(transform.schema().clone()).unwrap().create_sink().unwrap();
     let sink_collector = SinkCollector::new(sink);
     let mut transform_collector = TransformCollector::new(transform, Box::new(sink_collector));
     transform_collector.open().unwrap();

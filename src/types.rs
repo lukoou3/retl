@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize, Serializer};
 use crate::expr::AttributeReference;
 
 static NULL_TYPE: DataType = DataType::Null;
@@ -123,6 +124,11 @@ impl Schema {
         Schema {fields, name_to_index, name_to_field }
     }
 
+    pub fn from_attributes(attributes: Vec<AttributeReference>) -> Schema {
+        let fields = attributes.iter().map(|attribute| Field::new(&attribute.name, attribute.data_type.clone())).collect();
+        Schema::new(fields)
+    }
+
     pub fn field_names(&self) -> Vec<String> {
         self.fields.iter().map(|field| field.name.clone()).collect()
     }
@@ -161,7 +167,14 @@ impl Display for Schema {
     }
 }
 
-
+impl serde::ser::Serialize for Schema {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        serializer.serialize_str(self.to_string().as_str())
+    }
+}
 impl PartialEq for Schema {
     fn eq(&self, other: &Self) -> bool {
         self.fields == other.fields
