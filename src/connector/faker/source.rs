@@ -65,12 +65,13 @@ impl Source for FakerSource  {
     }
 
     fn run(&mut self, out: &mut dyn Collector) -> Result<()> {
-        let sec = Duration::from_secs(1);
         let rows_for_subtask = self.number_of_rows;
+        let rows_per_second = self.rows_per_second;
         let mut row = GenericRow::new_with_size(self.schema.fields.len());
         let mut rows = 0;
         let mut batch_rows = 0;
         let mut next_read_ts = current_timestamp_millis();
+        let mut current_ts = 0;
         let mut wait_ms = 0;
 
         while rows < rows_for_subtask {
@@ -84,12 +85,12 @@ impl Source for FakerSource  {
                 sleep(Duration::from_millis(self.millis_per_row as u64));
             } else {
                 batch_rows += 1;
-                if batch_rows >= rows_for_subtask {
+                if batch_rows >= rows_per_second {
                     batch_rows = 0;
                     next_read_ts += 1000;
-                    sleep(sec);
-                    wait_ms = cmp::max(0, next_read_ts - current_timestamp_millis());
-                    if wait_ms > 0 {
+                    current_ts = current_timestamp_millis();
+                    if next_read_ts > current_ts {
+                        wait_ms = next_read_ts - current_ts;
                         sleep(Duration::from_millis(wait_ms))
                     }
                 }

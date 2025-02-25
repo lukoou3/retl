@@ -39,6 +39,9 @@ pub fn create_physical_expr(
                 Ok(Arc::new(Substring::new(create_physical_expr(str)?, create_physical_expr(pos)?, create_physical_expr(len)?)))
             } else if let Some(expr::Length{child}) = any.downcast_ref::<expr::Length>() {
                 Ok(Arc::new(Length::new(create_physical_expr(child)?)))
+            } else if let Some(expr::Concat{children}) = any.downcast_ref::<expr::Concat>() {
+                let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
+                Ok(Arc::new(Concat::new(args)))
             } else {
                 Err(format!("Not implemented:{:?}", func))
             }

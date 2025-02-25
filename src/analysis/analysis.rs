@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::Result;
-use crate::analysis::{AnalyzerRule, ImplicitTypeCasts, ResolveReferences, ResolveRelations};
+use crate::analysis::{AnalyzerRule, ImplicitTypeCasts, ResolveFunctions, ResolveReferences, ResolveRelations};
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
 
@@ -13,6 +13,7 @@ impl Analyzer {
         let rules: Vec<Box<dyn AnalyzerRule>> = vec![
             Box::new(ResolveRelations::new(temp_views)),
             Box::new(ResolveReferences),
+            Box::new(ResolveFunctions),
             Box::new(ImplicitTypeCasts),
         ];
         Self { rules }

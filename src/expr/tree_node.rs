@@ -51,7 +51,9 @@ impl TreeNode for Expr {
                     })
             }
             Expr::UnresolvedFunction(UnresolvedFunction { name, arguments }) => {
-                panic!("Unresolved function {}: {:?}", name, arguments)
+                arguments.map_elements(f)?.update_data(|arguments| {
+                    Expr::UnresolvedFunction(UnresolvedFunction{name, arguments})
+                })
             }
             Expr::ScalarFunction(func) => {
                 let args = func

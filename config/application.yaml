@@ -35,7 +35,11 @@ transforms:
   - type: query
     inputs: [ faker_source ]
     outputs: [ query ]
-    sql: "select id, cate, text, in_bytes, out_bytes, (in_bytes + out_bytes) bytes, (10 + out_bytes) bytes2 from tbl"
+    sql: "select id, cate, text, concat(cate, '_', text) text2, in_bytes, out_bytes, (in_bytes + out_bytes) bytes, (10 + out_bytes) bytes2 from tbl"
+  - type: query
+    inputs: [ query ]
+    outputs: [ query2 ]
+    sql: "select id, cate, text, in_bytes, out_bytes, bytes, bytes2 from tbl"
 
 sinks:
   - type: print

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
-use crate::expr::{AttributeReference, Expr};
+use crate::expr::{AttributeReference, Concat, Expr, Length, Substring, UnresolvedFunction};
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
 
@@ -88,3 +88,45 @@ impl AnalyzerRule for ResolveReferences {
     }
 }
 
+#[derive(Debug)]
+pub struct ResolveFunctions;
+
+impl AnalyzerRule for ResolveFunctions {
+    fn analyze(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        plan.transform_up(|plan| match plan {
+            p if !p.children_resolved() => Ok(Transformed::no(p)),
+            p => {
+                let transformed = p.map_expressions(|expr| {
+                    expr.transform_up(|expr| {
+                        match &expr {
+                            Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) => {
+                                match name.to_lowercase().as_str() {
+                                    "length" => {
+                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Length::new(Box::new(arguments[0].clone()))))))
+                                    },
+                                    "substring" | "substr" => {
+                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Substring::new(
+                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
+                                    },
+                                    "concat" => {
+                                        let args = arguments.into_iter().map(|arg| arg.clone()).collect();
+                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Concat::new(args)))))
+                                    },
+                                    _ => Err(format!("UnresolvedFunction: {}", name))
+                                }
+
+                            },
+                            e if e.resolved() => Ok(Transformed::no(expr)),
+                            e => Ok(Transformed::no(expr)),
+                        }
+                    })
+                })?;
+                Ok(transformed)
+            }
+        })
+    }
+
+    fn name(&self) -> &str {
+        "ResolveFunctions"
+    }
+}

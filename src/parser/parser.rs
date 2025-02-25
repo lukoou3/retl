@@ -232,7 +232,11 @@ fn parse_constant(pair: Pair<Rule>) -> Result<Expr> {
                 _ => Err(format!("Unexpected parse_constant {:?}", v))
             }
         },
-        Rule::STRING => Ok(Expr::Literal(Literal::new(Value::string(pair.as_str()), DataType::String))),
+        Rule::STRING => {
+            let s = pair.as_str();
+            let s = &s[1.. s.len() - 1];
+            Ok(Expr::Literal(Literal::new(Value::string(s), DataType::String)))
+        },
         _ => Err(format!("Unexpected parse_constant {:?}", p))
     }
 }
