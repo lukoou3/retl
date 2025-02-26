@@ -16,7 +16,8 @@ fn main() {
     let producer: BaseProducer = ClientConfig::new()
         .set("bootstrap.servers", "192.168.216.86:9092")
         .set("batch.size", "16384") // 设置批量大小
-        .set("linger.ms", "10")    // 设置等待时间
+        .set("linger.ms", "100")    // 设置等待时间
+        .set("compression.type", "lz4") // lz4, snappy
         .create()
         .expect("Producer creation failed");
 

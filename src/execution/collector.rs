@@ -61,6 +61,38 @@ impl Collector for TransformCollector {
     }
 }
 
+pub struct MultiCollector {
+    outs:  Vec<Box<dyn Collector>>,
+}
+
+impl MultiCollector {
+    pub fn new(outs:  Vec<Box<dyn Collector>>) -> Self {
+        Self { outs }
+    }
+}
+
+impl Collector for MultiCollector {
+    fn open(&mut self) -> Result<()> {
+        for out in self.outs.iter_mut() {
+            out.open()?;
+        }
+        Ok(())
+    }
+    fn collect(&mut self, row: &dyn Row) -> Result<()> {
+        for out in self.outs.iter_mut() {
+            out.collect(row)?;
+        }
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<()> {
+        for out in self.outs.iter_mut() {
+            out.close()?;
+        }
+        Ok(())
+    }
+}
+
 pub struct PrintCollector;
 
 impl Collector for PrintCollector {

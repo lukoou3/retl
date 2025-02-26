@@ -8,7 +8,9 @@ fn parse_and_execution_graph() -> retl::Result<()> {
     let config: AppConfig = config::parse_config(config_path).unwrap();
     let mut parser = NodeParser::new();
     let graph = parser.parse_node_graph(&config)?;
+    graph.print_node_chains();
     execution::execution_graph(&graph)
+    //Ok(())
 }
 fn main() {
     flexi_logger::Logger::try_with_str("info")

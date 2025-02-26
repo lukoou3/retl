@@ -31,10 +31,10 @@ predicate
 */
 
 valueExpression = {
-   unaryExpression
+    primaryExpression
+    | unaryExpression
     | arithmeticExpression
     | comparisonExpression
-    | primaryExpression
 }
 
 unaryExpression = { (MINUS | PLUS | TILDE) ~ valueExpression }
@@ -43,6 +43,7 @@ primaryExpression = {
     functionCall
     | constant
     | columnReference
+    | "(" ~  valueExpression ~ ")"
 }
 
 arithmeticExpression = {"(" ~  valueExpression ~ arithmeticOperator ~ valueExpression ~ ")" }

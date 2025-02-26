@@ -124,6 +124,7 @@ impl NodeIdGenerator {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Graph {
     pub source_ids: Vec<u16>,
     pub node_dict: HashMap<u16, Node>,
@@ -132,14 +133,22 @@ pub struct Graph {
 impl Graph {
     pub fn print_node_chains(&self) {
         for id in self.source_ids.iter() {
-            let mut ids = vec![*id];
-            let mut node = self.node_dict.get(id).unwrap();
-            while !node.is_sink() {
-                let output_id = node.output_ids()[0];
-                ids.push(output_id);
-                node = self.node_dict.get(&output_id).unwrap();
+            println!("source id: {}", id);
+            let ids = vec![*id];
+            self.print_node_chains_on_sink(ids, id)
+        }
+    }
+
+    fn print_node_chains_on_sink(&self, mut ids: Vec<u16>, id: & u16){
+        let node = self.node_dict.get(id).unwrap();
+        if node.is_sink() {
+            println!("{:?}", ids);
+        } else {
+            for id in node.output_ids() {
+                let mut ids_clone = ids.clone();
+                ids_clone.push(*id);
+                self.print_node_chains_on_sink(ids_clone, id);
             }
-            println!("{:?}", ids)
         }
     }
 }
@@ -174,7 +183,9 @@ impl NodeParser {
             let mut in_node = if let Some(node) = self.output_node_dict.get(input) {
                 node.clone()
             } else {
-                self.parse_input_node(input)?
+                let in_node = self.parse_input_node(input)?;
+                //println!("end parse input node: {}", input);
+                in_node
             };
             let mut node = SinkNode::new_unparsed(sink.clone());
             node.input_id = in_node.borrow().id();
@@ -189,6 +200,7 @@ impl NodeParser {
     }
 
     fn parse_input_node(&mut self, input: &String) -> Result<Rc<RefCell<Node>>> {
+        //println!("parse input node: {}", input);
         if let Some(node) = self.unparsed_output_node_dict.get(input) {
             let node = node.clone();
             match &mut *node.borrow_mut() {
@@ -200,11 +212,14 @@ impl NodeParser {
                     Ok(node.clone())
                 },
                 Node::Transform(transform_node) => {
-                    let input = &transform_node.transform_config.inputs[0];
-                    let input_node = if let Some(node) = self.output_node_dict.get(input) {
+                    let transform_input = &transform_node.transform_config.inputs[0];
+                    let input_node = if let Some(node) = self.output_node_dict.get(transform_input) {
                         node.clone()
                     } else {
-                        self.parse_input_node(input)?
+                        let input_node = self.parse_input_node(transform_input)?;
+                        self.output_node_dict.insert(transform_input.clone(), input_node.clone());
+                        //println!("end parse input node: {}", transform_input);
+                        input_node
                     };
                     transform_node.input_id = input_node.borrow().id();
                     transform_node.id = NodeIdGenerator::get_next_node_id();

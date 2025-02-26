@@ -17,11 +17,20 @@ sources:
   #      rows_per_second: 10
   #      number_of_rows: 100
   #      codecs: json
+  - type: kafka
+    outputs: [ kafka_source ]
+    schema: "struct<id:bigint, cate:string, text:string, in_bytes:bigint, out_bytes:bigint>"
+    topics: ["logs"]
+    properties:
+      bootstrap.servers: "192.168.216.86:9092"
+      group.id: "my_group"
+    decoding:
+      codec: json
 
   - type: faker
     outputs: [ faker_source ]
     schema: "struct<id:bigint, cate:string, text:string, in_bytes:bigint, out_bytes:bigint>"
-    rows_per_second: 2
+    rows_per_second: 1
     number_of_rows: 100
     fields: [
       { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
@@ -43,7 +52,17 @@ transforms:
 
 sinks:
   - type: print
-    inputs: [ query ]
+    inputs: [ kafka_source ]
     print_mode: log_warn
+    encoding:
+      codec: json
+  - type: kafka
+    inputs: [ query ]
+    topic: logs
+    properties:
+      bootstrap.servers: "192.168.216.86:9092"
+      batch.size: "10000"
+      linger.ms: "100"
+      compression.type: "lz4"
     encoding:
       codec: json

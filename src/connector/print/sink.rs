@@ -22,13 +22,7 @@ impl PrintSink {
     }
 }
 
-
-
 impl Sink for PrintSink {
-    fn name(&self) -> &str {
-        "PrintSink"
-    }
-
     fn invoke(&mut self, row: &dyn Row) -> Result<()>  {
         match self.serializer.serialize(row) {
             Ok(bytes) => match self.print_mode {

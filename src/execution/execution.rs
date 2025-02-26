@@ -1,6 +1,6 @@
 use crate::Result;
 use crate::connector::Source;
-use crate::execution::{Collector, Graph, Node, SinkCollector, TransformCollector};
+use crate::execution::{Collector, Graph, MultiCollector, Node, SinkCollector, TransformCollector};
 use crate::parser::parse_schema;
 use crate::types::Schema;
 
@@ -22,12 +22,21 @@ pub fn new_source_operator(id: u16, graph: &Graph) -> Result<SourceOperator> {
         let config = &source_node.source_config.inner;
         let schema = parse_schema(&source_node.source_config.schema)?;
         let source = config.build(schema)?.create_source()?;
-        let next_node = graph.node_dict.get(&source_node.ouput_ids[0]).unwrap();
-        let out_schema = source.schema().clone();
-        let out = if !next_node.is_sink() {
-            new_transform_collector(next_node, graph, out_schema)?
+        let mut outs = Vec::new();
+        for ouput_id in source_node.ouput_ids.iter() {
+            let next_node = graph.node_dict.get(ouput_id).unwrap();
+            let out_schema = source.schema().clone();
+            let out = if !next_node.is_sink() {
+                new_transform_collector(next_node, graph, out_schema)?
+            } else {
+                new_sink_operator(next_node, out_schema)?
+            };
+            outs.push(out);
+        };
+        let out = if outs.len() == 1 {
+            outs.into_iter().next().unwrap()
         } else {
-            new_sink_operator(next_node, out_schema)?
+            Box::new(MultiCollector::new(outs))
         };
         Ok(SourceOperator{source, out})
     } else {
@@ -39,12 +48,21 @@ pub fn new_transform_collector(node: &Node, graph: &Graph, schema: Schema) -> Re
     if let Node::Transform(transform_node) = node {
         let config = &transform_node.transform_config.inner;
         let transform = config.build(schema)?.create_transform()?;
-        let next_node = graph.node_dict.get(&transform_node.ouput_ids[0]).unwrap();
-        let out_schema = transform.schema().clone();
-        let out = if !next_node.is_sink() {
-            new_transform_collector(next_node, graph, out_schema)?
+        let mut outs = Vec::new();
+        for ouput_id in transform_node.ouput_ids.iter() {
+            let next_node = graph.node_dict.get(ouput_id).unwrap();
+            let out_schema = transform.schema().clone();
+            let out = if !next_node.is_sink() {
+                new_transform_collector(next_node, graph, out_schema)?
+            } else {
+                new_sink_operator(next_node, out_schema)?
+            };
+            outs.push(out);
+        };
+        let out = if outs.len() == 1 {
+            outs.into_iter().next().unwrap()
         } else {
-            new_sink_operator(next_node, out_schema)?
+            Box::new(MultiCollector::new(outs))
         };
         Ok(Box::new(TransformCollector::new(transform, out)))
     } else {
@@ -63,6 +81,18 @@ pub fn new_sink_operator(node: &Node, schema: Schema) -> Result<Box<dyn Collecto
 }
 
 pub fn execution_graph(graph: &Graph) -> Result<()> {
-    let mut source = new_source_operator(graph.source_ids[0], graph)?;
-    source.run()
+    let mut handles = Vec::with_capacity(graph.source_ids.len());
+    for (i, source_id) in graph.source_ids.iter().enumerate() {
+        let source_id = *source_id;
+        let graph = graph.clone();
+        handles.push(std::thread::Builder::new().name(format!("etl-{}/{}", i + 1, graph.source_ids.len())).spawn(move || {
+            println!("start source: {}", source_id);
+            let mut source = new_source_operator(source_id, &graph)?;
+            source.run()
+        }).map_err(|_| "failed to spawn thread")?);
+    }
+    for handle in handles {
+        handle.join().unwrap()?;
+    }
+    Ok(())
 }

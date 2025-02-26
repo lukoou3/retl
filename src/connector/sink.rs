@@ -3,7 +3,6 @@ use crate::data::Row;
 use crate::Result;
 
 pub trait Sink: Debug {
-    fn name(&self) -> &str;
     fn open(&mut self) -> Result<()> {
         Ok(())
     }
