@@ -3,7 +3,7 @@ use crate::data::Value;
 use crate::types::DataType;
 use rand::Rng;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RangeIntFaker {
     start: i32,
     end: i32,
@@ -43,7 +43,7 @@ impl Faker for RangeIntFaker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct OptionIntFaker {
     options: Box<[Value]>,
     random: bool,
@@ -81,7 +81,7 @@ impl Faker for OptionIntFaker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RangeLongFaker {
     start: i64,
     end: i64,
@@ -121,7 +121,7 @@ impl Faker for RangeLongFaker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct OptionLongFaker {
     options: Box<[Value]>,
     random: bool,
@@ -160,7 +160,7 @@ impl Faker for OptionLongFaker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RangeDoubleFaker {
     start: f64,
     end: f64,
@@ -185,7 +185,7 @@ impl Faker for RangeDoubleFaker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct OptionDoubleFaker {
     options: Box<[Value]>,
     random: bool,

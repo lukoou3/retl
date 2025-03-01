@@ -2,7 +2,9 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
+use chrono::{NaiveDateTime};
 use crate::data::{Row, Value};
+use crate::datetime_utils::{format_datetime_fafault, from_timestamp_micros_utc};
 use crate::physical_expr::{PhysicalExpr};
 use crate::types::DataType;
 
@@ -88,6 +90,11 @@ fn boolean_to_string(v: Value) -> Value {
     Value::String(Arc::new(v.get_boolean().to_string()))
 }
 
+fn timestamp_to_string(v: Value) -> Value {
+    let dt = format_datetime_fafault(from_timestamp_micros_utc(v.get_long()));
+    Value::String(Arc::new(dt))
+}
+
 fn value_to_string(v: Value) -> Value {
     Value::String(Arc::new(format!("{v}")))
 }
@@ -146,6 +153,10 @@ fn boolean_to_long(v: Value) -> Value {
     }
 }
 
+fn timestamp_to_long(v: Value) -> Value {
+    Value::Long(v.get_long() / 1_000_000)
+}
+
 fn int_to_float(v: Value) -> Value {
     Value::Float(v.get_int() as f32)
 }
@@ -200,6 +211,29 @@ fn boolean_to_double(v: Value) -> Value {
     }
 }
 
+fn int_to_timestamp(v: Value) -> Value {
+    Value::Long(v.get_int() as i64 * 1_000_000)
+}
+
+fn long_to_timestamp(v: Value) -> Value {
+    Value::Long(v.get_long() * 1_000_000)
+}
+
+fn float_to_timestamp(v: Value) -> Value {
+    Value::Long(v.get_float() as i64 / 1_000_000)
+}
+
+fn double_to_timestamp(v: Value) -> Value {
+    Value::Long(v.get_double() as i64 / 1_000_000)
+}
+
+fn string_to_timestamp(v: Value) -> Value {
+    match NaiveDateTime::parse_from_str(v.get_string(), "%Y-%m-%d %H:%M:%S%.f") {
+        Ok(dt) => Value::Long(dt.and_utc().timestamp_micros()),
+        Err(_) => Value::Null
+    }
+}
+
 pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
     match to {
         dt if dt == from => Box::new(identity),
@@ -209,6 +243,7 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
             DataType::Float => Box::new(float_to_string),
             DataType::Double => Box::new(double_to_string),
             DataType::Boolean => Box::new(boolean_to_string),
+            DataType::Timestamp => Box::new(timestamp_to_string),
             _ =>  Box::new(value_to_string),
         },
         DataType::Int => match from {
@@ -225,6 +260,7 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
             DataType::Double => Box::new(double_to_long),
             DataType::String => Box::new(string_to_long),
             DataType::Boolean => Box::new(boolean_to_long),
+            DataType::Timestamp => Box::new(timestamp_to_long),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
         DataType::Float => match from {
@@ -243,6 +279,14 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
             DataType::Boolean => Box::new(boolean_to_double),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
+        DataType::Timestamp => match from {
+            DataType::Int => Box::new(int_to_timestamp),
+            DataType::Long => Box::new(long_to_timestamp),
+            DataType::Float => Box::new(float_to_timestamp),
+            DataType::Double => Box::new(double_to_timestamp),
+            DataType::String => Box::new(string_to_timestamp),
+            _ =>  panic!("Cannot cast {from} to {to}.")
+        },
         _ =>  panic!("Cannot cast {from} to {to}.")
     }
 }
@@ -253,6 +297,8 @@ pub fn can_cast(from: &DataType, to: &DataType) -> bool {
         (_, DataType::String) => true,
         (DataType::String | DataType::Boolean, to_type) if to_type.is_numeric_type() => true,
         (from_type, to_type) if from_type.is_numeric_type() && to_type.is_numeric_type() => true,
+        (from_type, DataType::Timestamp) if from_type.is_numeric_type() || matches!(from_type, DataType::String) => true,
+        (DataType::Timestamp, DataType::Long) => true,
         (_, _) => false
     }
 }

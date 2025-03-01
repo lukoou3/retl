@@ -1,4 +1,3 @@
-use std::cmp;
 use std::fmt::Debug;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -31,13 +30,6 @@ impl FakerSource {
             get_cast_func(from, to)
         }).collect();
         Self{ schema, converters, fakers, rows_per_second, number_of_rows, millis_per_row }
-    }
-}
-
-impl Clone for FakerSource {
-    fn clone(&self) -> Self {
-        Self::new(self.schema.clone(), self.fakers.iter().map(|(i, x)| (*i, x.clone_box())).collect(),
-                  self.rows_per_second, self.number_of_rows, self.millis_per_row)
     }
 }
 

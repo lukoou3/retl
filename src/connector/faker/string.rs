@@ -7,7 +7,7 @@ use crate::types::DataType;
 use rand::{Rng, SeedableRng};
 use rand_regex::Regex;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct OptionStringFaker {
     options: Box<[Value]>,
     random: bool,
@@ -45,7 +45,7 @@ impl Faker for OptionStringFaker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CharsStringFaker {
     chars: Box<[char]>,
     len: usize,

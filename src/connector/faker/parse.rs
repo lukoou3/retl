@@ -1,9 +1,10 @@
 use std::fmt::Debug;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use config::Config;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
 use crate::Result;
-use crate::connector::faker::{CharsStringFaker, Faker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker};
+use crate::connector::faker::{CharsStringFaker, Faker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, TimestampFaker, TimestampType, TimestampUnit};
 use crate::data::Value;
 use crate::types::Schema;
 pub fn parse_fakers(field_configs: Vec<Config>, schema: &Schema) -> Result<Vec<(usize, Box<dyn Faker>)>> {
@@ -158,6 +159,103 @@ impl FakerConfig for StringFakerConfig {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TimestampConfig {
+    #[serde(default)]
+    unit: TimestampUnit,
+    #[serde(default)]
+    timestamp_type: TimestampType,
+}
+
+#[typetag::serde(name = "timestamp")]
+impl FakerConfig for TimestampConfig {
+    fn build(&self) -> Result<Box<dyn Faker>> {
+        Ok(Box::new(TimestampFaker::new(self.unit, self.timestamp_type)))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct FormatTimestampConfig {
+    #[serde(default = "default_timestamp_format")]
+    format: String,
+    #[serde(default = "default_utc")]
+    utc: bool,
+}
+
+#[typetag::serde(name = "format_timestamp")]
+impl FakerConfig for FormatTimestampConfig {
+    fn build(&self) -> Result<Box<dyn Faker>> {
+        Ok(Box::new(FormatTimestampFaker{format: self.format.clone(), utc: self.utc}))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Ipv4Config {
+    #[serde(default = "default_ipv4_start")]
+    start: String,
+    #[serde(default = "default_ipv4_end")]
+    end: String,
+}
+
+#[typetag::serde(name = "ipv4")]
+impl FakerConfig for Ipv4Config {
+    fn build(&self) -> Result<Box<dyn Faker>> {
+        let start = self.start.parse::<Ipv4Addr>().map_err(|e| e.to_string())?;
+        let end = self.end.parse::<Ipv4Addr>().map_err(|e| e.to_string())?;
+        let start = u32::from(start);
+        let end = u32::from(end);
+        if start >= end {
+            return Err("Ipv4Config start must not be greater than end".to_string());
+        }
+        Ok(Box::new(Ipv4Faker::new(start, end)))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Ipv6Config {
+    #[serde(default = "default_ipv6_start")]
+    start: String,
+    #[serde(default = "default_ipv6_end")]
+    end: String,
+}
+
+#[typetag::serde(name = "ipv6")]
+impl FakerConfig for Ipv6Config {
+    fn build(&self) -> Result<Box<dyn Faker>> {
+        let start = self.start.parse::<Ipv6Addr>().map_err(|e| e.to_string())?;
+        let end = self.end.parse::<Ipv6Addr>().map_err(|e| e.to_string())?;
+        let start = u128::from(start);
+        let end = u128::from(end);
+        if start >= end {
+            return Err("Ipv6Config start must not be greater than end".to_string());
+        }
+        Ok(Box::new(Ipv6Faker::new(start, end)))
+    }
+}
+
+fn default_ipv6_start() -> String {
+    "::".to_string()
+}
+
+fn default_ipv6_end() -> String {
+    "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff".to_string()
+}
+
+fn default_ipv4_start() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_ipv4_end() -> String {
+    "255.255.255.255".to_string()
+}
+
+fn default_timestamp_format() -> String {
+    "%Y-%m-%d %H:%M:%S".to_string()
+}
+
+fn default_utc() -> bool {
+    true
+}
 
 fn default_random() -> bool {
     true

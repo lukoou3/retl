@@ -123,6 +123,8 @@ fn parse_primitive_data_type(pair: Pair<Rule>) -> Result<DataType> {
         "float" | "real" => Ok(DataType::Float),
         "double" => Ok(DataType::Double),
         "string" => Ok(DataType::String),
+        "date" => Ok(DataType::Date),
+        "timestamp" => Ok(DataType::Timestamp),
         "binary" => Ok(DataType::Binary),
         _ => Err(format!("not supported data type: {:?}", pair))
     }

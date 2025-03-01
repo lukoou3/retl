@@ -12,6 +12,8 @@ static FLOAT_TYPE: DataType = DataType::Float;
 static DOUBLE_TYPE: DataType = DataType::Double;
 static BOOLEAN_TYPE: DataType = DataType::Boolean;
 static STRING_TYPE: DataType = DataType::String;
+static DATE_TYPE: DataType = DataType::Date;
+static TIMESTAMP_TYPE: DataType = DataType::Timestamp;
 static BINARY_TYPE: DataType = DataType::Binary;
 
 
@@ -24,6 +26,8 @@ pub enum DataType {
     Double,
     String,
     Boolean,
+    Date,
+    Timestamp,
     Binary,
     Struct(Fields),
     Array(Box<DataType>),
@@ -65,6 +69,14 @@ impl DataType {
         &BOOLEAN_TYPE
     }
 
+    pub fn date_type() -> &'static DataType {
+        &DATE_TYPE
+    }
+
+    pub fn timestamp_type() -> &'static DataType {
+        &TIMESTAMP_TYPE
+    }
+
     pub fn binary_type() -> &'static DataType {
         &BINARY_TYPE
     }
@@ -80,6 +92,8 @@ impl Display for DataType {
             DataType::Double => write!(f, "double"),
             DataType::String => write!(f, "string"),
             DataType::Boolean => write!(f, "boolean"),
+            DataType::Date => write!(f, "date"),
+            DataType::Timestamp => write!(f, "timestamp"),
             DataType::Binary => write!(f, "binary"),
             DataType::Struct(fields) => write!(f, "struct<{}>", fields.0.iter().map(|field| format!("{}: {}", field.name, field.data_type)).join(",")),
             DataType::Array(element_type) => write!(f, "array<{}>", element_type),

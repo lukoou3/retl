@@ -1,6 +1,7 @@
 use std::io::Write;
 use serde::Serializer;
 use crate::data::{Row, Value};
+use crate::{date_utils, datetime_utils};
 use crate::types::{DataType, Field};
 
 macro_rules! tri {
@@ -43,6 +44,14 @@ impl serde::ser::Serialize for RowWriter<'_> {
                 DataType::Double => compound.serialize_value(&row.get_double(i))?,
                 DataType::String => compound.serialize_value(row.get_string(i))?,
                 DataType::Boolean => compound.serialize_value(&row.get_boolean(i))?,
+                DataType::Date => {
+                    let date = date_utils::num_days_to_date(row.get_int(i)).to_string();
+                    compound.serialize_value(&date)?
+                },
+                DataType::Timestamp => {
+                    let date = datetime_utils::from_timestamp_micros_utc(row.get_long(i)).format(datetime_utils::NORM_DATETIME_FMT).to_string();
+                    compound.serialize_value(&date)?
+                },
                 DataType::Struct(fs) => compound.serialize_value(&RowWriter::new(row.get_struct(i).as_ref(), &fs.0))?,
                 DataType::Array(dt) => {
                     compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref()))?;

@@ -27,7 +27,7 @@ impl Analyzer {
             for rule in &self.rules {
                 let t = rule.analyze(new_plan)?;
                 new_plan = t.data;
-                println!("{} apply {} change:{} after: {:?}", i, rule.name(), t.transformed, new_plan);
+                // println!("{} apply {} change:{} after: {:?}", i, rule.name(), t.transformed, new_plan);
                 if t.transformed {
                     changed = true;
                 }
