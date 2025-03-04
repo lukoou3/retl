@@ -1,4 +1,5 @@
 use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 
 pub const DEFAULT_DATETIME_UTC: DateTime<Utc> = NaiveDateTime::new(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(), NaiveTime::from_hms_opt(0, 0, 0).unwrap()).and_utc();
@@ -28,6 +29,11 @@ where
     Tz::Offset: fmt::Display,
 {
     datetime.format(NORM_DATETIME_MS_FMT).to_string()
+}
+
+#[inline]
+pub fn current_timestamp_millis() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before Unix epoch").as_millis() as u64
 }
 
 #[cfg(test)]

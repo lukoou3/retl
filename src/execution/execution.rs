@@ -10,9 +10,17 @@ struct SourceOperator {
 }
 
 impl SourceOperator {
-    pub fn run(&mut self) -> Result<()> {
+    fn open(&mut self) -> Result<()> {
         self.source.open()?;
+        self.out.open()
+    }
+
+    pub fn run(&mut self) -> Result<()> {
         self.source.run(self.out.as_mut())
+    }
+
+    fn close(&mut self) -> Result<()> {
+        self.source.close().and(self.out.close())
     }
 }
 
@@ -85,10 +93,12 @@ pub fn execution_graph(graph: &Graph) -> Result<()> {
     for (i, source_id) in graph.source_ids.iter().enumerate() {
         let source_id = *source_id;
         let graph = graph.clone();
-        handles.push(std::thread::Builder::new().name(format!("etl-{}/{}", i + 1, graph.source_ids.len())).spawn(move || {
+        handles.push(std::thread::Builder::new().stack_size(1024 * 1024).name(format!("etl-{}/{}", i + 1, graph.source_ids.len())).spawn(move || {
             println!("start source: {}", source_id);
             let mut source = new_source_operator(source_id, &graph)?;
-            source.run()
+            source.open()?;
+            source.run()?;
+            source.close()
         }).map_err(|_| "failed to spawn thread")?);
     }
     for handle in handles {

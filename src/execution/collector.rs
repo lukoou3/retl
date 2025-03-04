@@ -50,6 +50,7 @@ impl TransformCollector {
 
 impl Collector for TransformCollector {
     fn open(&mut self) -> Result<()> {
+        self.out.open()?;
         self.transform.open()
     }
     fn collect(&mut self, row: &dyn Row) -> Result<()> {
@@ -57,7 +58,7 @@ impl Collector for TransformCollector {
     }
 
     fn close(&mut self) -> Result<()> {
-        self.transform.close()
+        self.transform.close().and(self.out.close())
     }
 }
 

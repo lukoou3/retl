@@ -1,5 +1,6 @@
 pub mod date_utils;
 pub mod datetime_utils;
+pub mod buffer_pool;
 
 use std::result;
 
