@@ -68,10 +68,15 @@ impl BufferPool {
         }
 
         // 不是可重入锁
-        self.clear_expired_buffers(pool);
+        self.clear_expired_buffers_inner(pool);
     }
 
-    fn clear_expired_buffers(&self, mut pool: MutexGuard<VecDeque<BufferWithTs>>) {
+    pub fn clear_expired_buffers(&self) {
+        let mut pool = self.pool.lock().unwrap();
+        self.clear_expired_buffers_inner(pool);
+    }
+
+    fn clear_expired_buffers_inner(&self, mut pool: MutexGuard<VecDeque<BufferWithTs>>) {
         // 不是可重入锁
         let ts = current_timestamp_millis();
         let last_clear_ts = self.last_clear_ts.load(SeqCst);

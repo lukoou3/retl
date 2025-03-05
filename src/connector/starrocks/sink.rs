@@ -134,13 +134,14 @@ impl StarRocksSink {
         let mut url_index = 0;
         let mut last_flush_ts = current_timestamp_millis();
         let (lock, cvar) = shared_blocks.as_ref();
+        let mut has_stoped = false;
 
         loop {
             // 持有共享数据的锁
             let mut shared_blocks = lock.lock().unwrap();
             // 等待数据或超时
             let current_ms = current_timestamp_millis();
-            let wait_ms = if current_ms > last_flush_ts + interval_ms {
+            let wait_ms = if has_stoped || current_ms > last_flush_ts + interval_ms {
                 0
             } else {
                 last_flush_ts + interval_ms - current_ms
@@ -152,7 +153,13 @@ impl StarRocksSink {
                 drop(shared_blocks); // 释放共享数据的锁
                 Self::flush_block(&connection_config, &urls, &mut url_index, total_flush.clone(), &mut last_flush_ts, block);
             } else {
-                if (current_timestamp_millis() >= last_flush_ts + interval_ms || stoped.load(Ordering::SeqCst)) && shared_blocks.1.batch_rows > 0  {
+                if (current_timestamp_millis() >= last_flush_ts + interval_ms || stoped.load(Ordering::SeqCst)) {
+                    if shared_blocks.1.batch_rows == 0 {
+                        last_flush_ts = current_timestamp_millis();
+                        shared_blocks.1.buffer_pool.clear_expired_buffers();
+                        continue;
+                    }
+                    
                     shared_blocks.1.write_end();
                     let empty_block = Block::new(shared_blocks.1.buffer_pool.clone());
                     let block = mem::replace(&mut shared_blocks.1, empty_block);
@@ -162,8 +169,13 @@ impl StarRocksSink {
             }
 
             if stoped.load(Ordering::SeqCst) {
-                break;
+                if has_stoped {
+                    break;
+                } else {
+                    has_stoped = true;
+                }
             }
+            
         }
 
     }
