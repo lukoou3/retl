@@ -18,6 +18,7 @@ use reqwest::{redirect, StatusCode, Url};
 use crate::Result;
 use crate::buffer_pool::BufferPool;
 use crate::codecs::{JsonSerializer, Serializer};
+use crate::config::{BaseIOMetrics, TaskContext};
 use crate::connector::batch::BatchConfig;
 use crate::connector::Sink;
 use crate::connector::starrocks::{basic_auth_header, ConnectionConfig, StarRocksDefaultBatchSettings};
@@ -29,6 +30,7 @@ const LOCALHOST: &str = "localhost";
 const LOCALHOST_IP: &str = "127.0.0.1";
 
 pub struct StarRocksSink {
+    task_context: TaskContext,
     connection_config: ConnectionConfig,
     batch_config: BatchConfig<StarRocksDefaultBatchSettings>,
     serializer: JsonSerializer,
@@ -42,7 +44,7 @@ pub struct StarRocksSink {
 }
 
 impl StarRocksSink {
-    pub fn new(connection_config: ConnectionConfig, batch_config: BatchConfig<StarRocksDefaultBatchSettings>, serializer: JsonSerializer) -> Self {
+    pub fn new(task_context: TaskContext, connection_config: ConnectionConfig, batch_config: BatchConfig<StarRocksDefaultBatchSettings>, serializer: JsonSerializer) -> Self {
         let buffer_pool = BufferPool::new(1024 * 1024 * 1, batch_config.max_bytes * 2 + 1024 * 1024 * 1, 600_000);
         let stoped = Arc::new(AtomicBool::new(false));
         let shared_blocks = Arc::new((
@@ -50,6 +52,7 @@ impl StarRocksSink {
             Condvar::new()
         ));
         StarRocksSink {
+            task_context,
             connection_config,
             batch_config,
             serializer,
@@ -77,6 +80,7 @@ impl Debug for StarRocksSink{
 impl Sink for StarRocksSink {
 
     fn open(&mut self) -> Result<()> {
+        let base_iometrics = self.task_context.base_iometrics.clone();
         let connection_config = self.connection_config.clone();
         let stoped = self.stoped.clone();
         let shared_blocks = self.shared_blocks.clone();//block_deque
@@ -84,13 +88,14 @@ impl Sink for StarRocksSink {
         let interval_ms = self.batch_config.interval_ms;
         let thread_name = format!("flush-{}", self.connection_config.table);
         let flush_handle = thread::Builder::new().name(thread_name).stack_size(256 * 1024).spawn(move || {
-            StarRocksSink::process_flush_block(connection_config, stoped, shared_blocks, total_flush, interval_ms)
+            StarRocksSink::process_flush_block(base_iometrics, connection_config, stoped, shared_blocks, total_flush, interval_ms)
         }).map_err(|e| e.to_string())?;
         self.flush_handle = Some(flush_handle);
         Ok(())
     }
 
     fn invoke(&mut self, row: &dyn Row) -> Result<()> {
+        self.task_context.base_iometrics.num_records_in_inc_by(1);
         let bytes = self.serializer.serialize(row)?;
 
         let (lock, cvar) = self.shared_blocks.as_ref();
@@ -128,7 +133,7 @@ impl Sink for StarRocksSink {
 }
 
 impl StarRocksSink {
-    fn process_flush_block(connection_config: ConnectionConfig, stoped: Arc<AtomicBool>, shared_blocks: Arc<(Mutex<(VecDeque<Block>, Block)>, Condvar)>,
+    fn process_flush_block(base_iometrics: Arc<BaseIOMetrics>, connection_config: ConnectionConfig, stoped: Arc<AtomicBool>, shared_blocks: Arc<(Mutex<(VecDeque<Block>, Block)>, Condvar)>,
                            total_flush: Arc<AtomicU64>, interval_ms: u64,) {
         let urls = connection_config.build_urls();
         let mut url_index = 0;
@@ -151,7 +156,7 @@ impl StarRocksSink {
             if let Some(block) = shared_blocks.0.pop_front() {
                 cvar.notify_one(); // 通知生产线程
                 drop(shared_blocks); // 释放共享数据的锁
-                Self::flush_block(&connection_config, &urls, &mut url_index, total_flush.clone(), &mut last_flush_ts, block);
+                Self::flush_block(&base_iometrics, &connection_config, &urls, &mut url_index, total_flush.clone(), &mut last_flush_ts, block);
             } else {
                 if (current_timestamp_millis() >= last_flush_ts + interval_ms || stoped.load(Ordering::SeqCst)) {
                     if shared_blocks.1.batch_rows == 0 {
@@ -164,7 +169,7 @@ impl StarRocksSink {
                     let empty_block = Block::new(shared_blocks.1.buffer_pool.clone());
                     let block = mem::replace(&mut shared_blocks.1, empty_block);
                     drop(shared_blocks); // 释放共享数据的锁
-                    Self::flush_block(&connection_config, &urls, &mut url_index, total_flush.clone(), &mut last_flush_ts, block);
+                    Self::flush_block(&base_iometrics, &connection_config, &urls, &mut url_index, total_flush.clone(), &mut last_flush_ts, block);
                 }
             }
 
@@ -180,12 +185,15 @@ impl StarRocksSink {
 
     }
 
-    fn flush_block(connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize, total_flush: Arc<AtomicU64>,  last_flush_ts: &mut u64, block: Block )  {
+    fn flush_block(base_iometrics: &Arc<BaseIOMetrics>, connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize, total_flush: Arc<AtomicU64>,  last_flush_ts: &mut u64, block: Block )  {
         let batch_rows = block.batch_rows as u64;
         let batch_bytes = block.batch_bytes;
         let buffers: Arc<Vec<BytesMut>> = Arc::new(block.buffers);
         if let Err(e) = Self::flush_block_inner(connection_config, urls, url_index, total_flush, buffers.clone(), batch_rows, batch_bytes) {
            warn!("flush block error:{:?}", e)
+        } else {
+            base_iometrics.num_records_out_inc_by(batch_rows);
+            base_iometrics.num_bytes_out_inc_by(batch_bytes as u64);
         }
         if let Ok(buffers) = Arc::try_unwrap(buffers) {
             for buffer in buffers {

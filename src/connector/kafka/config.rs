@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::Result;
 use crate::codecs::{DeserializerConfig, SerializerConfig};
-use crate::config::{SinkConfig, SinkProvider, SourceConfig, SourceProvider};
+use crate::config::{SinkConfig, SinkProvider, SourceConfig, SourceProvider, TaskContext};
 use crate::connector::kafka::{KafkaSink, KafkaSource};
 use crate::connector::{Sink, Source};
 use crate::types::Schema;
@@ -37,8 +37,9 @@ impl KafkaSourceProvider {
 }
 
 impl SourceProvider for KafkaSourceProvider {
-    fn create_source(&self) -> crate::Result<Box<dyn Source>> {
+    fn create_source(&self, task_context: TaskContext) -> crate::Result<Box<dyn Source>> {
         let kafka_source = KafkaSource::new(
+            task_context,
             self.schema.clone(),
             self.source_config.topics.clone(),
             self.source_config.properties.clone(),
@@ -79,9 +80,9 @@ impl KafkaSinkProvider {
 }
 
 impl SinkProvider for KafkaSinkProvider {
-    fn create_sink(&self) -> crate::Result<Box<dyn Sink>> {
+    fn create_sink(&self, task_context: TaskContext) -> crate::Result<Box<dyn Sink>> {
         let serializer = self.sink_config.encoding.build(self.schema.clone())?;
-        let kafka_sink = KafkaSink::new(self.sink_config.topic.clone(), self.sink_config.properties.clone(), serializer)?;
+        let kafka_sink = KafkaSink::new(task_context, self.sink_config.topic.clone(), self.sink_config.properties.clone(), serializer)?;
         Ok(Box::new(kafka_sink))
     }
 }

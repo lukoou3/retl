@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::config::{SinkConfig, SinkProvider};
+use crate::config::{SinkConfig, SinkProvider, TaskContext};
 use crate::connector::Sink;
 use crate::connector::print::{PrintMode, PrintSink};
 use crate::codecs::{JsonSerializer, Serializer, SerializerConfig};
@@ -35,8 +35,8 @@ impl PrintSinkProvider {
 }
 
 impl SinkProvider for PrintSinkProvider {
-    fn create_sink(&self) -> crate::Result<Box<dyn Sink>> {
+    fn create_sink(&self, task_context: TaskContext) -> crate::Result<Box<dyn Sink>> {
         let serializer = self.sink_config.encoding.build(self.schema.clone())?;
-        Ok(Box::new(PrintSink::new(serializer, self.sink_config.print_mode)))
+        Ok(Box::new(PrintSink::new(serializer, self.sink_config.print_mode, task_context)))
     }
 }

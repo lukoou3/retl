@@ -1,10 +1,12 @@
 mod source;
 mod transform;
 mod sink;
+mod execution;
 
 pub use source::*;
 pub use transform::*;
 pub use sink::*;
+pub use execution::*;
 
 use std::error::Error;
 use serde::{Deserialize, Serialize};
@@ -19,12 +21,39 @@ pub struct AppConfig {
     pub sinks: Vec<SinkOuter>,
 }
 
-#[derive(Debug, Serialize,Deserialize)]
+#[derive(Debug, Clone, Serialize,Deserialize)]
 pub struct EnvConfig {
     pub application: ApplicationConfig,
+    #[serde(default)]
+    pub web: WebConfig,
 }
 
-#[derive(Debug, Serialize,Deserialize)]
+#[derive(Debug, Clone, Serialize,Deserialize)]
+pub struct WebConfig {
+    #[serde(default = "default_port")]
+    pub port: u32,
+    #[serde(default = "default_works")]
+    pub works: u32,
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        WebConfig {
+            port: default_port(),
+            works: default_works(),
+        }
+    }
+}
+
+fn default_port() -> u32 {
+    8000
+}
+
+fn default_works() -> u32 {
+    1
+}
+
+#[derive(Debug, Clone, Serialize,Deserialize)]
 pub struct ApplicationConfig {
     #[serde(default = "default_application_name")]
     pub name: String,

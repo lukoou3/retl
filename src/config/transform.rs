@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
+use crate::config::TaskContext;
 use crate::Result;
 use crate::transform::Transform;
 use crate::types::Schema;
@@ -22,5 +23,5 @@ pub trait TransformConfig: DynClone + Debug + Send + Sync {
 dyn_clone::clone_trait_object!(TransformConfig);
 
 pub trait TransformProvider: DynClone + Send + Sync {
-    fn create_transform(&self) -> Result<Box<dyn Transform>>;
+    fn create_transform(&self, task_context: TaskContext) -> Result<Box<dyn Transform>>;
 }

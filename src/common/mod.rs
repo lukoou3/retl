@@ -1,6 +1,7 @@
 pub mod date_utils;
 pub mod datetime_utils;
 pub mod buffer_pool;
+pub mod rate_stat;
 
 use std::result;
 

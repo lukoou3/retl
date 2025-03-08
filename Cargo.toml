@@ -19,7 +19,7 @@ itertools = "0.14.0"
 rand = "0.9.0"
 rand_regex = "0.18.0"
 #regex_generate = "0.2.3"
-serde = "1.0.194"
+serde = { version = "1.0.194", features = ["derive", "rc"] }
 #serde-value = "0.7.0"
 serde_json = "1.0.138"
 serde_yaml = "0.9"
@@ -28,6 +28,9 @@ config = { version = "0.15.8", features = ["yaml"] }
 # simd-json = "0.14.3"
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 isahc = "1.7"
+tiny_http = "0.12"
+prometheus = "0.13"
+signal-hook = "0.3"
 rdkafka = { version = "0.37.0", features = ["cmake-build"] }
 base64 = "0.21.7"
 anyhow = "1.0"

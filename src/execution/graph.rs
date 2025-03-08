@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::Arc;
+use itertools::Itertools;
 use serde::{Serialize, Serializer};
 use crate::config::{SinkConfig, SinkOuter, SourceConfig, SourceOuter, TransformConfig, TransformOuter};
 use crate::Result;
@@ -16,6 +18,13 @@ pub enum Node {
 }
 
 impl Node {
+
+    pub fn is_source(&self) -> bool {
+        match self {
+            Node::Source(_) => true,
+            _ => false,
+        }
+    }
 
     pub fn is_sink(&self) -> bool {
         match self {
@@ -55,6 +64,7 @@ impl Node {
             Node::Sink(_) => panic!("sink node has not output id"),
         }
     }
+
 }
 
 impl serde::ser::Serialize for Node {
@@ -127,10 +137,34 @@ impl NodeIdGenerator {
 #[derive(Debug, Clone)]
 pub struct Graph {
     pub source_ids: Vec<u16>,
-    pub node_dict: HashMap<u16, Node>,
+    pub node_dict: HashMap<u16, Arc<Node>>,
 }
 
 impl Graph {
+
+    pub fn get_node_dispaly_by_id(&self, id: u16) -> String {
+        match self.node_dict[&id].as_ref() {
+            Node::Source(node) => {
+                if node.ouput_ids.len() == 1 {
+                    format!("source({}) -> {}", node.id, self.get_node_dispaly_by_id(node.ouput_ids[0]))
+                } else {
+                    format!("source({}) -> ({})", node.id, node.ouput_ids.iter().map(|id| self.get_node_dispaly_by_id(*id)).join(","))
+                }
+
+            },
+            Node::Transform(node) => {
+                if node.ouput_ids.len() == 1 {
+                    format!("transform({}) -> {}", node.id, self.get_node_dispaly_by_id(node.ouput_ids[0]))
+                } else {
+                    format!("transform({}) -> ({})", node.id, node.ouput_ids.iter().map(|id| self.get_node_dispaly_by_id(*id)).join(","))
+                }
+            },
+            Node::Sink(node) => {
+                format!("sink({})", node.id)
+            },
+        }
+    }
+
     pub fn print_node_chains(&self) {
         for id in self.source_ids.iter() {
             println!("source id: {}", id);
@@ -158,11 +192,12 @@ pub struct NodeParser {
     output_node_dict: HashMap<String, Rc<RefCell<Node>>>,
     pub node_dict: HashMap<u16, Rc<RefCell<Node>>>,
     pub source_ids: Vec<u16>,
+    pub sink_ids: Vec<u16>,
 }
 
 impl NodeParser {
     pub fn new() -> Self {
-        Self { unparsed_output_node_dict: HashMap::new(), output_node_dict: HashMap::new(), node_dict: HashMap::new(), source_ids: vec![] }
+        Self { unparsed_output_node_dict: HashMap::new(), output_node_dict: HashMap::new(), node_dict: HashMap::new(), source_ids: vec![], sink_ids: vec![] }
     }
 
     pub fn parse_node_graph(&mut self, config: &AppConfig) -> Result<Graph> {
@@ -183,7 +218,8 @@ impl NodeParser {
             let mut in_node = if let Some(node) = self.output_node_dict.get(input) {
                 node.clone()
             } else {
-                let in_node = self.parse_input_node(input)?;
+                let mut inputs = vec![];
+                let in_node = self.parse_input_node(input, &mut inputs)?;
                 //println!("end parse input node: {}", input);
                 in_node
             };
@@ -191,16 +227,20 @@ impl NodeParser {
             node.input_id = in_node.borrow().id();
             node.id = NodeIdGenerator::get_next_node_id();
             in_node.borrow_mut().add_output_id(node.id);
+            self.sink_ids.push(node.id);
             self.node_dict.insert(node.id,  Rc::new(RefCell::new(Node::Sink(node))));
         }
-
         let source_ids = self.source_ids.clone();
-        let node_dict = self.node_dict.iter().map(|(i, node)| (*i, node.borrow().clone())).collect();
+        let mut node_dict: HashMap<u16, Arc<Node>> = self.node_dict.iter().map(|(i, node)| (*i, Arc::new(node.borrow().clone()))).collect();
         Ok(Graph{ source_ids, node_dict})
     }
 
-    fn parse_input_node(&mut self, input: &String) -> Result<Rc<RefCell<Node>>> {
+    fn parse_input_node(&mut self, input: &String, inputs: &mut Vec<String>) -> Result<Rc<RefCell<Node>>> {
         //println!("parse input node: {}", input);
+        if inputs.contains(&input) {
+            return Err(format!("input node loop for [{}] -> {}", inputs.join(","), input));
+        }
+        inputs.push(input.clone());
         if let Some(node) = self.unparsed_output_node_dict.get(input) {
             let node = node.clone();
             match &mut *node.borrow_mut() {
@@ -216,7 +256,7 @@ impl NodeParser {
                     let input_node = if let Some(node) = self.output_node_dict.get(transform_input) {
                         node.clone()
                     } else {
-                        let input_node = self.parse_input_node(transform_input)?;
+                        let input_node = self.parse_input_node(transform_input, inputs)?;
                         self.output_node_dict.insert(transform_input.clone(), input_node.clone());
                         //println!("end parse input node: {}", transform_input);
                         input_node

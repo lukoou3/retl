@@ -1,5 +1,5 @@
 use flexi_logger::with_thread;
-use retl::config::{SinkConfig, SourceConfig, TransformConfig};
+use retl::config::{SinkConfig, SourceConfig, TaskContext, TransformConfig};
 use retl::connector::print::{PrintSinkConfig};
 use retl::connector::faker::{FakerSourceConfig};
 use retl::execution::{Collector, SinkCollector, TransformCollector};
@@ -59,9 +59,9 @@ fn main() {
     let transform_config: QueryTransformConfig = serde_json::from_str(transform_text).unwrap();
     let source_config: FakerSourceConfig = serde_json::from_str(source_text).unwrap();
 
-    let mut source = source_config.build(in_schema).unwrap().create_source().unwrap();
-    let transform = transform_config.build(source.schema().clone()).unwrap().create_transform().unwrap();
-    let sink = sink_config.build(transform.schema().clone()).unwrap().create_sink().unwrap();
+    let mut source = source_config.build(in_schema).unwrap().create_source(TaskContext::default()).unwrap();
+    let transform = transform_config.build(source.schema().clone()).unwrap().create_transform(TaskContext::default()).unwrap();
+    let sink = sink_config.build(transform.schema().clone()).unwrap().create_sink(TaskContext::default()).unwrap();
     let sink_collector = SinkCollector::new(sink);
     let mut transform_collector = TransformCollector::new(transform, Box::new(sink_collector));
     transform_collector.open().unwrap();

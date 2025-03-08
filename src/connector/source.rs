@@ -1,4 +1,6 @@
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use crate::data::Row;
 use crate::execution::Collector;
 use crate::Result;
@@ -9,7 +11,7 @@ pub trait Source: Debug {
     fn open(&mut self) -> Result<()> {
         Ok(())
     }
-    fn run(&mut self, out: &mut dyn Collector) -> Result<()>;
+    fn run(&mut self, out: &mut dyn Collector, terminated: Arc<AtomicBool>) -> Result<()>;
 
     fn close(&mut self) -> Result<()> {
         Ok(())

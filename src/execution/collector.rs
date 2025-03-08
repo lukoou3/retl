@@ -19,7 +19,7 @@ pub struct SinkCollector {
 }
 
 impl SinkCollector {
-    pub fn new(sink: Box<dyn Sink>) -> Self {
+    pub fn new(sink: Box<dyn Sink> ) -> Self {
         Self { sink }
     }
 }

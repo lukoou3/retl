@@ -9,36 +9,43 @@ use config::{Config, Value};
 use config::{Value as ConfigValue};
 use serde::{Deserialize, Serialize};
 use typetag::serde;
+use crate::config::TaskContext;
 
 #[derive(Debug)]
 pub struct PrintSink {
     serializer: Box<dyn Serializer>,
     print_mode: PrintMode,
+    task_context: TaskContext,
 }
 
 impl PrintSink {
-    pub fn new(serializer: Box<dyn Serializer>, print_mode: PrintMode) -> Self {
-        Self {serializer, print_mode }
+    pub fn new(serializer: Box<dyn Serializer>, print_mode: PrintMode, task_context: TaskContext) -> Self {
+        Self {serializer, print_mode, task_context }
     }
 }
 
 impl Sink for PrintSink {
     fn invoke(&mut self, row: &dyn Row) -> Result<()>  {
+        self.task_context.base_iometrics.num_records_in_inc_by(1);
         match self.serializer.serialize(row) {
-            Ok(bytes) => match self.print_mode {
-                PrintMode::Stdout => {
-                    println!("{}", String::from_utf8_lossy(bytes));
-                },
-                PrintMode::Debug => {
-                    debug!("{}", String::from_utf8_lossy(bytes));
-                },
-                PrintMode::LogInfo => {
-                    info!("{}", String::from_utf8_lossy(bytes));
-                },
-                PrintMode::LogWarn => {
-                    warn!("{}", String::from_utf8_lossy(bytes));
-                },
-                PrintMode::Null => {}
+            Ok(bytes) => {
+                self.task_context.base_iometrics.num_records_out_inc_by(1);
+                self.task_context.base_iometrics.num_bytes_out_inc_by(bytes.len() as u64);
+                match self.print_mode {
+                    PrintMode::Stdout => {
+                        println!("{}", String::from_utf8_lossy(bytes));
+                    },
+                    PrintMode::Debug => {
+                        debug!("{}", String::from_utf8_lossy(bytes));
+                    },
+                    PrintMode::LogInfo => {
+                        info!("{}", String::from_utf8_lossy(bytes));
+                    },
+                    PrintMode::LogWarn => {
+                        warn!("{}", String::from_utf8_lossy(bytes));
+                    },
+                    PrintMode::Null => {}
+                }
             },
             Err(err) => match self.print_mode {
                 PrintMode::Stdout => {

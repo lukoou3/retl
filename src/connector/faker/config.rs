@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::Result;
-use crate::config::{SourceConfig, SourceProvider};
+use crate::config::{SourceConfig, SourceProvider, TaskContext};
 use crate::connector::faker::{Faker, FakerSource};
 use crate::connector::faker::parse::{FieldFakerConfig};
 use crate::connector::Source;
@@ -40,7 +40,7 @@ impl FakerSourceProvider {
 }
 
 impl SourceProvider for FakerSourceProvider {
-    fn create_source(&self) -> Result<Box<dyn Source>> {
+    fn create_source(&self, task_context: TaskContext) -> Result<Box<dyn Source>> {
         let FakerSourceConfig{fields, rows_per_second, number_of_rows, millis_per_row} = & self.source_config;
         let mut fakers: Vec<(usize, Box<dyn Faker>)> = Vec::with_capacity(fields.len());
         for FieldFakerConfig{name, config} in fields {
@@ -48,6 +48,6 @@ impl SourceProvider for FakerSourceProvider {
                 fakers.push((i, config.build()?))
             }
         }
-        Ok(Box::new(FakerSource::new(self.schema.clone(), fakers, *rows_per_second, *number_of_rows, *millis_per_row)))
+        Ok(Box::new(FakerSource::new(task_context,  self.schema.clone(), fakers, *rows_per_second, *number_of_rows, *millis_per_row)))
     }
 }

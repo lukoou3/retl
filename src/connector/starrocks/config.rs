@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use crate::codecs::JsonSerializer;
 use crate::Result;
-use crate::config::{SinkConfig, SinkProvider};
+use crate::config::{SinkConfig, SinkProvider, TaskContext};
 use crate::connector::batch::{BatchConfig, BatchSettings};
 use crate::connector::Sink;
 use crate::connector::starrocks::StarRocksSink;
@@ -70,8 +70,9 @@ impl StarRocksSinkProvider {
 }
 
 impl SinkProvider for StarRocksSinkProvider {
-    fn create_sink(&self) -> Result<Box<dyn Sink>> {
+    fn create_sink(&self, task_context: TaskContext) -> Result<Box<dyn Sink>> {
         Ok(Box::new(StarRocksSink::new(
+            task_context,
             self.sink_config.connection_config.clone(),
             self.sink_config.batch_config.clone(),
             JsonSerializer::new(self.schema.clone())

@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
+use crate::config::TaskContext;
 use crate::Result;
 use crate::connector::Source;
 use crate::types::Schema;
@@ -22,6 +23,6 @@ pub trait SourceConfig: DynClone + Debug + Send + Sync {
 dyn_clone::clone_trait_object!(SourceConfig);
 
 pub trait SourceProvider: DynClone + Send + Sync {
-    fn create_source(&self) -> Result<Box<dyn Source>>;
+    fn create_source(&self, task_context: TaskContext) -> Result<Box<dyn Source>>;
 }
 dyn_clone::clone_trait_object!(SourceProvider);

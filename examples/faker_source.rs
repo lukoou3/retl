@@ -13,7 +13,7 @@ fn main() {
         (0,Box::new(RegexStringFaker::new("12[a-z]{2}"))),
         (0,Box::new(RegexStringFaker::new("12[a-z]{2,4}"))),
     ];
-    let mut source: Box<dyn Source> = Box::new(FakerSource::new(Schema::new(Vec::new()), fakes, 3));
+    let mut source: Box<dyn Source> = Box::new(FakerSource::new(Schema::new(Vec::new()), fakes, 3, 1000, 1000));
     let mut out = PrintCollector;
     source.open().unwrap();
     source.run(&mut out);

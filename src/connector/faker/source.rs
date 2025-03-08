@@ -1,6 +1,9 @@
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use crate::config::TaskContext;
 use crate::Result;
 use crate::connector::faker::Faker;
 use crate::connector::Source;
@@ -10,6 +13,7 @@ use crate::physical_expr::{get_cast_func, CastFunc};
 use crate::types::Schema;
 
 pub struct FakerSource {
+    task_context: TaskContext,
     schema: Schema,
     fakers: Vec<(usize, Box<dyn Faker>)>,
     converters: Vec<Box<CastFunc>>,
@@ -19,7 +23,7 @@ pub struct FakerSource {
 }
 
 impl FakerSource {
-    pub fn new(schema: Schema, fakers: Vec<(usize, Box<dyn Faker>)>, rows_per_second: i32, number_of_rows: i64, millis_per_row: i64) -> Self {
+    pub fn new(task_context: TaskContext, schema: Schema, fakers: Vec<(usize, Box<dyn Faker>)>, rows_per_second: i32, number_of_rows: i64, millis_per_row: i64) -> Self {
         let fields = &schema.fields;
         let converters: Vec<Box<CastFunc>> = fakers.iter().map(|(i, x)| {
             let from = x.data_type();
@@ -29,7 +33,7 @@ impl FakerSource {
             }
             get_cast_func(from, to)
         }).collect();
-        Self{ schema, converters, fakers, rows_per_second, number_of_rows, millis_per_row }
+        Self{ task_context, schema, converters, fakers, rows_per_second, number_of_rows, millis_per_row }
     }
 }
 
@@ -56,7 +60,7 @@ impl Source for FakerSource  {
         Ok(())
     }
 
-    fn run(&mut self, out: &mut dyn Collector) -> Result<()> {
+    fn run(&mut self, out: &mut dyn Collector, terminated: Arc<AtomicBool>) -> Result<()> {
         let rows_for_subtask = self.number_of_rows;
         let rows_per_second = self.rows_per_second;
         let mut row = GenericRow::new_with_size(self.schema.fields.len());
@@ -66,12 +70,14 @@ impl Source for FakerSource  {
         let mut current_ts = 0;
         let mut wait_ms = 0;
 
-        while rows < rows_for_subtask {
+        while !terminated.load(Ordering::Acquire) && rows < rows_for_subtask {
+            self.task_context.base_iometrics.num_records_in_inc_by(1);
             for (i, faker) in self.fakers.iter_mut() {
                 row.update(*i, self.converters[*i](faker.gene_value()));
             }
             out.collect(&row)?;
             rows += 1;
+            self.task_context.base_iometrics.num_records_out_inc_by(1);
 
             if self.millis_per_row > 0 {
                 sleep(Duration::from_millis(self.millis_per_row as u64));
