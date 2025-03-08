@@ -1,13 +1,16 @@
 singleQuery = { SOI ~ queryPrimary ~ EOI}
+singleExpression = { SOI ~ expression ~ EOI}
 singleDataType = { SOI ~ dataType ~ EOI}
 
 queryPrimary = {
     selectClause
     ~ fromClause
+    ~ whereClause?
 }
 
 selectClause = { ^"select" ~ namedExpressionSeq}
 fromClause = { ^"from" ~ identifier }
+whereClause = { ^"where" ~ booleanExpression }
 
 relationPrimary = { identifier ~ (^"as"? ~ !mainKeyword ~ identifier)? }
 
@@ -16,7 +19,18 @@ namedExpression = {
     expression ~ (^"as")?  ~ !mainKeyword  ~ identifier
     | expression
 }
-expression = { valueExpression }
+expression = { booleanExpression }
+
+booleanExpression = {
+    logicalNotExpression
+    | valueExpression
+    | logicalAndExpression
+    | logicalOrExpression
+}
+
+logicalNotExpression = {^"not" ~ booleanExpression}
+logicalAndExpression = {"(" ~ booleanExpression  ~ ^"and" ~ booleanExpression  ~ ")"}
+logicalOrExpression = {"(" ~ booleanExpression  ~ ^"or" ~ booleanExpression  ~ ")"}
 
 /*
 predicate

@@ -117,3 +117,9 @@ pub struct Filter {
     pub condition: Expr,
     pub child: Arc<LogicalPlan>,
 }
+
+impl Filter {
+    pub fn new(condition: Expr, child: Arc<LogicalPlan>) -> Self {
+        Self { condition, child }
+    }
+}

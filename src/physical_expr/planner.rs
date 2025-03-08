@@ -16,6 +16,8 @@ pub fn create_physical_expr(
             Ok(Arc::new(Literal::new(value.clone(), data_type.clone()))),
         Expr::Cast(expr::Cast{child, data_type}) =>
             Ok(Arc::new(Cast::new(create_physical_expr(child)?, data_type.clone()))),
+        Expr::Not(child) =>
+            Ok(Arc::new(Not::new(create_physical_expr(child)?))),
         Expr::BinaryOperator(expr::BinaryOperator{left, op, right}) => match op {
             Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo => {
                 let l = create_physical_expr(left)?;

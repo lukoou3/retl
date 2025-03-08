@@ -9,7 +9,7 @@ use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::{BinaryOperator, Expr, Literal, UnresolvedFunction};
-use crate::logical_plan::{LogicalPlan, Project};
+use crate::logical_plan::{Filter, LogicalPlan, Project};
 use crate::types::*;
 
 #[derive(Parser)]
@@ -29,6 +29,14 @@ pub fn parse_query(sql: &str) -> Result<LogicalPlan> {
     match parse_ast(pair)? {
         Ast::Plan(plan) => Ok(plan),
         x => Err(format!("not a logical plan:{:?}", x)),
+    }
+}
+
+pub fn parse_expr(sql: &str) -> Result<Expr> {
+    let pair = SqlParser::parse(Rule::singleExpression, sql).map_err(|e| format!("{:?}", e))?.next().unwrap();
+    match parse_ast(pair)? {
+        Ast::Expression(expr) => Ok(expr),
+        x => Err(format!("not a expression:{:?}", x)),
     }
 }
 
@@ -53,7 +61,8 @@ pub fn parse_ast(pair: Pair<Rule>) -> Result<Ast> {
         Rule::queryPrimary => {
             let query = pair;
             let mut project_list: Vec<_> = Vec::new();
-            let mut child: Option<LogicalPlan> = None;
+            let mut from: Option<LogicalPlan> = None;
+            let mut filter: Option<Expr> = None;
             for pair in query.into_inner() {
                 match pair.as_rule() {
                     Rule::selectClause => {
@@ -63,19 +72,43 @@ pub fn parse_ast(pair: Pair<Rule>) -> Result<Ast> {
                         } else {
                             return Err(format!("Expected a projects but found {:?}", ast));
                         }
-                    }
+                    },
                     Rule::fromClause => {
-                        child = Some(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string()));
-                    }
+                        from = Some(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string()));
+                    },
+                    Rule::whereClause => {
+                        filter = Some(parse_expression(pair)?);
+                    },
                     _ => {}
                 }
             }
-            Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child: Arc::new(child.unwrap())})))
+            let mut child = Arc::new(from.unwrap());
+            if let Some(filter) = filter {
+                child = Arc::new(LogicalPlan::Filter(Filter::new(filter, child)));
+            }
+            Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child})))
         }
         Rule::namedExpressionSeq =>  parse_named_expression_seq(pair).map(|x| Ast::Projects(x)),
         Rule::functionCall => parse_function_call(pair).map(|x| Ast::Expression(x)),
         Rule::constant => parse_constant(pair).map(|x| Ast::Expression(x)),
         Rule::columnReference => parse_column_reference(pair).map(|x| Ast::Expression(x)),
+        Rule::logicalNotExpression => {
+            let mut pairs = pair.into_inner();
+            let expr = parse_expression(pairs.next().unwrap())?;
+            Ok(Ast::Expression(Expr::Not(Box::new(expr))))
+        },
+        Rule::logicalAndExpression => {
+            let mut pairs = pair.into_inner();
+            let left = parse_expression(pairs.next().unwrap())?;
+            let right = parse_expression(pairs.next().unwrap())?;
+            Ok(Ast::Expression(Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::And, Box::new(right)))))
+        },
+        Rule::logicalOrExpression =>{
+            let mut pairs = pair.into_inner();
+            let left = parse_expression(pairs.next().unwrap())?;
+            let right = parse_expression(pairs.next().unwrap())?;
+            Ok(Ast::Expression(Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::Or, Box::new(right)))))
+        },
         Rule::arithmeticExpression => parse_arithmetic_expression(pair).map(|x| Ast::Expression(x)),
         Rule::comparisonExpression => parse_comparison_expression(pair).map(|x| Ast::Expression(x)),
         Rule::arrayDataType => parse_array_data_type(pair).map(|x| Ast::DataType(x)),

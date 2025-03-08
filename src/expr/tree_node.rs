@@ -31,6 +31,7 @@ impl TreeNode for Expr {
             }) => f(*child)?
                 .update_data(|child| Expr::Alias(Alias::new_with_expr_id(child, name, expr_id))),
             Expr::Cast(Cast { child, data_type }) => f(*child)?.update_data(|e| e.cast(data_type)),
+            Expr::Not(child) => f(*child)?.update_data(|e| e.not()),
             Expr::BinaryOperator(BinaryOperator { left, op, right }) => (left, right)
                 .map_elements(f)?
                 .update_data(|(new_left, new_right)| {

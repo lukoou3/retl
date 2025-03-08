@@ -40,7 +40,7 @@ fn start_web(web_config: WebConfig, registry: Registry,  terminated: Arc<AtomicB
         let builder = thread::Builder::new().stack_size(1024 * 256).name(format!("web-{}", i));
         let handle = builder.spawn(move || {
             while !terminated.load(Ordering::Acquire) {
-                match server.recv_timeout(Duration::from_millis(100)) {
+                match server.recv_timeout(Duration::from_secs(1)) {
                     Ok(Some(request)) => handle_request(&registry, request),
                     Ok(None) => continue,
                     Err(_) => continue,

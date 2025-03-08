@@ -112,10 +112,10 @@ fn get_binary_arithmetic_func(op: Operator, data_type: DataType) -> Arc<BinaryFu
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::Modulo => match data_type {
-            DataType::Int => Arc::new(binary_int_multiply),
-            DataType::Long => Arc::new(binary_long_multiply),
-            DataType::Float => Arc::new(binary_float_multiply),
-            DataType::Double => Arc::new(binary_double_multiply),
+            DataType::Int => Arc::new(binary_int_modulo),
+            DataType::Long => Arc::new(binary_long_modulo),
+            DataType::Float => Arc::new(binary_float_modulo),
+            DataType::Double => Arc::new(binary_double_modulo),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         _ => panic!("{:?} not support data type {:?}", op, data_type),
@@ -349,7 +349,6 @@ impl PhysicalExpr for BinaryComparison {
         if right_value.is_null() {
             return Value::Null;
         }
-
         (self.f)(left_value, right_value)
     }
 }

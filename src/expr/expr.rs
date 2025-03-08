@@ -1,12 +1,13 @@
 use std::any::Any;
 use std::cmp::{Ordering, PartialEq};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::binary_expr;
 use crate::physical_expr::{can_cast, PhysicalExpr};
-use crate::tree_node::{Transformed, TreeNodeContainer, TreeNodeRecursion};
+use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::DataType;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
@@ -18,6 +19,7 @@ pub enum Expr {
     Cast(Cast),
     Literal(Literal),
     UnresolvedFunction(UnresolvedFunction),
+    Not(Box<Expr>),
     BinaryOperator(BinaryOperator),
     Like(Like),
     RLike(Like),
@@ -27,13 +29,14 @@ pub enum Expr {
 impl Expr {
     pub fn data_type(&self) -> &DataType {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) =>
-                panic!("UnresolvedException"),
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_)  =>
+                panic!("UnresolvedExpr:{:?}", self),
             Expr::BoundReference(b) => &b.data_type,
             Expr::AttributeReference(a) => &a.data_type,
             Expr::Alias(e) => e.child.data_type(),
             Expr::Literal(l) => &l.data_type,
             Expr::Cast(c) => &c.data_type,
+            Expr::Not(_) => DataType::boolean_type(),
             Expr::BinaryOperator(BinaryOperator{left, op, right:_ }) =>  match op {
                 Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo =>
                     left.data_type(),
@@ -67,7 +70,7 @@ impl Expr {
              | Expr::BoundReference(_)
              | Expr::AttributeReference(_)
              | Expr::Literal(_)
-             | Expr::Alias(_)=>
+             | Expr::Alias(_) =>
                 Ok(()),
             Expr::Cast(Cast{child, data_type}) =>{
                 let from = child.data_type();
@@ -75,6 +78,13 @@ impl Expr {
                     Ok(())
                 } else {
                     Err(format!("cannot cast {} to {}", from, data_type))
+                }
+            },
+            Expr::Not(child) => {
+                if child.data_type() != DataType::boolean_type() {
+                    Err(format!("{:?} requires boolean type, not {}", self, child.data_type()))
+                } else {
+                    Ok(())
                 }
             },
             Expr::BinaryOperator(BinaryOperator{left, op, right}) => {
@@ -128,7 +138,8 @@ impl Expr {
             | Expr::AttributeReference(_)
             | Expr::Literal(_) => Vec::new(),
             Expr::Alias(Alias{ child, ..})
-            | Expr::Cast(Cast{ child, ..})  =>
+            | Expr::Cast(Cast{ child, ..})
+            | Expr::Not(child)=>
                 vec![child],
             Expr::BinaryOperator(BinaryOperator { left, right, .. }) =>
                 vec![left, right],
@@ -147,6 +158,10 @@ impl Expr {
 
     pub fn cast(self, data_type: DataType) -> Expr {
         Expr::Cast(Cast::new(self, data_type))
+    }
+
+    pub fn not(self) -> Expr {
+        Expr::Not(Box::new(self))
     }
 
     pub fn col(ordinal: usize, data_type: DataType) -> Expr {
@@ -209,6 +224,38 @@ pub struct BoundReference {
 impl BoundReference {
     pub fn new(ordinal: usize, data_type: DataType) -> Self {
         Self { ordinal, data_type }
+    }
+
+    pub fn bind_reference(expr: Expr, input: Vec<AttributeReference>) -> Result<Expr> {
+        let expr_id_to_ordinal: HashMap<u32, usize> = input.iter().enumerate().map(|(i, x)| (x.expr_id, i)).collect();
+        let new_expr= expr.transform_up(|expr| {
+            if let Expr::AttributeReference(AttributeReference{data_type, expr_id, ..}) = &expr {
+                if let Some(ordinal) = expr_id_to_ordinal.get(expr_id){
+                    return Ok(Transformed::yes(Expr::BoundReference(BoundReference::new(*ordinal, data_type.clone()))));
+                } else { return Err(format!("not found {:?} in {:?}", expr, input)) }
+            } else {
+                Ok(Transformed::no(expr))
+            }
+        })?.data;
+        Ok(new_expr)
+    }
+
+    pub fn bind_references(exprs: Vec<Expr>, input: Vec<AttributeReference>) -> Result<Vec<Expr>> {
+        let expr_id_to_ordinal: HashMap<u32, usize> = input.iter().enumerate().map(|(i, x)| (x.expr_id, i)).collect();
+        let mut new_exprs = Vec::with_capacity(exprs.len());
+        for expr in exprs {
+            let e = expr.transform_up(|expr| {
+                if let Expr::AttributeReference(AttributeReference{data_type, expr_id, ..}) = &expr {
+                    if let Some(ordinal) = expr_id_to_ordinal.get(expr_id){
+                        return Ok(Transformed::yes(Expr::BoundReference(BoundReference::new(*ordinal, data_type.clone()))));
+                    } else { return Err(format!("not found {:?} in {:?}", expr, input)) }
+                } else {
+                    Ok(Transformed::no(expr))
+                }
+            })?.data;
+            new_exprs.push(e);
+        }
+        Ok(new_exprs)
     }
 }
 
