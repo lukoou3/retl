@@ -158,10 +158,13 @@ impl StarRocksSink {
                 drop(shared_blocks); // 释放共享数据的锁
                 Self::flush_block(&base_iometrics, &connection_config, &urls, &mut url_index, total_flush.clone(), &mut last_flush_ts, block);
             } else {
-                if (current_timestamp_millis() >= last_flush_ts + interval_ms || stoped.load(Ordering::SeqCst)) {
+                if current_timestamp_millis() >= last_flush_ts + interval_ms || has_stoped {
                     if shared_blocks.1.batch_rows == 0 {
                         last_flush_ts = current_timestamp_millis();
                         shared_blocks.1.buffer_pool.clear_expired_buffers();
+                        if has_stoped {
+                            break;
+                        }
                         continue;
                     }
                     
@@ -174,11 +177,7 @@ impl StarRocksSink {
             }
 
             if stoped.load(Ordering::SeqCst) {
-                if has_stoped {
-                    break;
-                } else {
-                    has_stoped = true;
-                }
+                has_stoped = true;
             }
             
         }

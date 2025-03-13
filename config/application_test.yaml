@@ -1,0 +1,73 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "struct<id:bigint, ts:timestamp, cate:string, client_ip:string,  ipv6:string, text:string, in_bytes:bigint, out_bytes:bigint>"
+    rows_per_second: 1
+    number_of_rows: 1000
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "ts", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "cate", "type": "string", "options": [ "a", "b", null, "c", "d" ] },
+      { "name": "client_ip", "type": "ipv4", "start": "192.168.0.1", "end": "192.168.0.255" },
+      { "name": "ipv6", "type": "ipv6", "start": "2001:0db8:85a3:0000:0000:8a2e:0370:0000", "end": "2001:0db8:85a3:0000:0000:8a2e:0370:7334" },
+      { "name": "text", "type": "string", "regex": "12[a-z]{2}" },
+      { "name": "in_bytes", "type": "int", "min": 100, "max": 10000 },
+      { "name": "out_bytes", "type": "int", "min": 100, "max": 10000 }
+    ]
+
+  - type: faker
+    outputs: [ faker_object_stat ]
+    schema: "struct<timestamp:timestamp,object_id:bigint,item_id:bigint,device_id:string,device_group:string,data_center:string,vsys_id:int,in_bytes:bigint,out_bytes:bigint,bytes:bigint,new_in_sessions:bigint,new_out_sessions:bigint,sessions:bigint>"
+    rows_per_second: 10
+    number_of_rows: 100000
+    fields: [
+      { "name": "timestamp", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "object_id", "type": "long", "min": 1, "max": 20 },
+      { "name": "item_id", "type": "long", "min": 1, "max": 5 },
+      { "name": "device_id", "type": "string", "options": [ "001", "002" ] },
+      { "name": "device_group", "type": "string", "options": [ "group-mock" ] },
+      { "name": "data_center", "type": "string", "options": [ "center-mock" ] },
+      { "name": "vsys_id", "type": "int", "options": [1] },
+      { "name": "in_bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "out_bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "new_in_sessions", "type": "long", "min": 1, "max": 10 },
+      { "name": "new_out_sessions", "type": "long", "min": 1, "max": 5 },
+      { "name": "sessions", "type": "long", "min": 1, "max": 15 }
+    ]
+
+transforms:
+  - type: filter
+    inputs: [ faker_source ]
+    outputs: [ filter ]
+    condition: "((id % 2) = 1)"
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query ]
+    sql: |
+      select 
+          id, cate, text, concat(cate, '_', text) text2, in_bytes, out_bytes, 
+          (in_bytes + out_bytes) bytes, (10 + out_bytes) bytes2, not (in_bytes > 5000) a 
+      from tbl
+      where ((id % 2) = 1)
+  - type: query
+    inputs: [ query ]
+    outputs: [ query2 ]
+    sql: "select id, cate, text, in_bytes, out_bytes, bytes, bytes2 from tbl"
+
+sinks:
+  - type: print
+    inputs: [ filter ]
+    print_mode: 'log_warn'
+    encoding:
+      codec: json
+#  - type: print
+#    inputs: [ query ]
+#    print_mode: log_warn
+#    encoding:
+#      codec: json

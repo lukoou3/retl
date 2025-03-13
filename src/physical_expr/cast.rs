@@ -220,11 +220,11 @@ fn long_to_timestamp(v: Value) -> Value {
 }
 
 fn float_to_timestamp(v: Value) -> Value {
-    Value::Long(v.get_float() as i64 / 1_000_000)
+    Value::Long(v.get_float() as i64 * 1_000_000)
 }
 
 fn double_to_timestamp(v: Value) -> Value {
-    Value::Long(v.get_double() as i64 / 1_000_000)
+    Value::Long(v.get_double() as i64 * 1_000_000)
 }
 
 fn string_to_timestamp(v: Value) -> Value {

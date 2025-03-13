@@ -1,0 +1,44 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "struct<id:bigint, datetime:timestamp, int32:int, int32_nullalbe:int, str:string>"
+    rows_per_second: 100
+    number_of_rows: 10000
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "datetime", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "int32", "type": "int", "min": 100, "max": 10000 },
+      { "name": "int32_nullalbe", "type": "int", "min": 100, "max": 10000 },
+      { "name": "str", "type": "string", "regex": "12[a-z]{2}" }
+    ]
+
+
+
+transforms:
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query ]
+    sql: "select id, cate, text, concat(cate, '_', text) text2, in_bytes, out_bytes, (in_bytes + out_bytes) bytes, (10 + out_bytes) bytes2 from tbl"
+
+sinks:
+#  - type: print
+#    inputs: [ faker_source ]
+#    print_mode: stdout
+#    encoding:
+#      codec: json
+  - type: clickhouse
+    inputs: [ faker_source ]
+    host: 192.168.216.86:8123
+    user: default
+    password: "123456"
+    database: test
+    table: test_ck_simple
+    batch_max_rows: 100000
+    batch_max_bytes: 104857600
+    batch_interval_ms: 5000
+

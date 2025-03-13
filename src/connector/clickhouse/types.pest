@@ -1,0 +1,20 @@
+singleDataType = { SOI ~ dataType ~ EOI}
+
+dataType = {
+    arrayDataType
+    | lowCardinalityDataType
+    | nullableDataType
+    | primitiveDataType
+}
+
+arrayDataType = { ^"Array" ~ "("  ~ dataType ~ ")" }
+lowCardinalityDataType = { ^"LowCardinality" ~ "(" ~ dataType ~ ")" }
+nullableDataType = { ^"Nullable" ~ "(" ~ dataType ~ ")" }
+primitiveDataType = { identifier ~ ("(" ~ integer ~ ("," ~ integer)? ~ ")")? }
+
+identifier = {unquotedIdentifier | quotedIdentifier}
+unquotedIdentifier = @{ (ASCII_ALPHA | ASCII_DIGIT | "_")+ } // [a-zA-Z0-9_]+
+quotedIdentifier = { "`" ~ (!"`" ~ ANY)* ~ "`"}
+integer = @{ ASCII_DIGIT+ }
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }

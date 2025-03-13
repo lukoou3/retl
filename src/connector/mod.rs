@@ -5,6 +5,7 @@ pub mod print;
 pub mod kafka;
 pub mod starrocks;
 pub mod batch;
+pub mod clickhouse;
 
 pub use source::*;
 pub use sink::*;
