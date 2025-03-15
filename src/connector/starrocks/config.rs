@@ -34,6 +34,8 @@ pub struct ConnectionConfig {
     pub database: String,
     pub table: String,
     #[serde(default)]
+    pub compress: bool,
+    #[serde(default)]
     pub properties: HashMap<String, String>,
 }
 
@@ -75,7 +77,7 @@ impl SinkProvider for StarRocksSinkProvider {
             task_context,
             self.sink_config.connection_config.clone(),
             self.sink_config.batch_config.clone(),
-            JsonSerializer::new(self.schema.clone())
+            JsonSerializer::new(self.schema.clone()),
         )))
     }
 }
@@ -103,6 +105,11 @@ impl ConnectionConfig {
         }
         if !self.properties.contains_key("timeout") {
             self.properties.insert("timeout".to_string(), "600".to_string());
+        }
+        if self.compress {
+            self.properties.insert("compression".to_string(), "lz4_frame".to_string());
+        } else if self.properties.contains_key("compression") {
+            self.compress = true;
         }
         self.properties.insert("expect".to_string(), "100-continue".to_string());
         self.properties.insert("Authorization".to_string(), basic_auth_header(&self.username, &self.password));

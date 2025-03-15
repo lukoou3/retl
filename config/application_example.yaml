@@ -23,8 +23,8 @@ sources:
   - type: faker
     outputs: [ faker_object_stat ]
     schema: "struct<timestamp:timestamp,object_id:bigint,item_id:bigint,device_id:string,device_group:string,data_center:string,vsys_id:int,in_bytes:bigint,out_bytes:bigint,bytes:bigint,new_in_sessions:bigint,new_out_sessions:bigint,sessions:bigint>"
-    rows_per_second: 10
-    number_of_rows: 10000
+    rows_per_second: 100
+    number_of_rows: 1000000
     fields: [
       { "name": "timestamp", "type": "timestamp", "timestamp_type": "datetime" },
       { "name": "object_id", "type": "long", "min": 1, "max": 20 },
@@ -64,6 +64,7 @@ sinks:
     password: ""
     database: test
     table: object_stat
+    compress: true
     batch_max_rows: 100000
     batch_max_bytes: 104857600
     batch_interval_ms: 5000

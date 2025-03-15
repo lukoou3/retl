@@ -21,7 +21,7 @@ use crate::codecs::{JsonSerializer, Serializer};
 use crate::config::{BaseIOMetrics, TaskContext};
 use crate::connector::batch::BatchConfig;
 use crate::connector::Sink;
-use crate::connector::starrocks::{basic_auth_header, ConnectionConfig, StarRocksDefaultBatchSettings};
+use crate::connector::starrocks::{basic_auth_header, lz4, ConnectionConfig, StarRocksDefaultBatchSettings};
 use crate::data::Row;
 use crate::datetime_utils::current_timestamp_millis;
 
@@ -86,8 +86,8 @@ impl Sink for StarRocksSink {
         let shared_blocks = self.shared_blocks.clone();//block_deque
         let total_flush = self.total_flush.clone();
         let interval_ms = self.batch_config.interval_ms;
-        let thread_name = format!("flush-{}", self.connection_config.table);
-        let flush_handle = thread::Builder::new().name(thread_name).stack_size(256 * 1024).spawn(move || {
+        let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, self.task_context.task_config.subtask_index + 1, self.task_context.task_config.subtask_parallelism);
+        let flush_handle = thread::Builder::new().name(thread_name).stack_size(128 * 1024).spawn(move || {
             StarRocksSink::process_flush_block(base_iometrics, connection_config, stoped, shared_blocks, total_flush, interval_ms)
         }).map_err(|e| e.to_string())?;
         self.flush_handle = Some(flush_handle);
@@ -231,7 +231,12 @@ impl StarRocksSink {
                     .build()?
             }
         };
-        *be_request.body_mut() = Some(Body::new(VecBytesMutReader::new(buffers)));
+        if connection_config.compress {
+            *be_request.body_mut() = Some(Body::new(lz4::VecBytesMutCompressReader::new(buffers)));
+        } else {
+            *be_request.body_mut() = Some(Body::new(VecBytesMutReader::new(buffers)));
+        }
+
         let response = client.execute(be_request)?;
 
         if response.status().is_success() {

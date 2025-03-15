@@ -1,13 +1,13 @@
 env:
   application:
     name: test
-    parallelism: 1
+    parallelism: 2
 
 sources:
   - type: faker
     outputs: [ faker_source ]
     schema: "struct<id:bigint, ts:timestamp, cate:string, client_ip:string,  ipv6:string, text:string, in_bytes:bigint, out_bytes:bigint>"
-    rows_per_second: 1
+    rows_per_second: 2
     number_of_rows: 1000
     fields: [
       { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
@@ -62,7 +62,7 @@ transforms:
 
 sinks:
   - type: print
-    inputs: [ filter ]
+    inputs: [ faker_source ]
     print_mode: 'log_warn'
     encoding:
       codec: json

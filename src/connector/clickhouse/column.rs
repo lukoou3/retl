@@ -6,7 +6,7 @@ use bytes::BufMut;
 use crate::buffer_block::BufferBlock;
 use crate::buffer_pool::BufferPool;
 use crate::Result;
-use crate::connector::clickhouse::{make_value_converter, ClickHouseType, ClickHouseValue as Value, ClickHouseValue, ToCkValueConverter};
+use crate::connector::clickhouse::{lz4, make_value_converter, ClickHouseType, ClickHouseValue as Value, ClickHouseValue, ToCkValueConverter};
 use crate::data::Row;
 use crate::types::DataType;
 
@@ -32,21 +32,19 @@ pub struct ArcBlockReader {
 }
 
 impl ArcBlockReader {
-    pub fn from(block: Block) -> Self {
-        ArcBlockReader {
-            block: Arc::new(Mutex::new(block)),
-        }
+    pub fn from(block: Arc<Mutex<Block>>) -> Self {
+        ArcBlockReader {block}
     }
 
     pub fn rows(&self) -> usize {
         self.block.lock().unwrap().rows
     }
 
-    pub fn bytes(&self) -> usize {
+    pub fn byte_size(&self) -> usize {
         self.block.lock().unwrap().bytes
     }
 
-    pub fn realease_buffer(& self) {
+    pub fn realease_buffer(&mut self) {
         self.block.lock().unwrap().release_buffer();
     }
 }
@@ -59,6 +57,60 @@ impl Read for ArcBlockReader {
 
 }
 
+#[derive(Clone)]
+pub struct ArcCompressBlockReader {
+    block: Arc<Mutex<Block>>,
+    uncompress_buf: Vec<u8>,
+    compress_buf: Vec<u8>,
+    compress_size: usize,
+    read_offset: usize,
+}
+
+impl ArcCompressBlockReader {
+    pub fn from(block: Arc<Mutex<Block>>) -> Self {
+        let compress_buf_size: usize = 1024 * 1024 * 1; // 压缩 缓冲区
+        ArcCompressBlockReader {
+            block,
+            uncompress_buf: vec![0; compress_buf_size],
+            compress_buf: vec![0; lz4::max_compressed_size(compress_buf_size)],
+            compress_size: 0,
+            read_offset: 0,
+        }
+    }
+}
+
+impl Read for ArcCompressBlockReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut block = self.block.lock().unwrap();
+        // 如果 compress_buf 已读完或为空，则重新填充
+        if self.read_offset >= self.compress_size {
+            // 从 block 读取数据到 uncompress_buf
+            let bytes_read = block.read(&mut self.uncompress_buf)?;
+
+            // 如果没有读取到数据，表示已到末尾
+            if bytes_read == 0 {
+                return Ok(0);
+            }
+
+            // 清空 compress_buf 并压缩数据
+            self.compress_size = lz4::compress_into(&self.uncompress_buf[..bytes_read], &mut self.compress_buf).map_err(|_| io::Error::other("Failed to compress data"))?;
+            self.read_offset = 0; // 重置偏移
+        }
+
+        // 计算可以从 compress_buf 读取的字节数
+        let available = self.compress_size - self.read_offset;
+        let to_read = min(buf.len(), available);
+
+        // 将 compress_buf 中的数据拷贝到输出缓冲区
+        buf[..to_read].copy_from_slice(
+            &self.compress_buf[self.read_offset..self.read_offset + to_read]
+        );
+        self.read_offset += to_read;
+
+        Ok(to_read)
+    }
+}
+
 pub struct Block {
     columns: Vec<Column>,
     value_converters: Vec<ValueConverter>,
@@ -66,7 +118,6 @@ pub struct Block {
     bytes: usize,
     header_bytes: Vec<u8>,
     read_pos: usize,                // 当前读取的 column 索引
-    read_offset: usize,             // 当前 column 的读取偏移量
     read_header_offset: usize,
 }
 
@@ -88,7 +139,6 @@ impl Block {
             bytes: 0,
             header_bytes: Vec::new(),
             read_pos: 0,
-            read_offset: 0,
             read_header_offset: 0,
         })
     }
@@ -99,11 +149,13 @@ impl Block {
             converter.data = converter.converter.convert(value)?;
         }
 
+        let mut bytes = 0;
         for (column, converter) in self.columns.iter_mut().zip(self.value_converters.iter()) {
-            column.write(&converter.data);
+            bytes += column.write(&converter.data);
         }
 
         self.rows += 1;
+        self.bytes += bytes;
 
         Ok(())
     }
@@ -114,13 +166,13 @@ impl Block {
     }
 
     #[inline]
-    pub fn bytes(&self) -> usize {
+    pub fn byte_size(&self) -> usize {
         self.bytes
     }
 
     pub fn read_reset(&mut self) {
         self.read_pos = 0;
-        self.read_offset = 0;
+        self.columns.iter_mut().for_each(|column| column.read_reset());
         self.header_bytes.clear();
         self.read_header_offset = 0;
     }
@@ -159,12 +211,10 @@ impl Read for Block {
         while total_read < buf.len() && self.read_pos < self.columns.len() {
             let column = &mut self.columns[self.read_pos];
             let bytes_read = column.read(&mut buf[total_read..])?;
-            self.read_offset += bytes_read;
             total_read += bytes_read;
 
             if bytes_read == 0 {
                 self.read_pos += 1;
-                self.read_offset = 0; // 重置当前Column的偏移量
             }
         }
 
@@ -197,7 +247,7 @@ impl Column {
     }
 
     #[inline]
-    pub fn write(&mut self, value: &Value) {
+    pub fn write(&mut self, value: &Value) -> usize {
         self.data.write(value)
     }
 
@@ -262,8 +312,8 @@ fn new_column_data(buffer_pool: BufferPool,ck_type: ClickHouseType) -> Result<Bo
 
 pub trait ColumnData: Send + 'static {
     fn sql_type(&self) -> ClickHouseType;
-    fn write(&mut self, value: &Value);
-    fn write_default_value(&mut self);
+    fn write(&mut self, value: &Value) -> usize;
+    fn write_default_value(&mut self) -> usize;
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
     fn read_reset(&mut self);
 
@@ -291,19 +341,19 @@ impl ColumnData for NullableColumnData {
         ClickHouseType::Nullable(Box::new(self.inner.sql_type()))
     }
 
-    fn write(&mut self, value: &Value) {
+    fn write(&mut self, value: &Value) -> usize {
         if value.is_null() {
             self.nulls.push(1);
-            self.inner.write_default_value();
+            self.inner.write_default_value() + 1
         } else {
             self.nulls.push(0);
-            self.inner.write(value)
+            self.inner.write(value) + 1
         }
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self) -> usize {
         self.nulls.push(1);
-        self.inner.write_default_value();
+        self.inner.write_default_value() + 1
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -363,15 +413,17 @@ impl ColumnData for Int32ColumnData {
         ClickHouseType::Int32
     }
 
-    fn write(&mut self, value: &Value)  {
+    fn write(&mut self, value: &Value)  -> usize  {
         match value {
             Value::Int32(v) => self.data.put_i32_le(*v),
             _ => panic!("invalid value for Int32Column: {:?}", value),
         }
+        4
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self)  -> usize  {
         self.data.put_i32_le(0);
+        4
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -404,15 +456,17 @@ impl ColumnData for Int64ColumnData {
         ClickHouseType::Int64
     }
 
-    fn write(&mut self, value: &Value){
+    fn write(&mut self, value: &Value) -> usize {
         match value {
             Value::Int64(v) => self.data.put_i64_le(*v),
             _ => panic!("invalid value for Int64Column: {:?}", value),
         }
+        8
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self)  -> usize {
         self.data.put_i64_le(0);
+        8
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -445,15 +499,17 @@ impl ColumnData for UInt32ColumnData {
         ClickHouseType::UInt32
     }
 
-    fn write(&mut self, value: &Value)  {
+    fn write(&mut self, value: &Value)  -> usize {
         match value {
             Value::UInt32(v) => self.data.put_u32_le(*v),
             _ => panic!("invalid value for UInt32Column: {:?}", value),
         }
+        4
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self)  -> usize {
         self.data.put_u32_le(0);
+        4
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -486,15 +542,17 @@ impl ColumnData for UInt64ColumnData {
         ClickHouseType::UInt64
     }
 
-    fn write(&mut self, value: &Value) {
+    fn write(&mut self, value: &Value) -> usize {
         match value {
             Value::UInt64(v) => self.data.put_u64_le(*v),
             _ => panic!("invalid value for UInt64Column: {:?}", value),
         }
+        8
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self)  -> usize {
         self.data.put_u64_le(0);
+        8
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -527,15 +585,17 @@ impl ColumnData for Float32ColumnData {
         ClickHouseType::Float32
     }
 
-    fn write(&mut self, value: &Value) {
+    fn write(&mut self, value: &Value) -> usize {
         match value {
             Value::Float32(v) => self.data.put_f32_le(*v),
             _ => panic!("invalid value for Float32Column: {:?}", value),
         }
+        4
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self) -> usize {
         self.data.put_f32_le(0.0);
+        4
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -568,15 +628,17 @@ impl ColumnData for Float64ColumnData {
         ClickHouseType::Float64
     }
 
-    fn write(&mut self, value: &Value){
+    fn write(&mut self, value: &Value) -> usize {
         match value {
             Value::Float64(v) => self.data.put_f64_le(*v),
             _ => panic!("invalid value for Float64Column: {:?}", value),
         }
+        8
     }
 
-    fn write_default_value(&mut self) {
+    fn write_default_value(&mut self) -> usize {
         self.data.put_f64_le(0.0);
+        8
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -609,19 +671,21 @@ impl ColumnData for StringColumnData {
         ClickHouseType::String
     }
 
-    fn write(&mut self, value: &Value){
+    fn write(&mut self, value: &Value) -> usize {
         match value {
             Value::String(s) => {
                 let v = s.as_bytes();
-                put_unsigned_leb128_block(&mut self.data, v.len() as u64);
+                let mut written = v.len();
+                written += put_unsigned_leb128_block(&mut self.data, v.len() as u64);
                 self.data.extend_from_slice(v);
+                written
             },
             _ =>  panic!("invalid value for StringColumn: {:?}", value),
         }
     }
 
-    fn write_default_value(&mut self) {
-        put_unsigned_leb128_block(&mut self.data, 0);
+    fn write_default_value(&mut self) -> usize {
+        put_unsigned_leb128_block(&mut self.data, 0)
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -654,15 +718,17 @@ impl ColumnData for DateTimeColumnData {
         ClickHouseType::DateTime
     }
 
-    fn write(&mut self, value: &Value) {
+    fn write(&mut self, value: &Value) -> usize{
         match value {
             Value::DateTime(v) => self.data.put_u32_le(*v),
             _ => panic!("invalid value for UInt32Column: {:?}", value),
         }
+        4
     }
 
-    fn write_default_value(&mut self) {
-        self.data.put_u32_le(0)
+    fn write_default_value(&mut self) -> usize {
+        self.data.put_u32_le(0);
+        4
     }
 
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -695,7 +761,8 @@ impl ColumnData for DateTimeColumnData {
     }
 }*/
 
-fn put_unsigned_leb128_block(buffer: &mut BufferBlock, mut value: u64) {
+fn put_unsigned_leb128_block(buffer: &mut BufferBlock, mut value: u64) -> usize {
+    let mut written = 0;
     while {
         let mut byte = value as u8 & 0x7f;
         value >>= 7;
@@ -705,9 +772,11 @@ fn put_unsigned_leb128_block(buffer: &mut BufferBlock, mut value: u64) {
         }
 
         buffer.put_u8(byte);
+        written += 1;
 
         value != 0
     } {}
+    written
 }
 
 fn put_unsigned_leb128(mut buffer: impl BufMut, mut value: u64) {
@@ -727,6 +796,7 @@ fn put_unsigned_leb128(mut buffer: impl BufMut, mut value: u64) {
 
 #[cfg(test)]
 mod tests {
+    use flexi_logger::with_thread;
     use crate::connector::clickhouse::{make_value_converter, ClickHouseValue};
     use crate::data::{GenericRow, Row};
     use crate::data::Value as EtlValue;
@@ -765,7 +835,7 @@ mod tests {
                 datas[j] = v;
             }
             for j in 0..len {
-                (&mut columns[j]).write(&datas[j])
+                (&mut columns[j]).write(&datas[j]);
             }
         }
 
@@ -818,6 +888,45 @@ mod tests {
         println!("{:x?}", buffer);
 
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_compress() -> Result<()> {
+        flexi_logger::Logger::try_with_str("info")
+            .unwrap()
+            .start()
+            .unwrap();
+        let pool = BufferPool::new(1024 * 1024, 10 * 1024 * 1024, 300_000);
+        let types = vec![
+            ColumnDesc::new("id", DataType::Long, ClickHouseType::Int64),
+            ColumnDesc::new("datetime", DataType::Timestamp, ClickHouseType::DateTime),
+            ColumnDesc::new("int32", DataType::Int, ClickHouseType::Int32),
+            ColumnDesc::new("int32_nullalbe", DataType::Int, ClickHouseType::Nullable(Box::new(ClickHouseType::Int32))),
+            ColumnDesc::new("str", DataType::String, ClickHouseType::String),
+        ];
+        let mut block = Block::new(pool, types)?;
+        for i in 0..50000 {
+            let row = GenericRow::new(vec![
+                EtlValue::Long(i), EtlValue::Long((10 + i) * 1_000_000), EtlValue::Int(i as i32),
+                if i % 2 == 0 { EtlValue::Null } else { EtlValue::Int(i as i32) },
+                EtlValue::String(Arc::new(format!("str{}", i)))
+            ]);
+            block.write(&row)?;
+        }
+
+        let mut buffer1 = Vec::new();
+        block.read_to_end(&mut buffer1).unwrap();
+        block.read_reset();
+        let buffer2 = lz4::compress(&buffer1).unwrap().to_vec();
+        let mut block_reader = ArcCompressBlockReader::from(Arc::new(Mutex::new(block)));
+        let mut buffer3 = Vec::new();
+        block_reader.read_to_end(&mut buffer3).unwrap();
+        //println!("{}: {:x?}", buffer1.len(), buffer1);
+        //println!("{}: {:x?}", buffer2.len(), buffer2);
+        //println!("{}: {:x?}", buffer3.len(), buffer3);
+        println!("{}, {}, {}", buffer1.len(), buffer2.len(), buffer3.len());
+        //assert_eq!(buffer2 , buffer3);
         Ok(())
     }
 }

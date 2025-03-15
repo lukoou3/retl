@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt::Debug;
 use std::{mem, thread};
+use std::io::Read;
 use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -15,7 +16,7 @@ use crate::Result;
 use crate::buffer_pool::BufferPool;
 use crate::config::{BaseIOMetrics, TaskContext};
 use crate::connector::batch::BatchConfig;
-use crate::connector::clickhouse::{parse_date_type, ArcBlockReader, Block, ClickHouseDefaultBatchSettings, ColumnDesc, ConnectionConfig};
+use crate::connector::clickhouse::{lz4, parse_date_type, ArcBlockReader, ArcCompressBlockReader, Block, ClickHouseDefaultBatchSettings, ColumnDesc, ConnectionConfig};
 use crate::connector::Sink;
 use crate::data::Row;
 use crate::datetime_utils::current_timestamp_millis;
@@ -120,8 +121,8 @@ impl Sink for ClickHouseSink {
         let stoped = self.stoped.clone();
         let shared_blocks = self.shared_blocks.clone();//block_deque
         let interval_ms = self.batch_config.interval_ms;
-        let thread_name = format!("flush-{}", self.connection_config.table);
-        let flush_handle = thread::Builder::new().name(thread_name).stack_size(256 * 1024).spawn(move || {
+        let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, self.task_context.task_config.subtask_index + 1, self.task_context.task_config.subtask_parallelism);
+        let flush_handle = thread::Builder::new().name(thread_name).stack_size(128 * 1024).spawn(move || {
             ClickHouseSink::process_flush_block(base_iometrics, buffer_pool, insert_sql, column_descs, connection_config, stoped, shared_blocks, interval_ms)
         }).map_err(|e| e.to_string())?;
         self.flush_handle = Some(flush_handle);
@@ -135,7 +136,7 @@ impl Sink for ClickHouseSink {
         let mut shared_blocks = lock.lock().unwrap();
         let block = &mut shared_blocks.1;
         block.write(row)?;
-        if block.rows() >= self.batch_config.max_rows || block.bytes() >= self.batch_config.max_bytes {
+        if block.rows() >= self.batch_config.max_rows || block.byte_size() >= self.batch_config.max_bytes {
             // 使用 mem::replace 移动数据
             let data_block = mem::replace(block, Block::new(self.buffer_pool.clone(), self.column_descs.clone())?);
             while shared_blocks.0.len() >= 1 {
@@ -187,7 +188,7 @@ impl ClickHouseSink {
             if let Some(block) = shared_blocks.0.pop_front() {
                 cvar.notify_one(); // 通知生产线程
                 drop(shared_blocks); // 释放共享数据的锁
-                Self::flush_block(&base_iometrics, &insert_sql, &connection_config, &urls, &mut url_index, &mut last_flush_ts, ArcBlockReader::from(block));
+                Self::flush_block(&base_iometrics, &insert_sql, &connection_config, &urls, &mut url_index, &mut last_flush_ts, block);
             } else {
                 if current_timestamp_millis() >= last_flush_ts + interval_ms || has_stoped {
                     if shared_blocks.1.rows() == 0 {
@@ -202,7 +203,7 @@ impl ClickHouseSink {
                     let empty_block = Block::new(buffer_pool.clone(), column_descs.clone()).unwrap();
                     let block = mem::replace(&mut shared_blocks.1, empty_block);
                     drop(shared_blocks); // 释放共享数据的锁
-                    Self::flush_block(&base_iometrics, &insert_sql, &connection_config, &urls, &mut url_index,  &mut last_flush_ts, ArcBlockReader::from(block));
+                    Self::flush_block(&base_iometrics, &insert_sql, &connection_config, &urls, &mut url_index,  &mut last_flush_ts, block);
                 }
             }
 
@@ -214,22 +215,25 @@ impl ClickHouseSink {
     }
 
     fn flush_block(base_iometrics: &Arc<BaseIOMetrics>, insert_sql: &str,
-                   connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize,  last_flush_ts: &mut u64, block: ArcBlockReader )  {
-        if let Err(e) = Self::flush_block_inner(insert_sql, connection_config, urls, url_index, block.clone()) {
+                   connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize, last_flush_ts: &mut u64, block: Block )  {
+        let rows = block.rows() as u64;
+        let byte_size = block.byte_size() as u64;
+        let compress = true;
+        let arc_block = Arc::new(Mutex::new(block));
+        if let Err(e) = Self::flush_block_inner(insert_sql, connection_config, urls, url_index, arc_block.clone(), rows , byte_size , compress) {
            warn!("flush block error:{:?}", e)
         } else {
-            base_iometrics.num_records_out_inc_by(block.rows() as u64);
-            base_iometrics.num_bytes_out_inc_by(block.bytes() as u64);
+            base_iometrics.num_records_out_inc_by(rows);
+            base_iometrics.num_bytes_out_inc_by(byte_size);
         }
 
-        block.realease_buffer();
+        arc_block.lock().unwrap().release_buffer();
         *last_flush_ts = current_timestamp_millis();
     }
 
-    fn flush_block_inner(insert_sql: &str, connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize,  block: ArcBlockReader ) -> core::result::Result<(), Box<dyn Error>>  {
-        let rows = block.rows();
-        let bytes = block.bytes();
-        info!("flush block start:{} rows,{} bytes", rows, bytes);
+    fn flush_block_inner(insert_sql: &str, connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize, arc_block: Arc<Mutex<Block>>,
+                         rows: u64, byte_size: u64, compress: bool ) -> core::result::Result<(), Box<dyn Error>>  {
+        info!("flush block start:{} rows,{} bytes", rows, byte_size);
 
         let host = &urls[*url_index];
         let mut url = Url::parse(host)?;
@@ -237,6 +241,9 @@ impl ClickHouseSink {
         pairs.clear();
         pairs.append_pair("database", "test");
         pairs.append_pair("query", &insert_sql);
+        if compress {
+            pairs.append_pair("decompress", "1");
+        }
         drop(pairs);
         let url = url.as_ref();
 
@@ -248,11 +255,21 @@ impl ClickHouseSink {
             .header("Content-Type", "application/octet-stream")
             ;
 
-        let response = r.body(Body::new(block)).send()?;
-        if response.status().is_success() {
-            info!("flush block success:{} rows,{} bytes.", rows, bytes);
+        let body = if compress {
+            /*let mut buffer1 = Vec::new();
+            arc_block.lock().unwrap().read_to_end(&mut buffer1).unwrap();
+            let buffer2 = lz4::compress(&buffer1).unwrap().to_vec();
+            Body::from(buffer2)*/
+            Body::new(ArcCompressBlockReader::from(arc_block))
         } else {
-            warn!("flush block error:{:?}", response);
+            Body::new(ArcBlockReader::from(arc_block))
+        };
+
+        let response = r.body(body).send()?;
+        if response.status().is_success() {
+            info!("flush block success:{} rows,{} bytes.", rows, byte_size);
+        } else {
+            warn!("flush block error:{}, {}", response.status(), response.text()?);
         }
 
         Ok(())

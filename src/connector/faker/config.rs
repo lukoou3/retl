@@ -6,14 +6,26 @@ use crate::connector::faker::parse::{FieldFakerConfig};
 use crate::connector::Source;
 use crate::types::Schema;
 
+fn default_rows_per_second() -> i32 {
+    1
+}
+
+fn default_number_of_rows() -> i64 {
+    i64::MAX
+}
+
+fn default_millis_per_row() -> i64 {
+    0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FakerSourceConfig {
     fields: Vec<FieldFakerConfig>,
-    #[serde(default)]
+    #[serde(default = "default_rows_per_second")]
     rows_per_second: i32,
-    #[serde(default)]
+    #[serde(default = "default_number_of_rows")]
     number_of_rows: i64,
-    #[serde(default)]
+    #[serde(default = "default_millis_per_row")]
     millis_per_row: i64,
 }
 

@@ -106,24 +106,35 @@ pub fn new_sink_operator(node: &Node, task_config: TaskConfig, schema: Schema) -
 }
 
 pub fn execution_graph(graph: &Graph, application_config: &ApplicationConfig, registry: Registry, terminated: Arc<AtomicBool>) -> Result<()> {
+    let parallelism = application_config.parallelism;
     let mut handles = Vec::with_capacity(graph.source_ids.len());
-    for (i, source_id) in graph.source_ids.iter().enumerate() {
-        let source_id = *source_id;
-        let graph = graph.clone();
-        let task_config = TaskConfig::new(1, 0, registry.clone());
-        let terminated = terminated.clone();
-        let builder = thread::Builder::new().stack_size(1024 * 512)
-            .name(format!("{}-{}/{}", graph.get_node_dispaly_by_id(source_id), 1, 1));
-        handles.push(builder.spawn(move || {
-            println!("start source: {}", source_id);
-            let mut source = new_source_operator(source_id, &graph, task_config)?;
-            source.open()?;
-            source.run(terminated)?;
-            source.close()
-        }).map_err(|_| "failed to spawn thread")?);
+    for source_id in graph.source_ids.iter() {
+        for i in 0..parallelism {
+            let source_id = *source_id;
+            let graph = graph.clone();
+            let task_config = TaskConfig::new(parallelism, i, registry.clone());
+            let terminated = terminated.clone();
+            let builder = thread::Builder::new().stack_size(1024 * 256)
+                .name(format!("{}-{}/{}", graph.get_node_dispaly_by_id(source_id), i + 1, parallelism));
+            handles.push(builder.spawn(move || {
+                println!("start source: {}", source_id);
+                let mut source = new_source_operator(source_id, &graph, task_config)?;
+                source.open()?;
+                source.run(terminated)?;
+                source.close()
+            }).map_err(|_| "failed to spawn thread")?);
+        }
     }
+    let mut errs = Vec::new();
     for handle in handles {
-        handle.join().unwrap()?;
+        let result = handle.join().unwrap();
+        if let Err(e) = result {
+            errs.push(e);
+        }
     }
-    Ok(())
+    if !errs.is_empty() {
+        Err(errs.join("\n"))
+    } else {
+        Ok(())
+    }
 }

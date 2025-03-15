@@ -37,7 +37,7 @@ fn start_web(web_config: WebConfig, registry: Registry,  terminated: Arc<AtomicB
         let registry = registry.clone();
         let server = server.clone();
         let terminated = Arc::clone(&terminated);
-        let builder = thread::Builder::new().stack_size(1024 * 256).name(format!("web-{}", i));
+        let builder = thread::Builder::new().stack_size(1024 * 128).name(format!("web-{}", i));
         let handle = builder.spawn(move || {
             while !terminated.load(Ordering::Acquire) {
                 match server.recv_timeout(Duration::from_secs(1)) {

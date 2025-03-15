@@ -85,8 +85,9 @@ mod tests {
 
         // 构造 JSON 数据
         let json_data = r#"[
-        {"timestamp":"2025-03-02 14:19:25","object_id":1},
-        {"timestamp":"2025-03-02 14:19:25","object_id":2}
+        {"timestamp":"2025-03-15 14:19:25","object_id":1},
+        {"timestamp":"2025-03-15 14:19:25","object_id":2},
+        {"timestamp":"2025-03-15 14:19:25","object_id":2}
         ]"#;
 
         let client = HttpClient::builder()
