@@ -15,6 +15,7 @@ use log::{info, warn};
 use reqwest::blocking::{Body, Client, Request, Response};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{redirect, StatusCode, Url};
+use serde_json::Value;
 use crate::Result;
 use crate::buffer_pool::BufferPool;
 use crate::codecs::{JsonSerializer, Serializer};
@@ -86,9 +87,10 @@ impl Sink for StarRocksSink {
         let shared_blocks = self.shared_blocks.clone();//block_deque
         let total_flush = self.total_flush.clone();
         let interval_ms = self.batch_config.interval_ms;
-        let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, self.task_context.task_config.subtask_index + 1, self.task_context.task_config.subtask_parallelism);
+        let subtask_index =  self.task_context.task_config.subtask_index;
+        let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, subtask_index + 1, self.task_context.task_config.subtask_parallelism);
         let flush_handle = thread::Builder::new().name(thread_name).stack_size(128 * 1024).spawn(move || {
-            StarRocksSink::process_flush_block(base_iometrics, connection_config, stoped, shared_blocks, total_flush, interval_ms)
+            StarRocksSink::process_flush_block(subtask_index, base_iometrics, connection_config, stoped, shared_blocks, total_flush, interval_ms)
         }).map_err(|e| e.to_string())?;
         self.flush_handle = Some(flush_handle);
         Ok(())
@@ -133,10 +135,10 @@ impl Sink for StarRocksSink {
 }
 
 impl StarRocksSink {
-    fn process_flush_block(base_iometrics: Arc<BaseIOMetrics>, connection_config: ConnectionConfig, stoped: Arc<AtomicBool>, shared_blocks: Arc<(Mutex<(VecDeque<Block>, Block)>, Condvar)>,
+    fn process_flush_block(subtask_index: u8, base_iometrics: Arc<BaseIOMetrics>, connection_config: ConnectionConfig, stoped: Arc<AtomicBool>, shared_blocks: Arc<(Mutex<(VecDeque<Block>, Block)>, Condvar)>,
                            total_flush: Arc<AtomicU64>, interval_ms: u64,) {
         let urls = connection_config.build_urls();
-        let mut url_index = 0;
+        let mut url_index = subtask_index as usize % urls.len();
         let mut last_flush_ts = current_timestamp_millis();
         let (lock, cvar) = shared_blocks.as_ref();
         let mut has_stoped = false;
@@ -188,11 +190,32 @@ impl StarRocksSink {
         let batch_rows = block.batch_rows as u64;
         let batch_bytes = block.batch_bytes;
         let buffers: Arc<Vec<BytesMut>> = Arc::new(block.buffers);
-        if let Err(e) = Self::flush_block_inner(connection_config, urls, url_index, total_flush, buffers.clone(), batch_rows, batch_bytes) {
-           warn!("flush block error:{:?}", e)
-        } else {
-            base_iometrics.num_records_out_inc_by(batch_rows);
-            base_iometrics.num_bytes_out_inc_by(batch_bytes as u64);
+        info!("flush block start:{} rows,{} bytes, after:{}", batch_rows, batch_bytes, current_timestamp_millis() - *last_flush_ts);
+        *last_flush_ts = current_timestamp_millis();
+        let mut retry = 0;
+        loop {
+            retry += 1;
+            match Self::flush_block_inner(connection_config, urls, url_index, buffers.clone()) {
+                Ok(json) => {
+                    info!("flush block success:{} rows,{} bytes, {} ms. \t{}", batch_rows, batch_bytes, current_timestamp_millis() - *last_flush_ts , json);
+                    total_flush.fetch_add(batch_rows, Ordering::SeqCst);
+                    base_iometrics.num_records_out_inc_by(batch_rows);
+                    base_iometrics.num_bytes_out_inc_by(batch_bytes as u64);
+                    break;
+                },
+                Err(e) => {
+                    if retry >= 3 || retry >= urls.len() {
+                        warn!("flush block error:{:?}", e);
+                        break;
+                    } else {
+                        warn!("retry({}) flush block error:{:?}", retry, e);
+                    }
+                }
+            }
+            *url_index += 1;
+            if *url_index == urls.len() {
+                *url_index = 0;
+            }
         }
         if let Ok(buffers) = Arc::try_unwrap(buffers) {
             for buffer in buffers {
@@ -201,12 +224,9 @@ impl StarRocksSink {
         } else {
             warn!("Arc<Vec<BytesMut>> still has multiple references, cannot recycle yet");
         }
-        *last_flush_ts = current_timestamp_millis();
     }
 
-    fn flush_block_inner(connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize, total_flush: Arc<AtomicU64>, buffers: Arc<Vec<BytesMut>>, batch_rows: u64, batch_bytes: usize ) -> core::result::Result<(), Box<dyn Error>>  {
-        info!("flush block start:{} rows,{} bytes", batch_rows, batch_bytes);
-
+    fn flush_block_inner(connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize,  buffers: Arc<Vec<BytesMut>>) ->anyhow::Result<serde_json::Value>  {
         let url = &urls[*url_index];
         let fe_host = Url::parse(&url)?.host_str().unwrap().to_string();
         let client = Client::builder()
@@ -241,16 +261,14 @@ impl StarRocksSink {
 
         if response.status().is_success() {
             let json: serde_json::Value = response.json()?;
-            total_flush.fetch_add(batch_rows, Ordering::SeqCst);
-            info!("flush block success:{} rows,{} bytes. \t{}", batch_rows, batch_bytes, json);
+            Ok(json)
         } else {
-            warn!("flush block error:{:?}", response);
+            Err(anyhow!("Stream load failed: {}, {}", response.status(), response.text()?))
         }
 
-        Ok(())
     }
 
-    fn construct_headers(connection_config: &ConnectionConfig) -> core::result::Result<HeaderMap, Box<dyn Error>>  {
+    fn construct_headers(connection_config: &ConnectionConfig) -> anyhow::Result<HeaderMap>  {
         let mut headers = HeaderMap::new();
         for (k, v) in connection_config.properties.iter() {
             headers.insert(HeaderName::from_str(k)?, HeaderValue::from_str(v)?);

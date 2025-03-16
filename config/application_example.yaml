@@ -2,6 +2,8 @@ env:
   application:
     name: test
     parallelism: 1
+  web:
+    enabled: true
 
 sources:
   - type: faker
@@ -52,12 +54,14 @@ transforms:
     sql: "select id, cate, text, in_bytes, out_bytes, bytes, bytes2 from tbl"
 
 sinks:
-#  - type: print
-#    inputs: [ faker_source ]
-#    print_mode: stdout
-#    encoding:
-#      codec: json
+  - type: print
+    name: print_sink
+    inputs: [ faker_source ]
+    print_mode: stdout
+    encoding:
+      codec: json
   - type: starrocks
+    name: starrocks_sink
     inputs: [ faker_object_stat ]
     host: 192.168.216.86:8061
     username: root
@@ -69,3 +73,4 @@ sinks:
     batch_max_bytes: 104857600
     batch_interval_ms: 5000
 
+active_sinks: [print_sink]

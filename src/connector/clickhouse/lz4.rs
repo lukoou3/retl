@@ -76,7 +76,7 @@ pub fn compress(uncompressed: &[u8]) -> anyhow::Result<Bytes> {
     buffer.resize(LZ4_META_SIZE + max_compressed_size, 0);
 
     let compressed_data_size = block::compress_into(uncompressed, &mut buffer[LZ4_META_SIZE..])?;
-    info!("lz4 bytes: {} => {}", uncompressed.len(), LZ4_META_SIZE + compressed_data_size);
+    //info!("lz4 bytes: {} => {}", uncompressed.len(), LZ4_META_SIZE + compressed_data_size);
 
     buffer.truncate(LZ4_META_SIZE + compressed_data_size);
 
@@ -96,7 +96,7 @@ pub fn compress(uncompressed: &[u8]) -> anyhow::Result<Bytes> {
 pub fn compress_into(uncompressed: &[u8], buffer: &mut [u8]) -> anyhow::Result<usize> {
     let compressed_data_size = block::compress_into(uncompressed, &mut buffer[LZ4_META_SIZE..])?;
     let compressed_size = LZ4_META_SIZE + compressed_data_size;
-    info!("lz4 bytes: {} => {}", uncompressed.len(), LZ4_META_SIZE + compressed_data_size);
+    //info!("lz4 bytes: {} => {}", uncompressed.len(), LZ4_META_SIZE + compressed_data_size);
 
     let mut meta = Lz4Meta {
         checksum: 0, // will be calculated below.

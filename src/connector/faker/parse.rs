@@ -4,7 +4,7 @@ use config::Config;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
 use crate::Result;
-use crate::connector::faker::{CharsStringFaker, Faker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, TimestampFaker, TimestampType, TimestampUnit};
+use crate::connector::faker::{ArrayFaker, CharsStringFaker, Faker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, TimestampFaker, TimestampType, TimestampUnit};
 use crate::data::Value;
 use crate::types::Schema;
 pub fn parse_fakers(field_configs: Vec<Config>, schema: &Schema) -> Result<Vec<(usize, Box<dyn Faker>)>> {
@@ -35,6 +35,19 @@ pub trait FakerConfig: DynClone + Debug + Send + Sync {
 
 dyn_clone::clone_trait_object!(FakerConfig);
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct WrapConfig {
+    #[serde(default)]
+    null_rate: f32,
+    #[serde(default)]
+    array: bool,
+    #[serde(default = "default_array_len_min")]
+    array_len_min: usize,
+    #[serde(default = "default_array_len_max")]
+    array_len_max: usize,
+}
+
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct IntFakerConfig {
     #[serde(default)]
@@ -45,6 +58,8 @@ struct IntFakerConfig {
     options: Vec<Option<i32>>,
     #[serde(default = "default_random")]
     random: bool,
+    #[serde(flatten, default)]
+    wrap_config: WrapConfig,
 }
 
 #[typetag::serde(name = "int")]
@@ -58,9 +73,11 @@ impl FakerConfig for IntFakerConfig {
                     None => options.push(Value::Null),
                 }
             }
-            Ok(Box::new(OptionIntFaker::new(options, self.random)))
+            let faker = Box::new(OptionIntFaker::new(options, self.random));
+            Ok(wrap_faker_necessary(faker, &self.wrap_config))
         } else {
-            Ok(Box::new(RangeIntFaker::new(self.min, self.max, self.random)))
+            let faker = Box::new(RangeIntFaker::new(self.min, self.max, self.random));
+            Ok(wrap_faker_necessary(faker, &self.wrap_config))
         }
     }
 }
@@ -75,6 +92,8 @@ struct LongFakerConfig {
     options: Vec<Option<i64>>,
     #[serde(default = "default_random")]
     random: bool,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "long")]
@@ -88,9 +107,11 @@ impl FakerConfig for LongFakerConfig {
                     None => options.push(Value::Null),
                }
             }
-            Ok(Box::new(OptionLongFaker::new(options, self.random)))
+            let faker = Box::new(OptionLongFaker::new(options, self.random));
+            Ok(wrap_faker_necessary(faker, &self.array_config))
         } else {
-            Ok(Box::new(RangeLongFaker::new(self.min, self.max, self.random)))
+            let faker = Box::new(RangeLongFaker::new(self.min, self.max, self.random));
+            Ok(wrap_faker_necessary(faker, &self.array_config))
         }
     }
 }
@@ -105,6 +126,8 @@ struct DoubleFakerConfig {
     options: Vec<Option<f64>>,
     #[serde(default = "default_random")]
     random: bool,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "double")]
@@ -118,9 +141,11 @@ impl FakerConfig for DoubleFakerConfig {
                     None => options.push(Value::Null),
                }
             }
-            Ok(Box::new(OptionDoubleFaker::new(options, self.random)))
+            let faker = Box::new(OptionDoubleFaker::new(options, self.random));
+            Ok(wrap_faker_necessary(faker, &self.array_config))
         } else {
-            Ok(Box::new(RangeDoubleFaker::new(self.min, self.max)))
+            let faker = Box::new(RangeDoubleFaker::new(self.min, self.max));
+            Ok(wrap_faker_necessary(faker, &self.array_config))
         }
     }
 }
@@ -137,12 +162,14 @@ struct StringFakerConfig {
     options: Vec<Option<String>>,
     #[serde(default = "default_random")]
     random: bool,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "string")]
 impl FakerConfig for StringFakerConfig {
     fn build(&self) -> Result<Box<dyn Faker>> {
-        if !self.options.is_empty() {
+        let faker: Box<dyn Faker> = if !self.options.is_empty() {
             let mut options = Vec::with_capacity(self.options.len());
             for option in self.options.clone() {
                 match option {
@@ -150,12 +177,13 @@ impl FakerConfig for StringFakerConfig {
                     None => options.push(Value::Null),
               }
             }
-            Ok(Box::new(OptionStringFaker::new(options, self.random)))
+            Box::new(OptionStringFaker::new(options, self.random))
         } else if !self.chars.is_empty() {
-            Ok(Box::new(CharsStringFaker::new(self.chars.chars().collect(), self.len)))
+            Box::new(CharsStringFaker::new(self.chars.chars().collect(), self.len))
         } else {
-            Ok(Box::new(RegexStringFaker::new(self.regex.clone())))
-        }
+            Box::new(RegexStringFaker::new(self.regex.clone()))
+        };
+        Ok(wrap_faker_necessary(faker, &self.array_config))
     }
 }
 
@@ -165,6 +193,8 @@ struct TimestampConfig {
     unit: TimestampUnit,
     #[serde(default)]
     timestamp_type: TimestampType,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "timestamp")]
@@ -180,12 +210,15 @@ struct FormatTimestampConfig {
     format: String,
     #[serde(default = "default_utc")]
     utc: bool,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "format_timestamp")]
 impl FakerConfig for FormatTimestampConfig {
     fn build(&self) -> Result<Box<dyn Faker>> {
-        Ok(Box::new(FormatTimestampFaker{format: self.format.clone(), utc: self.utc}))
+        let faker = Box::new(FormatTimestampFaker{format: self.format.clone(), utc: self.utc});
+        Ok(wrap_faker_necessary(faker, &self.array_config))
     }
 }
 
@@ -195,6 +228,8 @@ struct Ipv4Config {
     start: String,
     #[serde(default = "default_ipv4_end")]
     end: String,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "ipv4")]
@@ -207,7 +242,8 @@ impl FakerConfig for Ipv4Config {
         if start >= end {
             return Err("Ipv4Config start must not be greater than end".to_string());
         }
-        Ok(Box::new(Ipv4Faker::new(start, end)))
+        let faker = Box::new(Ipv4Faker::new(start, end));
+        Ok(wrap_faker_necessary(faker, &self.array_config))
     }
 }
 
@@ -217,6 +253,8 @@ struct Ipv6Config {
     start: String,
     #[serde(default = "default_ipv6_end")]
     end: String,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
 }
 
 #[typetag::serde(name = "ipv6")]
@@ -229,9 +267,22 @@ impl FakerConfig for Ipv6Config {
         if start >= end {
             return Err("Ipv6Config start must not be greater than end".to_string());
         }
-        Ok(Box::new(Ipv6Faker::new(start, end)))
+        let faker = Box::new(Ipv6Faker::new(start, end));
+        Ok(wrap_faker_necessary(faker, &self.array_config))
     }
 }
+
+fn wrap_faker_necessary(mut faker: Box<dyn Faker>, wrap_config: &WrapConfig,) -> Box<dyn Faker> {
+    if wrap_config.array {
+        faker = Box::new(ArrayFaker::new(faker, wrap_config.array_len_min, wrap_config.array_len_max))
+    }
+    if wrap_config.null_rate > 0f32 {
+        faker = Box::new(NullAbleFaker::new(faker, wrap_config.null_rate))
+    }
+    faker
+}
+
+
 
 fn default_ipv6_start() -> String {
     "::".to_string()
@@ -259,6 +310,14 @@ fn default_utc() -> bool {
 
 fn default_random() -> bool {
     true
+}
+
+fn default_array_len_min() -> usize {
+    0
+}
+
+fn default_array_len_max() -> usize {
+    5
 }
 
 fn default_regex() -> String {

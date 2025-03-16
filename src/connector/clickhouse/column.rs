@@ -3,6 +3,7 @@ use std::io;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use bytes::BufMut;
+use log::info;
 use crate::buffer_block::BufferBlock;
 use crate::buffer_pool::BufferPool;
 use crate::Result;
@@ -64,6 +65,8 @@ pub struct ArcCompressBlockReader {
     compress_buf: Vec<u8>,
     compress_size: usize,
     read_offset: usize,
+    total_uncompressed_size: usize,
+    total_compressed_size: usize,
 }
 
 impl ArcCompressBlockReader {
@@ -75,6 +78,8 @@ impl ArcCompressBlockReader {
             compress_buf: vec![0; lz4::max_compressed_size(compress_buf_size)],
             compress_size: 0,
             read_offset: 0,
+            total_uncompressed_size: 0,
+            total_compressed_size: 0,
         }
     }
 }
@@ -86,14 +91,17 @@ impl Read for ArcCompressBlockReader {
         if self.read_offset >= self.compress_size {
             // 从 block 读取数据到 uncompress_buf
             let bytes_read = block.read(&mut self.uncompress_buf)?;
+            self.total_uncompressed_size += bytes_read;
 
             // 如果没有读取到数据，表示已到末尾
             if bytes_read == 0 {
+                info!("lz4 bytes: {} => {}", self.total_uncompressed_size, self.total_compressed_size);
                 return Ok(0);
             }
 
             // 清空 compress_buf 并压缩数据
             self.compress_size = lz4::compress_into(&self.uncompress_buf[..bytes_read], &mut self.compress_buf).map_err(|_| io::Error::other("Failed to compress data"))?;
+            self.total_compressed_size += self.compress_size;
             self.read_offset = 0; // 重置偏移
         }
 

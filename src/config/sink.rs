@@ -8,6 +8,7 @@ use crate::types::Schema;
 
 #[derive(Clone, Debug, Serialize,Deserialize)]
 pub struct SinkOuter {
+    pub name: String,
     pub inputs: Vec<String>,
     #[serde(flatten)]
     pub inner: BoxedSinkConfig,

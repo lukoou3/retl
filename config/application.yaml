@@ -2,6 +2,8 @@ env:
   application:
     name: test
     parallelism: 1
+  web:
+    enabled: true
 
 sources:
   #  - type: inline
@@ -52,11 +54,13 @@ transforms:
 
 sinks:
   - type: print
+    name: print_sink
     inputs: [ kafka_source ]
     print_mode: log_warn
     encoding:
       codec: json
   - type: kafka
+    name: kafka_sink
     inputs: [ query ]
     topic: logs
     properties:
@@ -66,3 +70,5 @@ sinks:
       compression.type: "lz4"
     encoding:
       codec: json
+
+active_sinks: [print_sink]

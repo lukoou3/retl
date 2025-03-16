@@ -32,6 +32,7 @@ fn handle_request(registry: &Registry, mut request: Request) {
 }
 fn start_web(web_config: WebConfig, registry: Registry,  terminated: Arc<AtomicBool>) -> crate::Result<Vec<JoinHandle<()>>> {
     let server = Arc::new(Server::http(format!("0.0.0.0:{}", web_config.port)).map_err(|e| e.to_string())?);
+    info!("start metrics at: http://127.0.0.1:{}/metrics", web_config.port);
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
     for i in 0..web_config.works {
         let registry = registry.clone();
@@ -71,7 +72,11 @@ pub fn run_application() -> crate::Result<()> {
     // 捕获 SIGINT (Ctrl+C) 和 SIGTERM (kill) 信号
     flag::register(SIGINT, terminated.clone()).expect("Failed to register SIGINT handler");
     flag::register(SIGTERM, terminated.clone()).expect("Failed to register SIGTERM handler");
-    let handles = start_web(config.env.web.clone(), registry.clone(), terminated.clone())?;
+    let handles = if config.env.web.enabled {
+        start_web(config.env.web.clone(), registry.clone(), terminated.clone())?
+    } else {
+        Vec::new()
+    };
     let result = execution::execution_graph(&graph, &config.env.application, registry, terminated.clone());
     info!("execution finish");
     terminated.store(true, Ordering::Release);

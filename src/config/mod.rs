@@ -19,6 +19,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub transforms: Vec<TransformOuter>,
     pub sinks: Vec<SinkOuter>,
+    #[serde(default)]
+    pub active_sinks: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize,Deserialize)]
@@ -30,6 +32,8 @@ pub struct EnvConfig {
 
 #[derive(Debug, Clone, Serialize,Deserialize)]
 pub struct WebConfig {
+    #[serde(default)]
+    pub enabled: bool,
     #[serde(default = "default_port")]
     pub port: u32,
     #[serde(default = "default_works")]
@@ -39,6 +43,7 @@ pub struct WebConfig {
 impl Default for WebConfig {
     fn default() -> Self {
         WebConfig {
+            enabled: false,
             port: default_port(),
             works: default_works(),
         }

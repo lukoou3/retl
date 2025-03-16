@@ -136,7 +136,11 @@ impl ConnectionConfig {
                 .timeout(Duration::from_secs(60))
                 .body(body.as_str())?;
 
-            let mut response = request.send()?;
+            let response_rst = request.send();
+            if response_rst.is_err() {
+                continue;
+            }
+            let mut response = response_rst.unwrap();
 
             if response.status().is_success() {
                 let json: Value = serde_json::from_str(&response.text()?)?;

@@ -215,6 +215,9 @@ impl NodeParser {
 
         for sink in config.sinks.iter() {
             let input = &sink.inputs[0];
+            if !config.active_sinks.contains(&sink.name) {
+                continue;
+            }
             let mut in_node = if let Some(node) = self.output_node_dict.get(input) {
                 node.clone()
             } else {

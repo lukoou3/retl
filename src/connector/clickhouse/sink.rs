@@ -7,6 +7,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
+use anyhow::anyhow;
 use itertools::Itertools;
 use log::{info, warn};
 use reqwest::blocking::{Body, Client};
@@ -121,9 +122,10 @@ impl Sink for ClickHouseSink {
         let stoped = self.stoped.clone();
         let shared_blocks = self.shared_blocks.clone();//block_deque
         let interval_ms = self.batch_config.interval_ms;
-        let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, self.task_context.task_config.subtask_index + 1, self.task_context.task_config.subtask_parallelism);
+        let subtask_index =  self.task_context.task_config.subtask_index;
+        let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, subtask_index + 1, self.task_context.task_config.subtask_parallelism);
         let flush_handle = thread::Builder::new().name(thread_name).stack_size(128 * 1024).spawn(move || {
-            ClickHouseSink::process_flush_block(base_iometrics, buffer_pool, insert_sql, column_descs, connection_config, stoped, shared_blocks, interval_ms)
+            ClickHouseSink::process_flush_block(subtask_index, base_iometrics, buffer_pool, insert_sql, column_descs, connection_config, stoped, shared_blocks, interval_ms)
         }).map_err(|e| e.to_string())?;
         self.flush_handle = Some(flush_handle);
         Ok(())
@@ -165,10 +167,10 @@ impl Sink for ClickHouseSink {
 }
 
 impl ClickHouseSink {
-    fn process_flush_block(base_iometrics: Arc<BaseIOMetrics>, buffer_pool: BufferPool, insert_sql: String, column_descs: Vec<ColumnDesc>,
+    fn process_flush_block(subtask_index: u8, base_iometrics: Arc<BaseIOMetrics>, buffer_pool: BufferPool, insert_sql: String, column_descs: Vec<ColumnDesc>,
                            connection_config: ConnectionConfig, stoped: Arc<AtomicBool>, shared_blocks: Arc<(Mutex<(VecDeque<Block>, Block)>, Condvar)>, interval_ms: u64)  {
         let urls = connection_config.build_urls();
-        let mut url_index = 0;
+        let mut url_index = subtask_index as usize % urls.len();
         let mut last_flush_ts = current_timestamp_millis();
         let (lock, cvar) = shared_blocks.as_ref();
         let mut has_stoped = false;
@@ -220,21 +222,37 @@ impl ClickHouseSink {
         let byte_size = block.byte_size() as u64;
         let compress = true;
         let arc_block = Arc::new(Mutex::new(block));
-        if let Err(e) = Self::flush_block_inner(insert_sql, connection_config, urls, url_index, arc_block.clone(), rows , byte_size , compress) {
-           warn!("flush block error:{:?}", e)
-        } else {
-            base_iometrics.num_records_out_inc_by(rows);
-            base_iometrics.num_bytes_out_inc_by(byte_size);
-        }
-
-        arc_block.lock().unwrap().release_buffer();
+        info!("flush block start:{} rows,{} bytes, after:{}", rows, byte_size, current_timestamp_millis() - *last_flush_ts);
         *last_flush_ts = current_timestamp_millis();
+        let mut retry = 0;
+        loop {
+            retry += 1;
+            match Self::flush_block_inner(insert_sql, connection_config, urls, url_index, arc_block.clone(), compress) {
+                Ok(_) => {
+                    info!("flush block success:{} rows,{} bytes, {} ms.", rows, byte_size, current_timestamp_millis() - *last_flush_ts);
+                    base_iometrics.num_records_out_inc_by(rows);
+                    base_iometrics.num_bytes_out_inc_by(byte_size);
+                    break;
+                }
+                Err(e) => {
+                    if retry >= 3 || retry >= urls.len() {
+                        warn!("flush block error:{:?}", e);
+                        break;
+                    } else {
+                        warn!("retry({}) flush block error:{:?}", retry, e);
+                    }
+                }
+            }
+            *url_index += 1;
+            if *url_index == urls.len() {
+                *url_index = 0;
+            }
+        }
+        arc_block.lock().unwrap().release_buffer();
     }
 
     fn flush_block_inner(insert_sql: &str, connection_config: &ConnectionConfig, urls: &Vec<String>, url_index: &mut usize, arc_block: Arc<Mutex<Block>>,
-                         rows: u64, byte_size: u64, compress: bool ) -> core::result::Result<(), Box<dyn Error>>  {
-        info!("flush block start:{} rows,{} bytes", rows, byte_size);
-
+                          compress: bool ) -> anyhow::Result<()>  {
         let host = &urls[*url_index];
         let mut url = Url::parse(host)?;
         let mut pairs = url.query_pairs_mut();
@@ -267,12 +285,10 @@ impl ClickHouseSink {
 
         let response = r.body(body).send()?;
         if response.status().is_success() {
-            info!("flush block success:{} rows,{} bytes.", rows, byte_size);
+            Ok(())
         } else {
-            warn!("flush block error:{}, {}", response.status(), response.text()?);
+            Err(anyhow!("flush block failed: {}, {}", response.status(), response.text()?))
         }
-
-        Ok(())
     }
 }
 

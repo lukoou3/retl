@@ -1,0 +1,35 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+  web:
+    enabled: true
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "struct<id:bigint, ts:timestamp, cate:string, client_ip:string, ipv6:string, text:string, in_bytes:bigint, out_bytes:bigint, nuallable_int:int, int_array:array<int>, str_array:array<string>>"
+    rows_per_second: 1
+    number_of_rows: 100
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "ts", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "cate", "type": "string", "options": [ "a", "b", null, "c", "d" ] },
+      { "name": "client_ip", "type": "ipv4", "start": "192.168.0.1", "end": "192.168.0.255" },
+      { "name": "ipv6", "type": "ipv6", "start": "2001:0db8:85a3:0000:0000:8a2e:0370:0000", "end": "2001:0db8:85a3:0000:0000:8a2e:0370:7334" },
+      { "name": "text", "type": "string", "regex": "12[a-z]{2}" },
+      { "name": "in_bytes", "type": "int", "min": 100, "max": 10000 },
+      { "name": "out_bytes", "type": "int", "min": 100, "max": 10000 },
+      { "name": "nuallable_int", "type": "int", "min": 100, "max": 10000, "null_rate": 0.3 },
+      { "name": "int_array", "type": "int", "min": 100, "max": 10000, "array": true },
+      { "name": "str_array", "type": "string", "regex": "[a-z]{2}", "array": true }
+    ]
+
+sinks:
+  - type: print
+    inputs: [ faker_source ]
+    print_mode: stdout
+    encoding:
+      codec: json
+
+
