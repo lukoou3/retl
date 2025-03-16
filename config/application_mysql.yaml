@@ -1,0 +1,29 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "struct<code:bigint, name:string, age:int, birthday:timestamp>"
+    rows_per_second: 1
+    number_of_rows: 1000
+    fields: [
+      { "name": "code", "type": "long", "min": 1, "max": 30},
+      { "name": "name", "type": "string", "regex": "[a-z]{2}" },
+      { "name": "age", "type": "int", "min": 10, "max": 60 },
+      { "name": "birthday", "type": "timestamp", "timestamp_type": "datetime" }
+    ]
+
+sinks:
+  - type: mysql
+    name: mysql_sink
+    inputs: [ faker_source ]
+    url: mysql://root:123456@localhost:3306/test
+    table: people
+    upsert: true
+    batch_max_rows: 10
+
+
+active_sinks: [mysql_sink]
