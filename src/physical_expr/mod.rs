@@ -8,6 +8,7 @@ pub mod planner;
 pub mod cast;
 mod collection;
 mod predicate;
+mod datetime;
 
 pub use crate::physical_expr::physical_expr::*;
 pub use crate::physical_expr::attribute::*;
@@ -19,3 +20,4 @@ pub use crate::physical_expr::planner::*;
 pub use crate::physical_expr::cast::*;
 pub use crate::physical_expr::collection::*;
 pub use crate::physical_expr::predicate::*;
+pub use crate::physical_expr::datetime::*;

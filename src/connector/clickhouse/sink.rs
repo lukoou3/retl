@@ -235,7 +235,7 @@ impl ClickHouseSink {
                     break;
                 }
                 Err(e) => {
-                    if retry >= 3 || retry >= urls.len() {
+                    if retry >= 2 || retry >= urls.len() {
                         warn!("flush block error:{:?}", e);
                         break;
                     } else {
@@ -265,9 +265,9 @@ impl ClickHouseSink {
         drop(pairs);
         let url = url.as_ref();
 
-        let client = Client::builder().build()?;
+        let client = Client::builder().pool_idle_timeout(Duration::from_secs(300)).build()?;
         let r = client .post(url)
-            .timeout(Duration::from_secs(3000))
+            .timeout(Duration::from_secs(300))
             .header("X-ClickHouse-User", &connection_config.user)
             .header("X-ClickHouse-Key", &connection_config.password)
             .header("Content-Type", "application/octet-stream")

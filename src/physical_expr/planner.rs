@@ -44,6 +44,12 @@ pub fn create_physical_expr(
             } else if let Some(expr::Concat{children}) = any.downcast_ref::<expr::Concat>() {
                 let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
                 Ok(Arc::new(Concat::new(args)))
+            } else if let Some(_) = any.downcast_ref::<expr::CurrentTimestamp>() {
+                Ok(Arc::new(CurrentTimestamp))
+            } else if let Some(expr::FromUnixTime{sec, format}) = any.downcast_ref::<expr::FromUnixTime>() {
+                Ok(Arc::new(FromUnixTime::new(create_physical_expr(sec)?, create_physical_expr(format)?)))
+            } else if let Some(expr::ToUnixTimestamp{time_expr, format}) = any.downcast_ref::<expr::ToUnixTimestamp>() {
+                Ok(Arc::new(ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
             } else {
                 Err(format!("Not implemented:{:?}", func))
             }

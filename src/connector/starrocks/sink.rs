@@ -26,7 +26,7 @@ use crate::connector::starrocks::{basic_auth_header, lz4, ConnectionConfig, Star
 use crate::data::Row;
 use crate::datetime_utils::current_timestamp_millis;
 
-const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 const LOCALHOST: &str = "localhost";
 const LOCALHOST_IP: &str = "127.0.0.1";
 
@@ -204,7 +204,7 @@ impl StarRocksSink {
                     break;
                 },
                 Err(e) => {
-                    if retry >= 3 || retry >= urls.len() {
+                    if retry >= 2 || retry >= urls.len() {
                         warn!("flush block error:{:?}", e);
                         break;
                     } else {
@@ -235,7 +235,7 @@ impl StarRocksSink {
             .build()?;
         let header_map = Self::construct_headers(connection_config)?;
         let request = client.put(url)
-            .timeout(Duration::from_secs(1800))
+            .timeout(Duration::from_secs(300))
             .headers(header_map.clone())
             .build()?;;
 
@@ -246,7 +246,7 @@ impl StarRocksSink {
                 // and create a new request based on it.
                 let url = resp.url().clone();
                 client.put(url)
-                    .timeout(Duration::from_secs(1800))
+                    .timeout(Duration::from_secs(300))
                     .headers(header_map)
                     .build()?
             }

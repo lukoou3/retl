@@ -181,7 +181,7 @@ impl Expr {
     }
 
     pub fn string_lit(s:impl  Into<String>) -> Expr {
-        Expr::Literal(Literal::new(Value::string(s), DataType::Long))
+        Expr::Literal(Literal::new(Value::string(s), DataType::String))
     }
 
     /// Return `self == other`

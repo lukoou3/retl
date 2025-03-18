@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
-use crate::expr::{AttributeReference, Concat, Expr, Length, Substring, UnresolvedFunction};
+use crate::datetime_utils::NORM_DATETIME_FMT;
+use crate::expr::{AttributeReference, Concat, CurrentTimestamp, Expr, FromUnixTime, Length, Substring, ToUnixTimestamp, UnresolvedFunction};
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
 
@@ -112,6 +113,50 @@ impl AnalyzerRule for ResolveFunctions {
                                         let args = arguments.into_iter().map(|arg| arg.clone()).collect();
                                         Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Concat::new(args)))))
                                     },
+                                    "current_timestamp" | "now" => {
+                                        if arguments.is_empty() {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(CurrentTimestamp))))
+                                        } else {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                    },
+                                    "from_unixtime" => {
+                                        if arguments.len() == 1 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(FromUnixTime::new(
+                                                Box::new(arguments[0].clone()), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
+                                        } else if arguments.len() == 2 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(FromUnixTime::new(
+                                                Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
+                                        } else {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                    },
+                                    "unix_timestamp" => {
+                                        if arguments.len() == 0 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
+                                                Box::new(Expr::ScalarFunction(Box::new(CurrentTimestamp))), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
+                                        } else if arguments.len() == 1 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
+                                                Box::new(arguments[0].clone()), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
+                                        }
+                                        else if arguments.len() == 2 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
+                                                Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
+                                        } else {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                    },
+                                    "to_unix_timestamp" => {
+                                        if arguments.len() == 1 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
+                                                Box::new(arguments[0].clone()), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
+                                        } else if arguments.len() == 2 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
+                                                Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
+                                        } else {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                    }
                                     _ => Err(format!("UnresolvedFunction: {}", name))
                                 }
 
