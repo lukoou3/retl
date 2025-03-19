@@ -296,6 +296,7 @@ fn send_stream_load_request(
         info!("conn url:{}", request.url());
         let original_http_port = request.url().port();
         let mut request_for_redirection = request.try_clone().ok_or_else(|| anyhow!("Can't clone request"))?;
+        *request_for_redirection.timeout_mut() = Some(Duration::from_secs(300));
         let resp = client.execute(request).context("sending stream load request failed")?;
         let be_url = try_get_be_url(&resp, fe_host)?;
         match be_url {
