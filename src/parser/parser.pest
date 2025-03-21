@@ -23,15 +23,27 @@ expression = { booleanExpression }
 
 booleanExpression = {
     logicalNotExpression
-    | valueExpression
+    | predicateExpression
     | logicalAndExpression
     | logicalOrExpression
 }
 
 logicalNotExpression = {^"not" ~ booleanExpression}
+predicateExpression = {valueExpression ~ predicate?}
 logicalAndExpression = {"(" ~ booleanExpression  ~ ^"and" ~ booleanExpression  ~ ")"}
 logicalOrExpression = {"(" ~ booleanExpression  ~ ^"or" ~ booleanExpression  ~ ")"}
 
+predicate = {
+    predicateIn
+    | predicateNotIn
+    | predicateNull
+    | predicateNotNull
+}
+
+predicateIn = {^"in" ~ "(" ~ expression ~ ("," ~ expression)* ~ ")"}
+predicateNotIn = {^"not" ~ ^"in" ~ "(" ~ expression ~ ("," ~ expression)* ~ ")"}
+predicateNull = {^"is" ~ ^"null"}
+predicateNotNull = {^"is" ~ ^"not" ~ ^"null"}
 /*
 predicate
     : NOT? kind=BETWEEN lower=valueExpression AND upper=valueExpression

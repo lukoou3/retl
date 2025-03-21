@@ -12,5 +12,6 @@ pub mod transform;
 pub mod codecs;
 pub mod config;
 pub mod execution;
+pub mod optimizer;
 
 pub use common::*;

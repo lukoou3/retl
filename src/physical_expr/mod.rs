@@ -9,6 +9,8 @@ pub mod cast;
 mod collection;
 mod predicate;
 mod datetime;
+mod null;
+mod conditional;
 
 pub use crate::physical_expr::physical_expr::*;
 pub use crate::physical_expr::attribute::*;
@@ -21,3 +23,5 @@ pub use crate::physical_expr::cast::*;
 pub use crate::physical_expr::collection::*;
 pub use crate::physical_expr::predicate::*;
 pub use crate::physical_expr::datetime::*;
+pub use crate::physical_expr::null::*;
+pub use crate::physical_expr::conditional::*;

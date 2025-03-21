@@ -18,6 +18,10 @@ pub fn create_physical_expr(
             Ok(Arc::new(Cast::new(create_physical_expr(child)?, data_type.clone()))),
         Expr::Not(child) =>
             Ok(Arc::new(Not::new(create_physical_expr(child)?))),
+        Expr::IsNull(child) =>
+            Ok(Arc::new(IsNull::new(create_physical_expr(child)?))),
+        Expr::IsNotNull(child) =>
+            Ok(Arc::new(IsNotNull::new(create_physical_expr(child)?))),
         Expr::BinaryOperator(expr::BinaryOperator{left, op, right}) => match op {
             Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo => {
                 let l = create_physical_expr(left)?;
@@ -35,6 +39,11 @@ pub fn create_physical_expr(
             Ok(Arc::new(Like::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
         Expr::RLike(expr::Like{expr, pattern}) =>
             Ok(Arc::new(RLike::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
+        Expr::In(expr::In{value, list}) => {
+            let value = create_physical_expr(value)?;
+            let list = list.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
+            Ok(Arc::new(In::new(value, list)))
+        },
         Expr::ScalarFunction(func) => {
             let any = func.as_any();
             if let Some(expr::Substring{str, pos, len}) = any.downcast_ref::<expr::Substring>() {
@@ -50,7 +59,9 @@ pub fn create_physical_expr(
                 Ok(Arc::new(FromUnixTime::new(create_physical_expr(sec)?, create_physical_expr(format)?)))
             } else if let Some(expr::ToUnixTimestamp{time_expr, format}) = any.downcast_ref::<expr::ToUnixTimestamp>() {
                 Ok(Arc::new(ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
-            } else {
+            } else if let Some(expr::If{predicate, true_value, false_value}) = any.downcast_ref::<expr::If>()  {
+                Ok(Arc::new(If::new(create_physical_expr(predicate)?, create_physical_expr(true_value)?, create_physical_expr(false_value)?)))
+            }  else {
                 Err(format!("Not implemented:{:?}", func))
             }
         },

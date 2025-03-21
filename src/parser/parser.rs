@@ -8,7 +8,7 @@ use pest_derive::Parser;
 use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::{BinaryOperator, Expr, Literal, UnresolvedFunction};
+use crate::expr::{BinaryOperator, Expr, In, Literal, UnresolvedFunction};
 use crate::logical_plan::{Filter, LogicalPlan, Project};
 use crate::types::*;
 
@@ -96,6 +96,34 @@ pub fn parse_ast(pair: Pair<Rule>) -> Result<Ast> {
             let mut pairs = pair.into_inner();
             let expr = parse_expression(pairs.next().unwrap())?;
             Ok(Ast::Expression(Expr::Not(Box::new(expr))))
+        },
+        Rule::predicateExpression => {
+            let mut pairs = pair.into_inner();
+            let expr = parse_expression(pairs.next().unwrap())?;
+            if let Some(p) = pairs.next() {
+                let predicate = p.into_inner().next().unwrap();
+                match predicate.as_rule() {
+                    Rule::predicateIn | Rule::predicateNotIn => {
+                        let no = predicate.as_rule() == Rule::predicateNotIn;
+                        let list:Vec<_> = predicate.into_inner().map(|pair| {
+                            parse_expression(pair).unwrap()
+                        }).collect();
+                        let expr = Expr::In(In::new(Box::new(expr), list));
+                        if no {
+                            Ok(Ast::Expression(expr.not()))
+                        } else {
+                            Ok(Ast::Expression(expr))
+                        }
+                    },
+                    Rule::predicateNull => Ok(Ast::Expression(Expr::IsNull(Box::new(expr)))),
+                    Rule::predicateNotNull => Ok(Ast::Expression(Expr::IsNotNull(Box::new(expr)))),
+                    _ => {
+                        return Err(format!("Expected a predicate but found {:?}", predicate));
+                    }
+                }
+            } else {
+                Ok(Ast::Expression(expr))
+            }
         },
         Rule::logicalAndExpression => {
             let mut pairs = pair.into_inner();

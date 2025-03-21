@@ -20,13 +20,28 @@ pub enum Expr {
     Literal(Literal),
     UnresolvedFunction(UnresolvedFunction),
     Not(Box<Expr>),
+    IsNull(Box<Expr>),
+    IsNotNull(Box<Expr>),
     BinaryOperator(BinaryOperator),
     Like(Like),
     RLike(Like),
+    In(In),
     ScalarFunction(Box<dyn ScalarFunction>),
 }
 
 impl Expr {
+    pub fn foldable(&self) -> bool {
+        match self {
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) | Expr::BoundReference(_) => false,
+            // We should never fold named expressions in order to not remove the alias.
+            Expr::AttributeReference(_) | Expr::Alias(_)  => false,
+            Expr::Literal(_)  => true,
+            Expr::ScalarFunction(f) => f.foldable(),
+            _ => self.children().iter().all(|c| c.foldable()),
+        }
+    }
+
+
     pub fn data_type(&self) -> &DataType {
         match self {
             Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_)  =>
@@ -36,7 +51,7 @@ impl Expr {
             Expr::Alias(e) => e.child.data_type(),
             Expr::Literal(l) => &l.data_type,
             Expr::Cast(c) => &c.data_type,
-            Expr::Not(_) => DataType::boolean_type(),
+            Expr::Not(_) | Expr::IsNull(_) | Expr::IsNotNull(_) => DataType::boolean_type(),
             Expr::BinaryOperator(BinaryOperator{left, op, right:_ }) =>  match op {
                 Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo =>
                     left.data_type(),
@@ -47,6 +62,7 @@ impl Expr {
             },
             Expr::Like(_) => DataType::boolean_type(),
             Expr::RLike(_) => DataType::boolean_type(),
+            Expr::In(_) => DataType::boolean_type(),
             Expr::ScalarFunction(f) => f.data_type(),
         }
     }
@@ -87,6 +103,7 @@ impl Expr {
                     Ok(())
                 }
             },
+            Expr::IsNull(_) | Expr::IsNotNull(_) => Ok(()),
             Expr::BinaryOperator(BinaryOperator{left, op, right}) => {
                 if left.data_type() != right.data_type() {
                     return Err(format!("differing types in {:?}", self));
@@ -125,6 +142,13 @@ impl Expr {
                     Ok(())
                 }
             },
+            Expr::In(In{value, list}) => {
+                if list.iter().any(|e| value.data_type() != e.data_type()) {
+                    Err(format!("{:?} requires same type", self))
+                } else {
+                    Ok(())
+                }
+            },
             Expr::ScalarFunction(f) => {
                 f.check_input_data_types()
             },
@@ -139,13 +163,16 @@ impl Expr {
             | Expr::Literal(_) => Vec::new(),
             Expr::Alias(Alias{ child, ..})
             | Expr::Cast(Cast{ child, ..})
-            | Expr::Not(child)=>
+            | Expr::Not(child)
+            | Expr::IsNull(child) | Expr::IsNotNull(child) =>
                 vec![child],
             Expr::BinaryOperator(BinaryOperator { left, right, .. }) =>
                 vec![left, right],
             Expr::Like(Like{expr, pattern})
             | Expr::RLike(Like{expr, pattern}) =>
                 vec![expr, pattern],
+            Expr::In(In{value, list}) =>
+                vec![value.as_ref()].into_iter().chain(list.iter()).collect(),
             Expr::ScalarFunction(f) => f.args(),
             Expr::UnresolvedFunction(UnresolvedFunction{name: _, arguments}) =>
                 arguments.iter().map(|a| a).collect(),
@@ -162,6 +189,14 @@ impl Expr {
 
     pub fn not(self) -> Expr {
         Expr::Not(Box::new(self))
+    }
+
+    pub fn is_null(self) -> Expr {
+        Expr::IsNull(Box::new(self))
+    }
+
+    pub fn is_not_null(self) -> Expr {
+        Expr::IsNotNull(Box::new(self))
     }
 
     pub fn col(ordinal: usize, data_type: DataType) -> Expr {
@@ -397,9 +432,24 @@ impl Like {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
+pub struct In {
+    pub value: Box<Expr>,
+    pub list: Vec<Expr>,
+}
+
+impl In {
+    pub fn new(value: Box<Expr>, list: Vec<Expr>) -> Self {
+        Self { value, list }
+    }
+}
+
 pub trait ScalarFunction: Debug + Send + Sync + CloneScalarFunction {
     fn as_any(&self) -> &dyn Any;
     fn name(&self) -> &str;
+    fn foldable(&self) -> bool {
+        self.args().iter().all(|arg| arg.foldable())
+    }
     fn data_type(&self) -> &DataType;
     fn args(&self) -> Vec<&Expr>;
     fn check_input_data_types(&self) -> Result<()>;

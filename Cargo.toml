@@ -26,17 +26,21 @@ serde_yaml = "0.9"
 typetag = "0.2"
 config = { version = "0.15.8", features = ["yaml"] }
 # simd-json = "0.14.3"
-reqwest = { version = "0.12", features = ["blocking", "json"] }
+reqwest = { version = "0.12.15", features = ["blocking", "json"] }
 isahc = "1.7"
 tiny_http = "0.12"
 prometheus = "0.13"
 signal-hook = "0.3"
-rdkafka = { version = "0.37.0", features = ["cmake-build", "sasl"] }
 base64 = "0.21.7"
 lz4_flex = "0.11"
 cityhash-rs = "1.0.1"
 anyhow = "1.0"
 mysql = "26.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+rdkafka = { version = "0.37.0", features = ["cmake-build"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+rdkafka = { version = "0.37.0", features = ["cmake-build", "sasl"] }
 
 [build]
 rustflags = ["-A", "warnings"]

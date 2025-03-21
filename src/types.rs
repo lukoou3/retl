@@ -41,6 +41,14 @@ impl DataType {
         }
     }
 
+    pub fn is_atomic_type(&self) -> bool {
+        match self {
+            DataType::Int | DataType::Long | DataType::Float | DataType::Double | DataType::Boolean |
+            DataType::String | DataType::Date | DataType::Timestamp | DataType::Binary => true,
+            _ => false
+        }
+    }
+
     pub fn null_type() -> &'static DataType {
         &NULL_TYPE
     }

@@ -15,6 +15,10 @@ impl ScalarFunction for CurrentTimestamp {
         "CurrentTimestamp"
     }
 
+    fn foldable(&self) -> bool {
+        false
+    }
+
     fn data_type(&self) -> &DataType {
         DataType::timestamp_type()
     }

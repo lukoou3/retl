@@ -4,6 +4,7 @@ use crate::{parser, Result};
 use crate::analysis::Analyzer;
 use crate::config::{TaskContext, TransformConfig, TransformProvider};
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
+use crate::optimizer::Optimizer;
 use crate::transform::{get_process_operator_chain, QueryTransform, Transform};
 use crate::tree_node::{TreeNode};
 use crate::types::{Schema};
@@ -21,7 +22,8 @@ impl TransformConfig for QueryTransformConfig {
         let plan = parser::parse_query(&self.sql)?;
         let plan = Analyzer::new(temp_views).analyze(plan)?;
         // println!("{:?}", plan);
-        Ok(Box::new(QueryTransformProvider::new(plan)))
+        let optimized_plan = Optimizer::new().optimize(plan)?;
+        Ok(Box::new(QueryTransformProvider::new(optimized_plan)))
     }
 
 }

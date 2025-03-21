@@ -5,6 +5,7 @@ mod operation;
 mod string;
 mod collection;
 mod datetime;
+mod conditional;
 
 pub use expr::*;
 pub use expr_fn::*;
@@ -12,5 +13,6 @@ pub use tree_node::*;
 pub use string::*;
 pub use collection::*;
 pub use datetime::*;
+pub use conditional::*;
 
 

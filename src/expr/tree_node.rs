@@ -32,6 +32,8 @@ impl TreeNode for Expr {
                 .update_data(|child| Expr::Alias(Alias::new_with_expr_id(child, name, expr_id))),
             Expr::Cast(Cast { child, data_type }) => f(*child)?.update_data(|e| e.cast(data_type)),
             Expr::Not(child) => f(*child)?.update_data(|e| e.not()),
+            Expr::IsNull(child) => f(*child)?.update_data(|e| e.is_null()),
+            Expr::IsNotNull(child) => f(*child)?.update_data(|e| e.is_not_null()),
             Expr::BinaryOperator(BinaryOperator { left, op, right }) => (left, right)
                 .map_elements(f)?
                 .update_data(|(new_left, new_right)| {
@@ -43,19 +45,26 @@ impl TreeNode for Expr {
                     .update_data(|(new_expr, new_pattern)| {
                         Expr::Like(Like::new(new_expr, new_pattern))
                     })
-            }
+            },
             Expr::RLike(Like { expr, pattern }) => {
                 (expr, pattern)
                     .map_elements(f)?
                     .update_data(|(new_expr, new_pattern)| {
                         Expr::RLike(Like::new(new_expr, new_pattern))
                     })
-            }
+            },
+            Expr::In(In {value, list}) => {
+                (value, list)
+                    .map_elements(f)?
+                    .update_data(|(new_value, new_list)| {
+                        Expr::In(In::new(new_value, new_list))
+                    })
+            },
             Expr::UnresolvedFunction(UnresolvedFunction { name, arguments }) => {
                 arguments.map_elements(f)?.update_data(|arguments| {
                     Expr::UnresolvedFunction(UnresolvedFunction{name, arguments})
                 })
-            }
+            },
             Expr::ScalarFunction(func) => {
                 let args = func
                     .args()

@@ -71,10 +71,34 @@ fn test_timeout() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn test_request_clone_timeout() -> Result<(), Box<dyn Error>> {
+    // 0.12.12版本时候，try_clone()不会复制timeout
+    let client = reqwest::blocking::Client::builder()
+        .pool_idle_timeout(Duration::from_secs(5))
+        //.connect_timeout(Some(Duration::from_secs(5)))
+        .build()?;
+    let url = "http://127.0.0.1:8000/slow3";
+
+    // 发送 POST 请求
+    let request = client.put(url)
+        .timeout(Duration::from_secs(30))
+        .build()?;
+    println!("request: {:?}", request);
+    println!("request timeout: {:?}", request.timeout());
+    let request2 = request.try_clone().unwrap();
+    println!("request: {:?}", request);
+    println!("request timeout: {:?}", request.timeout());
+    println!("request2: {:?}", request2);
+    println!("request2 timeout: {:?}", request2.timeout());
+
+    Ok(())
+}
+
 fn main() {
     //test_get().unwrap();
     //test_post().unwrap();
-    if let Err(e) = test_timeout() {
+    /*if let Err(e) = test_timeout() {
         println!("{} Error: {:?}", Local::now(), e);
-    }
+    }*/
+    test_request_clone_timeout().unwrap();
 }

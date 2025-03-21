@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
 use crate::datetime_utils::NORM_DATETIME_FMT;
-use crate::expr::{AttributeReference, Concat, CurrentTimestamp, Expr, FromUnixTime, Length, Substring, ToUnixTimestamp, UnresolvedFunction};
+use crate::expr::*;
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
 
@@ -156,7 +156,11 @@ impl AnalyzerRule for ResolveFunctions {
                                         } else {
                                             return Err(format!("{} args not match: {:?}", name, arguments));
                                         }
-                                    }
+                                    },
+                                    "if" => {
+                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(If::new(
+                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
+                                    },
                                     _ => Err(format!("UnresolvedFunction: {}", name))
                                 }
 
