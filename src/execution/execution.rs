@@ -114,7 +114,7 @@ pub fn execution_graph(graph: &Graph, application_config: &ApplicationConfig, re
             let graph = graph.clone();
             let task_config = TaskConfig::new(parallelism, i, registry.clone());
             let terminated = terminated.clone();
-            let builder = thread::Builder::new().stack_size(1024 * 256)
+            let builder = thread::Builder::new().stack_size(1024 * 512)
                 .name(format!("{}-{}/{}", graph.get_node_dispaly_by_id(source_id), i + 1, parallelism));
             handles.push(builder.spawn(move || {
                 println!("start source: {}", source_id);

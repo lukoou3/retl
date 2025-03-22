@@ -21,60 +21,49 @@ namedExpression = {
 }
 expression = { booleanExpression }
 
-booleanExpression = {
-    logicalNotExpression
-    | predicateExpression
-    | logicalAndExpression
-    | logicalOrExpression
-}
+// 逻辑表达式（逻辑层）
+booleanExpression = { logicalOrExpression }
 
-logicalNotExpression = {^"not" ~ booleanExpression}
-predicateExpression = {valueExpression ~ predicate?}
-logicalAndExpression = {"(" ~ booleanExpression  ~ ^"and" ~ booleanExpression  ~ ")"}
-logicalOrExpression = {"(" ~ booleanExpression  ~ ^"or" ~ booleanExpression  ~ ")"}
+logicalOrExpression = { logicalAndExpression ~ (^"or" ~ logicalAndExpression)* }
+logicalAndExpression = { logicalNotExpression ~ (^"and" ~ logicalNotExpression)* }
+logicalNotExpression = { NOT? ~ predicateExpression }
+predicateExpression = { valueExpression ~ predicate? }
 
 predicate = {
-    predicateIn
-    | predicateNotIn
+    predicateBetween
+    | predicateRlike
+    | predicateLike
+    | predicateIn
     | predicateNull
-    | predicateNotNull
 }
 
-predicateIn = {^"in" ~ "(" ~ expression ~ ("," ~ expression)* ~ ")"}
-predicateNotIn = {^"not" ~ ^"in" ~ "(" ~ expression ~ ("," ~ expression)* ~ ")"}
-predicateNull = {^"is" ~ ^"null"}
-predicateNotNull = {^"is" ~ ^"not" ~ ^"null"}
-/*
-predicate
-    : NOT? kind=BETWEEN lower=valueExpression AND upper=valueExpression
-    | NOT? kind=IN '(' expression (',' expression)* ')'
-    | NOT? kind=RLIKE pattern=valueExpression
-    | NOT? kind=LIKE quantifier=(ANY | SOME | ALL) ('('')' | '(' expression (',' expression)* ')')
-    | NOT? kind=LIKE pattern=valueExpression (ESCAPE escapeChar=STRING)?
-    | IS NOT? kind=NULL
-    | IS NOT? kind=(TRUE | FALSE | UNKNOWN)
-    ;
-*/
+predicateBetween = { NOT? ~ ^"between" ~ valueExpression ~ ^"and" ~ valueExpression }
+predicateRlike = { NOT? ~ ^"rlike" ~ valueExpression}
+predicateLike = { NOT? ~ ^"like" ~ valueExpression}
+predicateIn = { NOT? ~ ^"in" ~ "(" ~ expression ~ ("," ~ expression)* ~ ")"}
+predicateNull = {^"is" ~ NOT? ~ ^"null"}
 
-valueExpression = {
-    primaryExpression
-    | unaryExpression
-    | arithmeticExpression
-    | comparisonExpression
-}
+// 值表达式（算术层）
+valueExpression = { comparisonExpression }
 
-unaryExpression = { (MINUS | PLUS | TILDE) ~ valueExpression }
+comparisonExpression = { addSubExpression ~ (comparisonOperator ~ addSubExpression)? }
+// 加减法
+addSubExpression = { mulDivExpression ~ ((PLUS | MINUS) ~ mulDivExpression)* }
+// 乘除法
+mulDivExpression = { unaryExpression ~ ((ASTERISK | SLASH | PERCENT) ~ unaryExpression)* }
+// 一元表达式
+unaryExpression = { (MINUS | PLUS | TILDE)? ~ primaryExpression }
 
+// 基本表达式
 primaryExpression = {
-    functionCall
+    searchedCase
+    | simpleCase
+    | cast
+    | functionCall
     | constant
     | columnReference
-    | "(" ~  valueExpression ~ ")"
+    | "(" ~ expression ~ ")"
 }
-
-arithmeticExpression = {"(" ~  valueExpression ~ arithmeticOperator ~ valueExpression ~ ")" }
-comparisonExpression = {"(" ~  valueExpression ~ comparisonOperator ~ valueExpression ~ ")" }
-
 columnReference = { identifier }
 
 functionCall = {
@@ -84,6 +73,12 @@ functionCall = {
 functionArgs = {
     "(" ~ (expression ~ ("," ~ expression)*)? ~ ")"
 }
+
+searchedCase = { ^"case" ~ whenClause +  ~ ("else" ~ expression)? ~ ^"end" }
+simpleCase = { ^"case" ~ expression ~ whenClause +  ~ ("else" ~ expression)? ~ ^"end" }
+whenClause = { ^"when" ~ expression ~ ^"then" ~ expression}
+
+cast = { ^"cast" ~ "(" ~ expression ~ ^"as" ~ dataType  ~ ")" }
 
 dataType = {
     arrayDataType
@@ -114,7 +109,9 @@ STRING = ${
     | "\"" ~ (!"\"" ~ ANY)*  ~ "\""
 }
 
-arithmeticOperator = { PLUS | MINUS | ASTERISK | SLASH | PERCENT }
+NOT = { ^"not" | "!"}
+
+// arithmeticOperator = { PLUS | MINUS | ASTERISK | SLASH | PERCENT }
 NULL = { ^"null" }
 PLUS = { "+" }
 MINUS = { "-" }

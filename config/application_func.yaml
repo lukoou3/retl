@@ -27,7 +27,7 @@ transforms:
           id, cate, str, nuallable_int, nuallable_int is null na, nuallable_int in (1, 2, 3) is_in,
           if(nuallable_int is null, 1, 2) i
       from tbl
-      where ((id % 2) = 1)
+      where id % 2 = 1
   - type: query
     inputs: [ faker_source ]
     outputs: [ query2 ]
@@ -37,7 +37,7 @@ transforms:
           current_timestamp() timestamp,  from_unixtime(id) timestamp2,
           unix_timestamp() ts1, to_unix_timestamp('1970-01-01 08:00:00') ts1
       from tbl
-      where ((id % 2) = 1)
+      where id % 2 = 1
 sinks:
   - type: print
     name: print_sink
