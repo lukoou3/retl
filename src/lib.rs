@@ -13,5 +13,6 @@ pub mod codecs;
 pub mod config;
 pub mod execution;
 pub mod optimizer;
+pub mod sql_utils;
 
 pub use common::*;

@@ -1,0 +1,14 @@
+[
+  { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+  { "name": "ts", "type": "timestamp", "timestamp_type": "datetime" },
+  { "name": "union", "type": "union", "random": true, "union_fields": [
+    { "weight": 4, "fields":[
+      { "name": "cate_id", "type": "int", "min": 1, "max": 100 },
+      { "name": "cate", "type": "string", "options": [ "a", "b", null, "c", "d" ] }
+    ]},
+    { "weight": 2, "fields": [
+      { "name": "text", "type": "string", "regex": "12[a-z]{2}" }
+    ] }
+  ] },
+  { "name": "bigint_eval", "type": "eval", "expression": "(id + 1)" }
+]

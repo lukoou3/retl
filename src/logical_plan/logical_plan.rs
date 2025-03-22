@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::vec;
 use crate::Result;
 use crate::expr::{Alias, AttributeReference, Expr};
 use crate::tree_node::{Transformed, TreeNodeContainer, TreeNodeRecursion};
@@ -10,6 +11,7 @@ pub enum LogicalPlan {
     RelationPlaceholder(RelationPlaceholder),
     Project(Project),
     Filter(Filter),
+    Expression(Expression),
 }
 
 impl LogicalPlan {
@@ -18,7 +20,8 @@ impl LogicalPlan {
             LogicalPlan::UnresolvedRelation(_)
              | LogicalPlan::RelationPlaceholder(_) => vec![],
             LogicalPlan::Project(Project{child, ..})
-             | LogicalPlan::Filter(Filter{child, ..}) => vec![child.as_ref()],
+             | LogicalPlan::Filter(Filter{child, ..})
+             | LogicalPlan::Expression(Expression{child, ..}) => vec![child.as_ref()],
         }
     }
 
@@ -28,6 +31,7 @@ impl LogicalPlan {
              | LogicalPlan::RelationPlaceholder(_) => vec![],
             LogicalPlan::Project(Project{project_list, ..}) => project_list.iter().collect(),
             LogicalPlan::Filter(Filter{condition, ..}) => vec![condition],
+            LogicalPlan::Expression(Expression{expr, ..}) => vec![expr],
         }
     }
 
@@ -58,6 +62,13 @@ impl LogicalPlan {
                 }).collect()
             },
             LogicalPlan::Filter(Filter{child, ..}) => child.output(),
+            LogicalPlan::Expression(Expression{expr, ..}) => match expr {
+                Expr::Alias(Alias {child, name, expr_id}) =>
+                    vec![AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id)],
+                Expr::AttributeReference(a) => vec![a.clone()],
+                Expr::UnresolvedAttribute(a) => vec![AttributeReference::new_with_expr_id(a.clone(), DataType::Int, 0)],
+                e => panic!("{:?} is not allowed in expr", e),
+            },
         }
     }
 
@@ -121,5 +132,21 @@ pub struct Filter {
 impl Filter {
     pub fn new(condition: Expr, child: Arc<LogicalPlan>) -> Self {
         Self { condition, child }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
+pub struct Expression {
+    pub expr: Expr,
+    pub child: Arc<LogicalPlan>,
+}
+
+impl Expression {
+    pub fn new(expr: Expr, child: Arc<LogicalPlan>) -> Self {
+        match expr {
+            Expr::Alias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => (),
+            e => panic!("{:?} is not allowed in expr", e),
+        }
+        Self { expr, child }
     }
 }

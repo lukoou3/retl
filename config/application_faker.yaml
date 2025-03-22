@@ -24,12 +24,37 @@ sources:
       { "name": "int_array", "type": "int", "min": 100, "max": 10000, "array": true },
       { "name": "str_array", "type": "string", "regex": "[a-z]{2}", "array": true }
     ]
+  - type: faker
+    outputs: [ faker_source1 ]
+    schema: "struct<id:bigint, ts:timestamp, cate_id: int, cate:string, text:string>"
+    rows_per_second: 1
+    number_of_rows: 100
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "ts", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "union", "type": "union", "random": false, "union_fields": [
+        { "weight": 4, "fields":[
+          { "name": "cate_id", "type": "int", "min": 1, "max": 100 },
+          { "name": "cate", "type": "string", "options": [ "a", "b", null, "c", "d" ] }
+        ]},
+        { "weight": 2, "fields": [
+          { "name": "text", "type": "string", "regex": "12[a-z]{2}" }
+        ] }
+      ] }
+    ]
+  - type: faker
+    outputs: [ faker_source2 ]
+    schema: "struct<id:bigint, ts:timestamp, cate_id: int, cate:string, text:string, bigint_eval:bigint>"
+    rows_per_second: 1
+    number_of_rows: 100
+    fields_desc_file: faker/faker.json
 
 sinks:
   - type: print
-    inputs: [ faker_source ]
+    name: print_sink
+    inputs: [ faker_source2 ]
     print_mode: stdout
     encoding:
       codec: json
 
-
+active_sinks: [print_sink]

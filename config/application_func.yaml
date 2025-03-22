@@ -6,13 +6,14 @@ env:
 sources:
   - type: faker
     outputs: [ faker_source ]
-    schema: "struct<id:bigint, cate:string, str:string, in_bytes:bigint, out_bytes:bigint>"
+    schema: "struct<id:bigint, cate:string, str:string, nuallable_int:int, in_bytes:bigint, out_bytes:bigint>"
     rows_per_second: 1
     number_of_rows: 100
     fields: [
       { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
       { "name": "cate", "type": "string", "options": [ "a", "b", null, "c", "d" ] },
       { "name": "str", "type": "string", "regex": "[a-z]{2}_12" },
+      { "name": "nuallable_int", "type": "int", "min": 1, "max": 10, "null_rate": 0.3 },
       { "name": "in_bytes", "type": "int", "min": 100, "max": 10000 },
       { "name": "out_bytes", "type": "int", "min": 100, "max": 10000 }
     ]
@@ -23,7 +24,16 @@ transforms:
     outputs: [ query ]
     sql: |
       select 
-          id, cate, str,
+          id, cate, str, nuallable_int, nuallable_int is null na, nuallable_int in (1, 2, 3) is_in,
+          if(nuallable_int is null, 1, 2) i
+      from tbl
+      where ((id % 2) = 1)
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query2 ]
+    sql: |
+      select 
+          id, cate, str, 
           current_timestamp() timestamp,  from_unixtime(id) timestamp2,
           unix_timestamp() ts1, to_unix_timestamp('1970-01-01 08:00:00') ts1
       from tbl

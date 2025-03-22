@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
-use crate::analysis::Analyzer;
 use crate::config::{TaskContext, TransformConfig, TransformProvider};
 use crate::expr::BoundReference;
-use crate::logical_plan::{Filter, LogicalPlan, RelationPlaceholder};
-use crate::parser;
+use crate::logical_plan::Filter;
+use crate::sql_utils;
 use crate::physical_expr::create_physical_expr;
 use crate::transform::{FilterTransform, Transform};
 use crate::types::Schema;
@@ -18,14 +15,8 @@ pub struct FilterTransformConfig {
 #[typetag::serde(name = "filter")]
 impl TransformConfig for FilterTransformConfig {
     fn build(&self, schema: Schema) -> crate::Result<Box<dyn TransformProvider>> {
-        let expr = parser::parse_expr(&self.condition)?;
-        let plan = LogicalPlan::Filter(Filter::new(expr, Arc::new(LogicalPlan::RelationPlaceholder(RelationPlaceholder::new("tbl".to_string(), schema.to_attributes())))));
-        let plan = Analyzer::new(HashMap::new()).analyze(plan)?;
-        if let LogicalPlan::Filter(filter) = plan {
-            Ok(Box::new(FilterTransformProvider{schema, filter}))
-        } else {
-            Err("Invalid filter plan".into())
-        }
+        let filter = sql_utils::parse_filter(&self.condition, &schema)?;
+        Ok(Box::new(FilterTransformProvider{schema, filter}))
     }
 }
 

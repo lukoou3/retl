@@ -5,18 +5,17 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::config::TaskContext;
 use crate::Result;
-use crate::connector::faker::Faker;
+use crate::connector::faker::{Faker, FieldFaker};
 use crate::connector::Source;
 use crate::data::{GenericRow, Row};
 use crate::execution::Collector;
 use crate::physical_expr::{get_cast_func, CastFunc};
-use crate::types::Schema;
+use crate::types::{DataType, Schema};
 
 pub struct FakerSource {
     task_context: TaskContext,
     schema: Schema,
-    fakers: Vec<(usize, Box<dyn Faker>)>,
-    converters: Vec<Box<CastFunc>>,
+    field_fakers: Vec<FieldFaker>,
     rows_per_second: i32,
     number_of_rows: i64,
     millis_per_row: i64,
@@ -25,15 +24,18 @@ pub struct FakerSource {
 impl FakerSource {
     pub fn new(task_context: TaskContext, schema: Schema, fakers: Vec<(usize, Box<dyn Faker>)>, rows_per_second: i32, number_of_rows: i64, millis_per_row: i64) -> Self {
         let fields = &schema.fields;
-        let converters: Vec<Box<CastFunc>> = fakers.iter().map(|(i, x)| {
-            let from = x.data_type();
-            let to = fields[*i].data_type.clone();
-            if from != to {
-                println!("{}({}) cast from {} to {}", fields[*i].name, *i, from, to)
+        let field_fakers = fakers.into_iter().map(|(i, faker)| {
+            if faker.is_union_faker() {
+                return FieldFaker::new(0, faker, get_cast_func(DataType::Null, DataType::Null));
             }
-            get_cast_func(from, to)
+            let from = faker.data_type();
+            let to = fields[i].data_type.clone();
+            if from != to {
+                println!("{}({}) cast from {} to {}", fields[i].name, i, from, to)
+            }
+            FieldFaker::new(i, faker, get_cast_func(from, to))
         }).collect();
-        Self{ task_context, schema, converters, fakers, rows_per_second, number_of_rows, millis_per_row }
+        Self{ task_context, schema, field_fakers, rows_per_second, number_of_rows, millis_per_row }
     }
 
     fn get_rows_for_subtask(&self) -> i64 {
@@ -71,7 +73,6 @@ impl Debug for FakerSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FakerSource")
             .field("schema", &self.schema)
-            .field("fakers", &self.fakers)
             .field("rows_per_second", &self.rows_per_second)
             .finish()
     }
@@ -84,8 +85,8 @@ impl Source for FakerSource  {
     }
 
     fn open(&mut self) -> Result<()> {
-        for (_, f) in self.fakers.iter_mut() {
-            f.init()?
+        for field_faker in self.field_fakers.iter_mut() {
+            field_faker.faker.init()?
         }
         Ok(())
     }
@@ -102,8 +103,21 @@ impl Source for FakerSource  {
 
         while !terminated.load(Ordering::Acquire) && rows < rows_for_subtask {
             self.task_context.base_iometrics.num_records_in_inc_by(1);
-            for (i, faker) in self.fakers.iter_mut() {
-                row.update(*i, self.converters[*i](faker.gene_value()));
+            row.fill_null();
+            for field_faker in self.field_fakers.iter_mut() {
+                if field_faker.faker.is_union_faker() {
+                    field_faker.faker.gene_union_value(&mut row);
+                    continue;
+                }
+                let value = if field_faker.faker.is_compute_faker(){
+                    field_faker.faker.gene_compute_value(&row)
+                } else {
+                    field_faker.faker.gene_value()
+                };
+                if ! value.is_null() {
+                    let value = (field_faker.converter)(value);
+                    row.update(field_faker.index, value);
+                }
             }
             out.collect(&row)?;
             rows += 1;

@@ -1,6 +1,6 @@
 use crate::expr::Expr;
 use crate::Result;
-use crate::logical_plan::{Filter, LogicalPlan, Project};
+use crate::logical_plan::{Expression, Filter, LogicalPlan, Project};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 
 impl TreeNode for LogicalPlan {
@@ -35,6 +35,11 @@ impl TreeNode for LogicalPlan {
                 .update_data(|child| {
                     LogicalPlan::Filter(Filter { condition, child })
                 }),
+            LogicalPlan::Expression(Expression { expr, child }) =>
+                child.map_elements(f)?
+                .update_data(|child| {
+                    LogicalPlan::Expression(Expression {expr, child, })
+                }),
         })
     }
 }
@@ -63,6 +68,11 @@ impl LogicalPlan {
                 Ok(f(condition)?
                     .update_data(|condition|
                     LogicalPlan::Filter(Filter {condition, child, }))
+                ),
+            LogicalPlan::Expression(Expression { expr, child }) =>
+                Ok(f(expr)?
+                    .update_data(|expr|
+                    LogicalPlan::Expression(Expression {expr, child, }))
                 ),
         }
     }

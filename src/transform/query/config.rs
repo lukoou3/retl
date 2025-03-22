@@ -1,10 +1,8 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use crate::{parser, Result};
-use crate::analysis::Analyzer;
+use crate::Result;
 use crate::config::{TaskContext, TransformConfig, TransformProvider};
-use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
-use crate::optimizer::Optimizer;
+use crate::logical_plan::LogicalPlan;
+use crate::sql_utils;
 use crate::transform::{get_process_operator_chain, QueryTransform, Transform};
 use crate::tree_node::{TreeNode};
 use crate::types::{Schema};
@@ -17,12 +15,7 @@ pub struct QueryTransformConfig {
 #[typetag::serde(name = "query")]
 impl TransformConfig for QueryTransformConfig {
     fn build(&self, schema: Schema) -> Result<Box<dyn TransformProvider>> {
-        let mut temp_views = HashMap::new();
-        temp_views.insert("tbl".to_string(), RelationPlaceholder::new("tbl".to_string(), schema.to_attributes()));
-        let plan = parser::parse_query(&self.sql)?;
-        let plan = Analyzer::new(temp_views).analyze(plan)?;
-        // println!("{:?}", plan);
-        let optimized_plan = Optimizer::new().optimize(plan)?;
+        let optimized_plan = sql_utils::sql_plan(&self.sql, &schema)?;
         Ok(Box::new(QueryTransformProvider::new(optimized_plan)))
     }
 

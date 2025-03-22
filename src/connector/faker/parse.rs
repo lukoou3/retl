@@ -3,9 +3,11 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use config::Config;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
-use crate::Result;
-use crate::connector::faker::{ArrayFaker, CharsStringFaker, Faker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, TimestampFaker, TimestampType, TimestampUnit};
+use crate::{sql_utils, Result};
+use crate::connector::faker::{ArrayFaker, CharsStringFaker, EvalFaker, Faker, FieldFaker, FieldsFaker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, TimestampFaker, TimestampType, TimestampUnit, UnionFaker};
 use crate::data::Value;
+use crate::expr::BoundReference;
+use crate::physical_expr::{create_physical_expr, get_cast_func};
 use crate::types::Schema;
 pub fn parse_fakers(field_configs: Vec<Config>, schema: &Schema) -> Result<Vec<(usize, Box<dyn Faker>)>> {
     let mut fakers: Vec<(usize, Box<dyn Faker>)> = Vec::with_capacity(field_configs.len());
@@ -14,7 +16,7 @@ pub fn parse_fakers(field_configs: Vec<Config>, schema: &Schema) -> Result<Vec<(
         let name = config.get_string("name").unwrap();
         let faker_config: Box<dyn FakerConfig> = config.try_deserialize().map_err(|e| e.to_string())?;
         if let Some(i) = schema.field_index(&name) {
-            fakers.push((i, faker_config.build()?))
+            fakers.push((i, faker_config.build(schema, i)?))
         }
     }
 
@@ -30,7 +32,7 @@ pub struct FieldFakerConfig {
 
 #[typetag::serde(tag = "type")]
 pub trait FakerConfig: DynClone + Debug + Send + Sync {
-    fn build(&self) -> Result<Box<dyn Faker>>;
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>>;
 }
 
 dyn_clone::clone_trait_object!(FakerConfig);
@@ -64,7 +66,7 @@ struct IntFakerConfig {
 
 #[typetag::serde(name = "int")]
 impl FakerConfig for IntFakerConfig {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         if !self.options.is_empty() {
             let mut options = Vec::with_capacity(self.options.len());
             for option in self.options.clone() {
@@ -98,7 +100,7 @@ struct LongFakerConfig {
 
 #[typetag::serde(name = "long")]
 impl FakerConfig for LongFakerConfig {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         if !self.options.is_empty() {
             let mut options = Vec::with_capacity(self.options.len());
             for option in self.options.clone() {
@@ -132,7 +134,7 @@ struct DoubleFakerConfig {
 
 #[typetag::serde(name = "double")]
 impl FakerConfig for DoubleFakerConfig {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         if !self.options.is_empty() {
             let mut options = Vec::with_capacity(self.options.len());
             for option in self.options.clone() {
@@ -168,7 +170,7 @@ struct StringFakerConfig {
 
 #[typetag::serde(name = "string")]
 impl FakerConfig for StringFakerConfig {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         let faker: Box<dyn Faker> = if !self.options.is_empty() {
             let mut options = Vec::with_capacity(self.options.len());
             for option in self.options.clone() {
@@ -199,7 +201,7 @@ struct TimestampConfig {
 
 #[typetag::serde(name = "timestamp")]
 impl FakerConfig for TimestampConfig {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         Ok(Box::new(TimestampFaker::new(self.unit, self.timestamp_type)))
     }
 }
@@ -216,7 +218,7 @@ struct FormatTimestampConfig {
 
 #[typetag::serde(name = "format_timestamp")]
 impl FakerConfig for FormatTimestampConfig {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         let faker = Box::new(FormatTimestampFaker{format: self.format.clone(), utc: self.utc});
         Ok(wrap_faker_necessary(faker, &self.array_config))
     }
@@ -234,7 +236,7 @@ struct Ipv4Config {
 
 #[typetag::serde(name = "ipv4")]
 impl FakerConfig for Ipv4Config {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         let start = self.start.parse::<Ipv4Addr>().map_err(|e| e.to_string())?;
         let end = self.end.parse::<Ipv4Addr>().map_err(|e| e.to_string())?;
         let start = u32::from(start);
@@ -259,7 +261,7 @@ struct Ipv6Config {
 
 #[typetag::serde(name = "ipv6")]
 impl FakerConfig for Ipv6Config {
-    fn build(&self) -> Result<Box<dyn Faker>> {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
         let start = self.start.parse::<Ipv6Addr>().map_err(|e| e.to_string())?;
         let end = self.end.parse::<Ipv6Addr>().map_err(|e| e.to_string())?;
         let start = u128::from(start);
@@ -269,6 +271,61 @@ impl FakerConfig for Ipv6Config {
         }
         let faker = Box::new(Ipv6Faker::new(start, end));
         Ok(wrap_faker_necessary(faker, &self.array_config))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct EvalConfig {
+    expression: String,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
+}
+
+#[typetag::serde(name = "eval")]
+impl FakerConfig for EvalConfig {
+    fn build(&self, schema: &Schema, _: usize) -> Result<Box<dyn Faker>> {
+        let expression = sql_utils::parse_expr(&self.expression, schema)?;
+        let expr = BoundReference::bind_reference(expression.expr, expression.child.output())?;
+        let expr = create_physical_expr(&expr)?;
+        let faker = Box::new(EvalFaker::new(expr));
+        Ok(wrap_faker_necessary(faker, &self.array_config))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct UnionFieldsConfig {
+    fields: Vec<FieldFakerConfig>,
+    weight: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct UnionFakerConfig {
+    union_fields: Vec<UnionFieldsConfig>,
+    #[serde(default = "default_random")]
+    random: bool,
+}
+
+#[typetag::serde(name = "union")]
+impl FakerConfig for UnionFakerConfig {
+    fn build(&self, schema: &Schema, _: usize) -> Result<Box<dyn Faker>> {
+        let mut fields_fakers: Vec<FieldsFaker> = Vec::with_capacity(self.union_fields.len());
+        for union_fields_config in &self.union_fields {
+            let weight = union_fields_config.weight;
+
+            let field_configs = &union_fields_config.fields;
+            let mut field_fakers: Vec<FieldFaker> = Vec::with_capacity(field_configs.len());
+            for field_config in field_configs {
+                if let Some(i) = schema.field_index(&field_config.name) {
+                    let faker = field_config.config.build(schema, i)?;
+                    let converter = get_cast_func(faker.data_type(), schema.fields[i].data_type.clone());
+                    field_fakers.push(FieldFaker::new(i, faker, converter))
+                }
+            }
+
+            fields_fakers.push(FieldsFaker::new(field_fakers, weight))
+        }
+
+        Ok(Box::new(UnionFaker::new(fields_fakers, self.random)))
     }
 }
 
@@ -340,7 +397,7 @@ mod test {
         "#;
         let config: Box<dyn FakerConfig> = serde_json::from_str(text).unwrap();
         println!("{:?}", config);
-        println!("{:?}", config.build());
+        //println!("{:?}", config.build());
         let text = r#"
         {
             "type": "long",
@@ -352,7 +409,7 @@ mod test {
         "#;
         let config: Box<dyn FakerConfig> = serde_json::from_str(text).unwrap();
         println!("{:?}", config);
-        println!("{:?}", config.build());
+        //println!("{:?}", config.build());
     }
 
     #[test]
@@ -369,7 +426,7 @@ mod test {
         "#;
         let config: Box<dyn FakerConfig> = serde_json::from_str(text).unwrap();
         println!("{:?}", config);
-        println!("{:?}", config.build());
+        //println!("{:?}", config.build());
 
         let text = r#"
         {
@@ -379,6 +436,6 @@ mod test {
         "#;
         let config: Box<dyn FakerConfig> = serde_json::from_str(text).unwrap();
         println!("{:?}", config);
-        println!("{:?}", config.build());
+        //println!("{:?}", config.build());
     }
 }
