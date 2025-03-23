@@ -219,11 +219,33 @@ impl Expr {
         Expr::Literal(Literal::new(Value::string(s), DataType::String))
     }
 
+    pub fn null_lit() -> Expr {
+        Expr::Literal(Literal::new(Value::Null, DataType::Null))
+    }
+
+    pub fn and(self, other: Expr) -> Expr {
+        binary_expr(self, Operator::And, other)
+    }
+
     /// Return `self == other`
     pub fn eq(self, other: Expr) -> Expr {
         binary_expr(self, Operator::Eq, other)
     }
 
+    pub fn gt(self, other: Expr) -> Expr {
+        binary_expr(self, Operator::Gt, other)
+    }
+    pub fn ge(self, other: Expr) -> Expr {
+        binary_expr(self, Operator::GtEq, other)
+    }
+
+    pub fn lt(self, other: Expr) -> Expr {
+        binary_expr(self, Operator::Lt, other)
+    }
+
+    pub fn le(self, other: Expr) -> Expr {
+        binary_expr(self, Operator::LtEq, other)
+    }
 
     /// Return `self LIKE other`
     pub fn like(self, other: Expr) -> Expr {

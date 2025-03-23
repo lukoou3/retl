@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::Result;
-use crate::analysis::{AnalyzerRule, IfCoercion, ImplicitTypeCasts, InConversion, ResolveFunctions, ResolveReferences, ResolveRelations};
+use crate::analysis::{AnalyzerRule, CaseWhenCoercion, IfCoercion, ImplicitTypeCasts, InConversion, PromoteStrings, ResolveFunctions, ResolveReferences, ResolveRelations};
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
 
@@ -15,6 +15,8 @@ impl Analyzer {
             Box::new(ResolveReferences),
             Box::new(ResolveFunctions),
             Box::new(InConversion),
+            Box::new(PromoteStrings),
+            Box::new(CaseWhenCoercion),
             Box::new(IfCoercion),
             Box::new(ImplicitTypeCasts),
         ];

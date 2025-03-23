@@ -76,4 +76,11 @@ impl LogicalPlan {
                 ),
         }
     }
+
+    pub fn transform_up_expressions<F: FnMut(Expr) -> Result<Transformed<Expr>> + Copy>(
+        self,
+        mut f: F,
+    ) -> Result<Transformed<Self>> {
+        self.transform_up(|plan|  plan.map_expressions(|expr| expr.transform_up(f)))
+    }
 }

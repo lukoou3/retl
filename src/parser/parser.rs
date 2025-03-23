@@ -9,7 +9,7 @@ use pest_derive::Parser;
 use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::{BinaryOperator, Expr, In, Literal, UnresolvedFunction};
+use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnresolvedFunction};
 use crate::logical_plan::{Filter, LogicalPlan, Project};
 use crate::types::*;
 
@@ -93,9 +93,12 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
                 return Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child})))
             }
             Rule::namedExpressionSeq => return parse_named_expression_seq(pair).map(|x| Ast::Projects(x)),
-            Rule::functionCall => return  parse_function_call(pair).map(|x| Ast::Expression(x)),
-            Rule::constant => return  parse_constant(pair).map(|x| Ast::Expression(x)),
-            Rule::columnReference => return  parse_column_reference(pair).map(|x| Ast::Expression(x)),
+            Rule::functionCall => return parse_function_call(pair).map(|x| Ast::Expression(x)),
+            Rule::constant => return parse_constant(pair).map(|x| Ast::Expression(x)),
+            Rule::columnReference => return parse_column_reference(pair).map(|x| Ast::Expression(x)),
+            Rule::cast => return parse_cast(pair).map(|x| Ast::Expression(x)),
+            Rule::searchedCase => return parse_searched_case(pair).map(|x| Ast::Expression(x)),
+            Rule::simpleCase => return parse_simple_case(pair).map(|x| Ast::Expression(x)),
             Rule::logicalNotExpression => {
                 let mut pairs:Vec<_> = pair.clone().into_inner().collect();
                 let mut expr = parse_expression(pairs.last().unwrap().clone())?;
@@ -104,43 +107,7 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
                 }
                 return Ok(Ast::Expression(expr))
             },
-            Rule::predicateExpression => {
-                let mut pairs = pair.into_inner();
-                let expr = parse_expression(pairs.next().unwrap())?;
-                if let Some(p) = pairs.next() {
-                    let predicate = p.into_inner().next().unwrap();
-                    match predicate.as_rule() {
-                        Rule::predicateIn => {
-                            let pairs:Vec<_> = predicate.into_inner().collect();
-                            let no = pairs[0].as_rule() == Rule::NOT;
-                            let list:Vec<_> = if no {
-                                pairs.into_iter().skip(1).map(|pair| {parse_expression(pair).unwrap()}).collect()
-                            } else {
-                                pairs.into_iter().map(|pair| {parse_expression(pair).unwrap()}).collect()
-                            };
-                            let expr = Expr::In(In::new(Box::new(expr), list));
-                            if no {
-                                return Ok(Ast::Expression(expr.not()))
-                            } else {
-                                return Ok(Ast::Expression(expr))
-                            }
-                        },
-                        Rule::predicateNull => {
-                            let pairs:Vec<_> = predicate.into_inner().collect();
-                            if pairs.len() == 0 {
-                                return Ok(Ast::Expression(Expr::IsNull(Box::new(expr))))
-                            } else {
-                                return Ok(Ast::Expression(Expr::IsNotNull(Box::new(expr))))
-                            }
-                        },
-                        _ => {
-                            return Err(format!("Expected a predicate but found {:?}", predicate));
-                        }
-                    }
-                } else {
-                    return Ok(Ast::Expression(expr))
-                }
-            },
+            Rule::predicateExpression => return parse_predicate_expression(pair).map(|x| Ast::Expression(x)),
             Rule::logicalAndExpression => {
                 let mut pairs = pair.clone().into_inner();
                 let mut expr = parse_expression(pairs.next().unwrap())?;
@@ -260,6 +227,15 @@ fn parse_expression(pair: Pair<Rule>) -> Result<Expr> {
     }
 }
 
+fn parse_datatype(pair: Pair<Rule>) -> Result<DataType> {
+    let ast = parse_ast(pair).unwrap();
+    if let Ast::DataType(d) = ast {
+        Ok(d)
+    } else {
+        Err(format!("expected a data type but found {:?}", ast))
+    }
+}
+
 fn parse_function_call(pair: Pair<Rule>) -> Result<Expr> {
     let mut pairs = pair.into_inner();
     let name = pairs.next().unwrap().as_str().to_string();
@@ -268,6 +244,121 @@ fn parse_function_call(pair: Pair<Rule>) -> Result<Expr> {
         parse_expression(pair).unwrap()
     }).collect();
     Ok(Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}))
+}
+
+fn parse_cast(pair: Pair<Rule>) -> Result<Expr> {
+    let mut pairs = pair.into_inner();
+    let expr = parse_expression(pairs.next().unwrap())?;
+    let data_type = parse_datatype(pairs.next().unwrap())?;
+    Ok(Expr::Cast(Cast::new(expr, data_type)))
+}
+
+fn parse_searched_case(pair: Pair<Rule>) -> Result<Expr> {
+    let mut pairs = pair.into_inner();
+    let mut branches = Vec::new();
+    let mut else_value = Expr::null_lit();
+    for when_else in pairs {
+        match when_else.as_rule() {
+            Rule::whenClause => {
+                let mut when = when_else.into_inner();
+                let condition = parse_expression(when.next().unwrap())?;
+                let value = parse_expression(when.next().unwrap())?;
+                branches.push((condition, value));
+            },
+            _ => {
+                else_value = parse_expression(when_else)?;
+            }
+        }
+    }
+    Ok(Expr::ScalarFunction(Box::new(CaseWhen::new(branches, Box::new(else_value)))))
+}
+
+fn parse_simple_case(pair: Pair<Rule>) -> Result<Expr> {
+    let mut pairs = pair.into_inner();
+    let expr = parse_expression(pairs.next().unwrap())?;
+    let mut branches = Vec::new();
+    let mut else_value = Expr::null_lit();
+    for when_else in pairs {
+        match when_else.as_rule() {
+            Rule::whenClause => {
+                let mut when = when_else.into_inner();
+                let condition = parse_expression(when.next().unwrap())?;
+                let value = parse_expression(when.next().unwrap())?;
+                branches.push((condition.eq(expr.clone()), value));
+            },
+            _ => {
+                else_value = parse_expression(when_else)?;
+            }
+        }
+    }
+    Ok(Expr::ScalarFunction(Box::new(CaseWhen::new(branches, Box::new(else_value)))))
+}
+
+fn parse_predicate_expression(pair: Pair<Rule>) -> Result<Expr> {
+    let mut pairs = pair.into_inner();
+    let expr = parse_expression(pairs.next().unwrap())?;
+    if let Some(p) = pairs.next() {
+        let predicate = p.into_inner().next().unwrap();
+        match predicate.as_rule() {
+            Rule::predicateBetween => {
+                let mut pairs = predicate.into_inner();
+                let no = pairs.len() > 2;
+                if no {
+                    pairs.next();
+                }
+                let lower = parse_expression(pairs.next().unwrap())?;
+                let upper = parse_expression(pairs.next().unwrap())?;
+
+                Ok(expr.clone().ge(lower).and(expr.le(upper)))
+            },
+            Rule::predicateIn => {
+                let pairs:Vec<_> = predicate.into_inner().collect();
+                let no = pairs[0].as_rule() == Rule::NOT;
+                let list:Vec<_> = if no {
+                    pairs.into_iter().skip(1).map(|pair| {parse_expression(pair).unwrap()}).collect()
+                } else {
+                    pairs.into_iter().map(|pair| {parse_expression(pair).unwrap()}).collect()
+                };
+                let expr = Expr::In(In::new(Box::new(expr), list));
+                if no {
+                    Ok(expr.not())
+                } else {
+                    Ok(expr)
+                }
+            },
+            Rule::predicateNull => {
+                let pairs:Vec<_> = predicate.into_inner().collect();
+                if pairs.len() == 0 {
+                    Ok(Expr::IsNull(Box::new(expr)))
+                } else {
+                    Ok(Expr::IsNotNull(Box::new(expr)))
+                }
+            },
+            Rule::predicateLike => {
+                let mut pairs = predicate.into_inner();
+                let no = pairs.len() > 1;
+                if no {
+                    pairs.next();
+                }
+                let regex = parse_expression(pairs.next().unwrap())?;
+                Ok(Expr::Like(Like::new(Box::new(expr), Box::new(regex))))
+            },
+            Rule::predicateRlike => {
+                let mut pairs = predicate.into_inner();
+                let no = pairs.len() > 1;
+                if no {
+                    pairs.next();
+                }
+                let regex = parse_expression(pairs.next().unwrap())?;
+                Ok(Expr::RLike(Like::new(Box::new(expr), Box::new(regex))))
+            },
+            _ => {
+                Err(format!("Expected a predicate but found {:?}", predicate))
+            }
+        }
+    } else {
+        Ok(expr)
+    }
 }
 
 fn parse_arithmetic_expression(pair: Pair<Rule>) -> Result<Expr> {

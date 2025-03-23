@@ -53,5 +53,52 @@ impl PhysicalExpr for If {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CaseWhen {
+    branches: Vec<(Arc<dyn PhysicalExpr>, Arc<dyn PhysicalExpr>)>,
+    else_value: Arc<dyn PhysicalExpr>,
+}
+
+impl CaseWhen {
+    pub fn new(branches: Vec<(Arc<dyn PhysicalExpr>, Arc<dyn PhysicalExpr>)>, else_value: Arc<dyn PhysicalExpr>) -> Self {
+        Self { branches, else_value, }
+    }
+}
+
+impl PartialEq for CaseWhen{
+    fn eq(&self, other: &CaseWhen) -> bool {
+        self.branches.eq(&other.branches)
+            && self.else_value.eq(&other.else_value)
+    }
+}
+
+impl Eq for CaseWhen{}
+
+impl Hash for CaseWhen{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.branches.hash(state);
+        self.else_value.hash(state);
+    }
+}
+
+impl PhysicalExpr for CaseWhen {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.else_value.data_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        for (when, then) in &self.branches {
+            if when.eval(input).is_true() {
+                return then.eval(input);
+            }
+        }
+        self.else_value.eval(input)
+    }
+}
+
 
 

@@ -61,7 +61,13 @@ pub fn create_physical_expr(
                 Ok(Arc::new(ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
             } else if let Some(expr::If{predicate, true_value, false_value}) = any.downcast_ref::<expr::If>()  {
                 Ok(Arc::new(If::new(create_physical_expr(predicate)?, create_physical_expr(true_value)?, create_physical_expr(false_value)?)))
-            }  else {
+            } else if let Some(expr::CaseWhen{branches, else_value}) = any.downcast_ref::<expr::CaseWhen>()  {
+                let mut physical_branches = Vec::new();
+                for (condition, value) in branches {
+                    physical_branches.push((create_physical_expr(condition)?, create_physical_expr(value)?));
+                }
+                Ok(Arc::new(CaseWhen::new(physical_branches, create_physical_expr(else_value)?)))
+            } else {
                 Err(format!("Not implemented:{:?}", func))
             }
         },

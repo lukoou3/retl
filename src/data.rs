@@ -105,11 +105,28 @@ impl Value {
         Value::Null
     }
 
+    #[inline]
     pub fn is_null(&self) -> bool {
         if let Value::Null = self {
             true
         } else {
             false
+        }
+    }
+
+    #[inline]
+    pub fn is_true(&self) -> bool {
+        match self {
+            Value::Boolean(true) => true,
+            _ => false
+        }
+    }
+
+    #[inline]
+    pub fn is_false(&self) -> bool {
+        match self {
+            Value::Boolean(false) => true,
+            _ => false
         }
     }
 

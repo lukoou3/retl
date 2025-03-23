@@ -1,6 +1,6 @@
 use crate::analysis::AnalyzerRule;
 use crate::data::Value;
-use crate::expr::{BinaryOperator, In, Expr, If};
+use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen};
 use crate::logical_plan::LogicalPlan;
 use crate::Operator;
 use crate::tree_node::{Transformed, TreeNode};
@@ -11,70 +11,68 @@ pub struct ImplicitTypeCasts;
 
 impl AnalyzerRule for ImplicitTypeCasts {
     fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
-        plan.transform_up(|plan|  plan.map_expressions(|expr| {
-            expr.transform_up(|expr| match expr {
-                e if !e.children_resolved() => Ok(Transformed::no(e)),
-                Expr::BinaryOperator(BinaryOperator{left, op, right}) if left.data_type() != right.data_type() => {
-                    match find_tightest_common_type(left.data_type().clone(), right.data_type().clone()) {
-                        Some(common_type) => match op {
-                            Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo  => {
-                                if common_type.is_numeric_type() {
-                                    let new_left = if left.data_type() == &common_type {
-                                        left
-                                    } else {
-                                        Box::new(left.cast(common_type.clone()))
-                                    };
-                                    let new_right = if right.data_type() == &common_type {
-                                        right
-                                    } else {
-                                        Box::new(right.cast(common_type.clone()))
-                                    };
-                                    Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+        plan.transform_up_expressions(|expr| match expr {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::BinaryOperator(BinaryOperator{left, op, right}) if left.data_type() != right.data_type() => {
+                match find_tightest_common_type(left.data_type().clone(), right.data_type().clone()) {
+                    Some(common_type) => match op {
+                        Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo  => {
+                            if common_type.is_numeric_type() {
+                                let new_left = if left.data_type() == &common_type {
+                                    left
                                 } else {
-                                    Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
-                                }
-                            },
-                            Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq => {
-                                if common_type.is_numeric_type() || common_type == DataType::String {
-                                    let new_left = if left.data_type() == &common_type {
-                                        left
-                                    } else {
-                                        Box::new(left.cast(common_type.clone()))
-                                    };
-                                    let new_right = if right.data_type() == &common_type {
-                                        right
-                                    } else {
-                                        Box::new(right.cast(common_type.clone()))
-                                    };
-                                    Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+                                    Box::new(left.cast(common_type.clone()))
+                                };
+                                let new_right = if right.data_type() == &common_type {
+                                    right
                                 } else {
-                                    Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
-                                }
-                            },
-                            Operator::And | Operator::Or => {
-                                if common_type == DataType::Boolean {
-                                    let new_left = if left.data_type() == &common_type {
-                                        left
-                                    } else {
-                                        Box::new(left.cast(common_type.clone()))
-                                    };
-                                    let new_right = if right.data_type() == &common_type {
-                                        right
-                                    } else {
-                                        Box::new(right.cast(common_type.clone()))
-                                    };
-                                    Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+                                    Box::new(right.cast(common_type.clone()))
+                                };
+                                Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+                            } else {
+                                Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
+                            }
+                        },
+                        Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq => {
+                            if common_type.is_numeric_type() || common_type == DataType::String {
+                                let new_left = if left.data_type() == &common_type {
+                                    left
                                 } else {
-                                    Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
-                                }
+                                    Box::new(left.cast(common_type.clone()))
+                                };
+                                let new_right = if right.data_type() == &common_type {
+                                    right
+                                } else {
+                                    Box::new(right.cast(common_type.clone()))
+                                };
+                                Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+                            } else {
+                                Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
+                            }
+                        },
+                        Operator::And | Operator::Or => {
+                            if common_type == DataType::Boolean {
+                                let new_left = if left.data_type() == &common_type {
+                                    left
+                                } else {
+                                    Box::new(left.cast(common_type.clone()))
+                                };
+                                let new_right = if right.data_type() == &common_type {
+                                    right
+                                } else {
+                                    Box::new(right.cast(common_type.clone()))
+                                };
+                                Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+                            } else {
+                                Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
                             }
                         }
-                        None => Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
                     }
-                },
-                e => Ok(Transformed::no(e))
-            })
-        }))
+                    None => Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
+                }
+            },
+            e => Ok(Transformed::no(e))
+        })
     }
 
     fn name(&self) -> &str {
@@ -83,27 +81,24 @@ impl AnalyzerRule for ImplicitTypeCasts {
 }
 
 #[derive(Debug)]
-pub struct InConversion;
+pub struct PromoteStrings;
 
-impl AnalyzerRule for InConversion {
+impl AnalyzerRule for PromoteStrings {
     fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
-        plan.transform_up(|plan|  plan.map_expressions(|expr| {
-            expr.transform_up(|expr| match expr.clone() {
-                e if !e.children_resolved() => Ok(Transformed::no(e)),
-                Expr::In(In{value, list}) if list.iter().any(|e| e.data_type() != value.data_type()) => {
-                    match find_wider_common_type(vec![value.data_type().clone()].into_iter().chain(list.iter().map(|e| e.data_type().clone())).collect()) {
-                        Some(common_type) => {
-                            Ok(Transformed::yes(Expr::In(In{
-                                value: Box::new(cast_if_not_same_type(*value, &common_type)),
-                                list: list.into_iter().map(|e|cast_if_not_same_type(e, &common_type)).collect()
-                            })))
-                        },
-                        None => Ok(Transformed::no(expr))
-                    }
-                },
-                _ => Ok(Transformed::no(expr))
-            })
-        }))
+        plan.transform_up_expressions(|expr| match expr.clone() {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::BinaryOperator(BinaryOperator{left, op, right})
+            if matches!(op, Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq)
+            && find_common_type_for_binary_comparison(left.data_type(), right.data_type()).is_some() => {
+                let common_type = find_common_type_for_binary_comparison(left.data_type(), right.data_type()).unwrap();
+                Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{
+                    left: Box::new(cast_if_not_same_type(*left, &common_type)),
+                    op,
+                    right: Box::new(cast_if_not_same_type(*right, &common_type))
+                })))
+            },
+            _ => Ok(Transformed::no(expr))
+        })
     }
 
     fn name(&self) -> &str {
@@ -112,44 +107,104 @@ impl AnalyzerRule for InConversion {
 }
 
 #[derive(Debug)]
+pub struct InConversion;
+
+impl AnalyzerRule for InConversion {
+    fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
+        plan.transform_up_expressions(|expr| match expr.clone() {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::In(In{value, list}) if list.iter().any(|e| e.data_type() != value.data_type()) => {
+                match find_wider_common_type(vec![value.data_type().clone()].into_iter().chain(list.iter().map(|e| e.data_type().clone())).collect()) {
+                    Some(common_type) => {
+                        Ok(Transformed::yes(Expr::In(In{
+                            value: Box::new(cast_if_not_same_type(*value, &common_type)),
+                            list: list.into_iter().map(|e|cast_if_not_same_type(e, &common_type)).collect()
+                        })))
+                    },
+                    None => Ok(Transformed::no(expr))
+                }
+            },
+            _ => Ok(Transformed::no(expr))
+        })
+    }
+
+    fn name(&self) -> &str {
+        "InConversion"
+    }
+}
+
+#[derive(Debug)]
+pub struct CaseWhenCoercion;
+
+impl AnalyzerRule for CaseWhenCoercion {
+    fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
+        plan.transform_up_expressions(|expr| match expr {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::ScalarFunction(func) => {
+                let any = func.as_any();
+                if let Some(CaseWhen{branches, else_value}) = any.downcast_ref::<CaseWhen>() {
+                    if ! branches.into_iter().all(|(cond, value)| cond.data_type() == value.data_type()) {
+                        let mut types = Vec::with_capacity(branches.len() + 1);
+                        for (_, e) in branches {
+                            types.push(e.data_type().clone());
+                        }
+                        types.push(else_value.data_type().clone());
+                        if let Some(common_type) = find_wider_common_type(types) {
+                            return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(CaseWhen::new(
+                                branches.into_iter().map(|(cond, value)| (cond.clone(), cast_if_not_same_type(value.clone(), &common_type))).collect(),
+                                Box::new(cast_if_not_same_type(*else_value.clone(), &common_type))
+                            )))))
+                        }
+                    }
+                }
+                Ok(Transformed::no(Expr::ScalarFunction(func)))
+            }
+            e => Ok(Transformed::no(e))
+        })
+    }
+
+    fn name(&self) -> &str {
+        "IfCoercion"
+    }
+}
+
+#[derive(Debug)]
 pub struct IfCoercion;
 
 impl AnalyzerRule for IfCoercion {
     fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
-        plan.transform_up(|plan|  plan.map_expressions(|expr| {
-            expr.transform_up(|expr| match expr.clone() {
-                e if !e.children_resolved() => Ok(Transformed::no(e)),
-                Expr::ScalarFunction(func) => {
-                    let any = func.as_any();
-                    if let Some(If{predicate, true_value, false_value}) = any.downcast_ref::<If>() {
-                        let predicate = predicate.clone();
-                        let true_value = true_value.clone();
-                        let false_value = false_value.clone();
-                        if true_value.data_type() != false_value.data_type() {
-                            if let Some(common_type) = find_wider_type_for_two(true_value.data_type().clone(), false_value.data_type().clone()) {
-                                return  Ok(Transformed::yes(Expr::ScalarFunction(Box::new(
-                                    If::new(
-                                        predicate,
-                                        Box::new(cast_if_not_same_type(*true_value, &common_type)),
-                                        Box::new(cast_if_not_same_type(*false_value, &common_type))
-                                    )
-                                ))));
-                            }
-                        } else if predicate.data_type() == DataType::null_type() {
-                            return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(
+        plan.transform_up_expressions(|expr| match expr {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::ScalarFunction(func) => {
+                let any = func.as_any();
+                if let Some(If{predicate, true_value, false_value}) = any.downcast_ref::<If>() {
+                    let predicate = predicate.clone();
+                    let true_value = true_value.clone();
+                    let false_value = false_value.clone();
+                    if true_value.data_type() != false_value.data_type() {
+                        if let Some(common_type) = find_wider_type_for_two(true_value.data_type().clone(), false_value.data_type().clone()) {
+                            return  Ok(Transformed::yes(Expr::ScalarFunction(Box::new(
                                 If::new(
-                                    Box::new(Expr::lit(Value::Null, DataType::Boolean)),
-                                    true_value,
-                                    false_value
+                                    predicate,
+                                    Box::new(cast_if_not_same_type(*true_value, &common_type)),
+                                    Box::new(cast_if_not_same_type(*false_value, &common_type))
                                 )
                             ))));
                         }
+                    } else if predicate.data_type() == DataType::null_type() {
+                        return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(
+                            If::new(
+                                Box::new(Expr::lit(Value::Null, DataType::Boolean)),
+                                true_value,
+                                false_value
+                            )
+                        ))));
                     }
-                    Ok(Transformed::no(expr))
                 }
-                _ => Ok(Transformed::no(expr))
-            })
-        }))
+                Ok(Transformed::no(Expr::ScalarFunction(func)))
+            }
+            e => Ok(Transformed::no(e))
+        })
     }
 
     fn name(&self) -> &str {
@@ -178,6 +233,16 @@ fn find_tightest_common_type(type1:  DataType, type2:  DataType) -> Option<DataT
 }
 
 static NUMERIC_PRECEDENCE: [DataType; 4] = [DataType::Int, DataType::Long, DataType::Float, DataType::Double];
+
+fn find_common_type_for_binary_comparison(type1:  &DataType, type2:  &DataType) -> Option<DataType> {
+    match (type1, type2) {
+        (DataType::String, DataType::Null) => Some(DataType::String),
+        (DataType::Null, DataType::String) => Some(DataType::String),
+        (DataType::String, r) if r.is_atomic_type() && !matches!(r, DataType::String) => Some(DataType::String),
+        (l, DataType::String) if l.is_atomic_type() && !matches!(l, DataType::String) => Some(DataType::String),
+        _ => None,
+    }
+}
 
 fn find_wider_common_type(types: Vec<DataType>) -> Option<DataType> {
     let (string_types, non_string_types): (Vec<_>, Vec<_>) = types.into_iter().partition(|t| has_string_type(t));
