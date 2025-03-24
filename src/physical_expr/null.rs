@@ -86,6 +86,51 @@ impl PhysicalExpr for IsNotNull {
 }
 
 #[derive(Debug, Clone)]
+pub struct Coalesce {
+    children: Vec<Arc<dyn PhysicalExpr>>,
+}
+
+impl Coalesce {
+    pub fn new(children: Vec<Arc<dyn PhysicalExpr>>) -> Coalesce {
+        Coalesce { children }
+    }
+}
+
+impl PartialEq for Coalesce{
+    fn eq(&self, other: &Coalesce) -> bool {
+        self.children.eq(&other.children)
+    }
+}
+
+impl Eq for Coalesce{}
+
+impl Hash for Coalesce{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.children.hash(state);
+    }
+}
+
+impl PhysicalExpr for Coalesce {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.children[0].data_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        for child in &self.children {
+            let value = child.eval(input);
+            if !value.is_null() {
+                return value;
+            }
+        }
+        Value::Null
+   }
+}
+
+#[derive(Debug, Clone)]
 pub struct In {
     pub value: Arc<dyn PhysicalExpr>,
     pub list: Vec<Arc<dyn PhysicalExpr>>,

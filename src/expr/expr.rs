@@ -8,7 +8,7 @@ use crate::data::Value;
 use crate::expr::binary_expr;
 use crate::physical_expr::{can_cast, PhysicalExpr};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
-use crate::types::DataType;
+use crate::types::{AbstractDataType, DataType};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum Expr {
@@ -474,6 +474,9 @@ pub trait ScalarFunction: Debug + Send + Sync + CloneScalarFunction {
     }
     fn data_type(&self) -> &DataType;
     fn args(&self) -> Vec<&Expr>;
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        None
+    }
     fn check_input_data_types(&self) -> Result<()>;
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction>;
 }

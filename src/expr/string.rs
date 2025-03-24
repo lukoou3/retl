@@ -1,7 +1,7 @@
 use std::any::Any;
 use crate::Result;
 use crate::expr::{Expr, ScalarFunction};
-use crate::types::DataType;
+use crate::types::{AbstractDataType, DataType};
 
 #[derive(Debug, Clone)]
 pub struct Length {
@@ -79,13 +79,17 @@ impl ScalarFunction for Substring {
         vec![&self.str, &self.pos, &self.len]
     }
 
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int), AbstractDataType::Type(DataType::Int)])
+    }
+
     fn check_input_data_types(&self) -> Result<()> {
         if self.str.data_type() != DataType::string_type() {
             Err(format!("{:?} requires string type, not {}", self.str, self.str.data_type()))
         } else if self.pos.data_type() != DataType::int_type() {
-            Err(format!("{:?} requires int type, not {}", self.str, self.pos.data_type()))
+            Err(format!("{:?} requires int type, not {}", self.pos, self.pos.data_type()))
         } else if self.len.data_type() != DataType::int_type() {
-            Err(format!("{:?} requires int type, not {}", self.str, self.pos.data_type()))
+            Err(format!("{:?} requires int type, not {}", self.len, self.len.data_type()))
         }  else {
             Ok(())
         }

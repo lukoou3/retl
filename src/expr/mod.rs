@@ -6,6 +6,7 @@ mod string;
 mod collection;
 mod datetime;
 mod conditional;
+mod null;
 
 pub use expr::*;
 pub use expr_fn::*;
@@ -14,5 +15,6 @@ pub use string::*;
 pub use collection::*;
 pub use datetime::*;
 pub use conditional::*;
+pub use null::*;
 
 

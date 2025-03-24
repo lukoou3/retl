@@ -1,10 +1,22 @@
+use std::env::args;
 use crate::analysis::AnalyzerRule;
 use crate::data::Value;
-use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen};
+use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen, Coalesce};
 use crate::logical_plan::LogicalPlan;
 use crate::Operator;
 use crate::tree_node::{Transformed, TreeNode};
-use crate::types::DataType;
+use crate::types::{AbstractDataType, DataType};
+
+pub fn type_coercion_rules() -> Vec<Box<dyn AnalyzerRule>> {
+    vec![
+        Box::new(InConversion),
+        Box::new(PromoteStrings),
+        Box::new(FunctionArgumentConversion),
+        Box::new(CaseWhenCoercion),
+        Box::new(IfCoercion),
+        Box::new(ImplicitTypeCasts),
+    ]
+}
 
 #[derive(Debug)]
 pub struct ImplicitTypeCasts;
@@ -71,6 +83,26 @@ impl AnalyzerRule for ImplicitTypeCasts {
                     None => Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
                 }
             },
+            Expr::ScalarFunction(func) => {
+                if let Some(input_types) = func.expects_input_types()  {
+                    if func.args().into_iter().zip(input_types.clone().into_iter()).any(|(arg, input_type)| !input_type.accepts_type(arg.data_type())  ) {
+                        let mut args = Vec::with_capacity(func.args().len());
+                        let mut change = false;
+                        for (arg, input_type) in func.args().into_iter().zip(input_types.into_iter()) {
+                            if let Some(tp) = implicit_cast(arg.data_type(), input_type) {
+                                args.push(cast_if_not_same_type(arg.clone(), &tp));
+                                change = true;
+                            } else {
+                                args.push(arg.clone());
+                            }
+                        }
+                        if change {
+                            return Ok(Transformed::yes(Expr::ScalarFunction(func.rewrite_args(args))))
+                        }
+                    }
+                }
+                Ok(Transformed::no(Expr::ScalarFunction(func)))
+            }
             e => Ok(Transformed::no(e))
         })
     }
@@ -212,6 +244,38 @@ impl AnalyzerRule for IfCoercion {
     }
 }
 
+#[derive(Debug)]
+pub struct FunctionArgumentConversion;
+
+impl AnalyzerRule for FunctionArgumentConversion {
+    fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
+        plan.transform_up_expressions(|expr| match expr {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::ScalarFunction(func) => {
+                let any = func.as_any();
+                if let Some(Coalesce{children}) = any.downcast_ref::<Coalesce>() {
+                    if ! children.into_iter().all(|e| e.data_type() == children[0].data_type()) {
+                        let mut types = Vec::with_capacity(children.len());
+                        for e in children {
+                            types.push(e.data_type().clone());
+                        }
+                        if let Some(common_type) = find_wider_common_type(types) {
+                            let children = children.into_iter().map(|e|cast_if_not_same_type(e.clone(), &common_type)).collect();
+                            return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Coalesce::new(children)))))
+                        }
+                    }
+                }
+                Ok(Transformed::no(Expr::ScalarFunction(func)))
+            }
+            e => Ok(Transformed::no(e))
+        })
+    }
+
+    fn name(&self) -> &str {
+        "FunctionArgumentConversion"
+    }
+}
+
 fn cast_if_not_same_type(expr:  Expr, dt:  &DataType) -> Expr {
     if expr.data_type() == dt {
         expr
@@ -271,6 +335,29 @@ fn has_string_type(data_type: &DataType) -> bool {
         DataType::String => true,
         DataType::Array(data_type) => has_string_type(data_type),
         _ => false
+    }
+}
+
+fn implicit_cast(in_type:  &DataType, expected_type: AbstractDataType) -> Option<DataType> {
+    match (in_type, expected_type) {
+        (in_type, expected_type) if expected_type.accepts_type(in_type) => Some(in_type.clone()),
+        (DataType::Null, expected_type) => Some(expected_type.default_concrete_type()),
+        // If the function accepts any numeric type and the input is a string, we follow the hive
+        // convention and cast that input into a double
+        (DataType::String, AbstractDataType::Numeric) => Some(DataType::Double),
+        // Implicit cast among numeric types. When we reach here, input type is not acceptable.
+        // For any other numeric types, implicitly cast to each other, e.g. long -> int, int -> long
+        (in_type, expected_type) if in_type.is_numeric_type() && expected_type.is_numeric_type() =>
+            Some(expected_type.default_concrete_type()),
+        // string类型可以隐士转换成这么多类型
+        // Implicit cast from/to string
+        (DataType::String, expected_type) if expected_type.is_numeric_type() => Some(expected_type.default_concrete_type()),
+        (DataType::String, AbstractDataType::Type(DataType::Timestamp)) => Some(DataType::Timestamp),
+        // Cast any atomic type to string.
+        (in_type, AbstractDataType::Type(DataType::String)) if in_type.is_atomic_type() => Some(DataType::String),
+        (in_type, AbstractDataType::Collection(dts)) =>
+            dts.into_iter().find_map(|dt| implicit_cast(in_type, dt)),
+        _ => None
     }
 }
 

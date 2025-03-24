@@ -16,6 +16,38 @@ static DATE_TYPE: DataType = DataType::Date;
 static TIMESTAMP_TYPE: DataType = DataType::Timestamp;
 static BINARY_TYPE: DataType = DataType::Binary;
 
+#[derive(Clone, Debug)]
+pub enum AbstractDataType {
+    Numeric,
+    Type(DataType),
+    Collection(Vec<AbstractDataType>),
+}
+
+impl AbstractDataType {
+    pub fn accepts_type(&self, other: &DataType) -> bool {
+        match self {
+            AbstractDataType::Numeric => other.is_numeric_type(),
+            AbstractDataType::Type(data_type) => data_type == other,
+            AbstractDataType::Collection(data_types) => data_types.iter().any(|data_type| data_type.accepts_type(other)),
+        }
+    }
+
+    pub fn default_concrete_type(&self) -> DataType {
+        match self {
+            AbstractDataType::Numeric => DataType::Double,
+            AbstractDataType::Type(dt) => dt.clone(),
+            AbstractDataType::Collection(dts) => dts[0].default_concrete_type(),
+        }
+    }
+
+    pub fn is_numeric_type(&self) -> bool {
+        match self {
+            AbstractDataType::Numeric => true,
+            AbstractDataType::Type(data_type) => data_type.is_numeric_type(),
+            _ => false,
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum DataType {

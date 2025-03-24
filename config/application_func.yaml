@@ -24,7 +24,17 @@ transforms:
     outputs: [ query ]
     sql: |
       select 
+          id, cate, str, substr(str, 1, cast(2 as bigint)) a
+      from tbl
+      where id % 2 = 1
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query0 ]
+    sql: |
+      select 
           id, cate, str, nuallable_int, cast(nuallable_int as string) int_str,
+          nvl(nuallable_int, 0) int1,
+          coalesce(nuallable_int, 0) int2,
           case nuallable_int
             when '1' then 'a'
             when '2' then 'b'

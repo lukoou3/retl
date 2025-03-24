@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::Result;
-use crate::analysis::{AnalyzerRule, CaseWhenCoercion, IfCoercion, ImplicitTypeCasts, InConversion, PromoteStrings, ResolveFunctions, ResolveReferences, ResolveRelations};
+use crate::analysis::{type_coercion_rules, AnalyzerRule, ResolveFunctions, ResolveReferences, ResolveRelations};
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
 
@@ -10,16 +10,14 @@ pub struct Analyzer {
 
 impl Analyzer {
     pub fn new(temp_views: HashMap<String, RelationPlaceholder>) -> Self {
-        let rules: Vec<Box<dyn AnalyzerRule>> = vec![
+        let mut rules: Vec<Box<dyn AnalyzerRule>> = vec![
             Box::new(ResolveRelations::new(temp_views)),
             Box::new(ResolveReferences),
             Box::new(ResolveFunctions),
-            Box::new(InConversion),
-            Box::new(PromoteStrings),
-            Box::new(CaseWhenCoercion),
-            Box::new(IfCoercion),
-            Box::new(ImplicitTypeCasts),
         ];
+        for r in type_coercion_rules() {
+            rules.push(r);
+        }
         Self { rules }
     }
 

@@ -161,6 +161,20 @@ impl AnalyzerRule for ResolveFunctions {
                                         Ok(Transformed::yes(Expr::ScalarFunction(Box::new(If::new(
                                             Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
                                     },
+                                    "nvl" => {
+                                        if arguments.len() == 2 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Coalesce::new(arguments.clone())))))
+                                        } else {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                    },
+                                    "coalesce" => {
+                                        if arguments.len() >= 1 {
+                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Coalesce::new(arguments.clone())))))
+                                        } else {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                    },
                                     _ => Err(format!("UnresolvedFunction: {}", name))
                                 }
 

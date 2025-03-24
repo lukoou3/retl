@@ -67,6 +67,9 @@ pub fn create_physical_expr(
                     physical_branches.push((create_physical_expr(condition)?, create_physical_expr(value)?));
                 }
                 Ok(Arc::new(CaseWhen::new(physical_branches, create_physical_expr(else_value)?)))
+            } else if let Some(expr::Coalesce{children}) = any.downcast_ref::<expr::Coalesce>() {
+                let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
+                Ok(Arc::new(Coalesce::new(args)))
             } else {
                 Err(format!("Not implemented:{:?}", func))
             }
