@@ -61,37 +61,8 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
     loop {
         match pair.as_rule() {
             Rule::singleQuery | Rule::singleExpression | Rule::singleDataType =>
-                return parse_ast(pair.into_inner().next().unwrap()),
-            Rule::queryPrimary => {
-                let query = pair;
-                let mut project_list: Vec<_> = Vec::new();
-                let mut from: Option<LogicalPlan> = None;
-                let mut filter: Option<Expr> = None;
-                for pair in query.into_inner() {
-                    match pair.as_rule() {
-                        Rule::selectClause => {
-                            let ast = parse_ast(pair)?;
-                            if let Ast::Projects(projects) = ast {
-                                project_list = projects;
-                            } else {
-                                return Err(format!("Expected a projects but found {:?}", ast));
-                            }
-                        },
-                        Rule::fromClause => {
-                            from = Some(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string()));
-                        },
-                        Rule::whereClause => {
-                            filter = Some(parse_expression(pair)?);
-                        },
-                        _ => {}
-                    }
-                }
-                let mut child = Arc::new(from.unwrap());
-                if let Some(filter) = filter {
-                    child = Arc::new(LogicalPlan::Filter(Filter::new(filter, child)));
-                }
-                return Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child})))
-            }
+                pair = pair.into_inner().next().unwrap(),
+            Rule::queryPrimary => return parse_query_primary_ast(pair),
             Rule::namedExpressionSeq => return parse_named_expression_seq(pair).map(|x| Ast::Projects(x)),
             Rule::functionCall => return parse_function_call(pair).map(|x| Ast::Expression(x)),
             Rule::constant => return parse_constant(pair).map(|x| Ast::Expression(x)),
@@ -99,43 +70,13 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
             Rule::cast => return parse_cast(pair).map(|x| Ast::Expression(x)),
             Rule::searchedCase => return parse_searched_case(pair).map(|x| Ast::Expression(x)),
             Rule::simpleCase => return parse_simple_case(pair).map(|x| Ast::Expression(x)),
-            Rule::logicalNotExpression => {
-                let mut pairs:Vec<_> = pair.clone().into_inner().collect();
-                let mut expr = parse_expression(pairs.last().unwrap().clone())?;
-                if pairs.len() == 2 {
-                    expr = Expr::Not(Box::new(expr));
-                }
-                return Ok(Ast::Expression(expr))
-            },
+            Rule::logicalNotExpression => return parse_logical_not_expression_ast(pair),
             Rule::predicateExpression => return parse_predicate_expression(pair).map(|x| Ast::Expression(x)),
-            Rule::logicalAndExpression => {
-                let mut pairs = pair.clone().into_inner();
-                let mut expr = parse_expression(pairs.next().unwrap())?;
-                for pair in pairs {
-                    expr = Expr::BinaryOperator(BinaryOperator::new(Box::new(expr), Operator::And, Box::new(parse_expression(pair)?)));
-                }
-                return Ok(Ast::Expression(expr))
-            },
-            Rule::logicalOrExpression =>{
-                let mut pairs = pair.clone().into_inner();
-                let mut expr = parse_expression(pairs.next().unwrap())?;
-                for pair in pairs {
-                    expr = Expr::BinaryOperator(BinaryOperator::new(Box::new(expr), Operator::Or, Box::new(parse_expression(pair)?)));
-                }
-                return Ok(Ast::Expression(expr))
-            },
+            Rule::logicalAndExpression => return parse_logical_and_expression_ast(pair),
+            Rule::logicalOrExpression => return parse_logical_or_expression_ast(pair),
             Rule::addSubExpression | Rule::mulDivExpression => return parse_arithmetic_expression(pair).map(|x| Ast::Expression(x)),
             Rule::comparisonExpression => return parse_comparison_expression(pair).map(|x| Ast::Expression(x)),
-            Rule::unaryExpression => {
-                let mut pairs = pair.into_inner();
-                if pairs.len() == 1 {
-                    return Ok(Ast::Expression(parse_expression(pairs.next().unwrap())?))
-                } else {
-                    let op = pairs.next().unwrap().as_str();
-                    let expr = parse_expression(pairs.next().unwrap())?;
-                    return Ok(Ast::Expression(expr))
-                }
-            },
+            Rule::unaryExpression => return parse_unary_expression_ast(pair),
             Rule::arrayDataType => return parse_array_data_type(pair).map(|x| Ast::DataType(x)),
             Rule::structDataType => return parse_struct_data_type(pair).map(|x| Ast::DataType(x)),
             Rule::primitiveDataType => return parse_primitive_data_type(pair).map(|x| Ast::DataType(x)),
@@ -149,6 +90,75 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
                 }
             }
         }
+    }
+}
+
+fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let query = pair;
+    let mut project_list: Vec<_> = Vec::new();
+    let mut from: Option<LogicalPlan> = None;
+    let mut filter: Option<Expr> = None;
+    for pair in query.into_inner() {
+        match pair.as_rule() {
+            Rule::selectClause => {
+                let ast = parse_ast(pair)?;
+                if let Ast::Projects(projects) = ast {
+                    project_list = projects;
+                } else {
+                    return Err(format!("Expected a projects but found {:?}", ast));
+                }
+            },
+            Rule::fromClause => {
+                from = Some(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string()));
+            },
+            Rule::whereClause => {
+                filter = Some(parse_expression(pair)?);
+            },
+            _ => {}
+        }
+    }
+    let mut child = Arc::new(from.unwrap());
+    if let Some(filter) = filter {
+        child = Arc::new(LogicalPlan::Filter(Filter::new(filter, child)));
+    }
+    Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child})))
+}
+
+fn parse_logical_not_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let mut pairs:Vec<_> = pair.clone().into_inner().collect();
+    let mut expr = parse_expression(pairs.last().unwrap().clone())?;
+    if pairs.len() == 2 {
+        expr = Expr::Not(Box::new(expr));
+    }
+    Ok(Ast::Expression(expr))
+}
+
+fn parse_logical_and_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let mut pairs = pair.clone().into_inner();
+    let mut expr = parse_expression(pairs.next().unwrap())?;
+    for pair in pairs {
+        expr = Expr::BinaryOperator(BinaryOperator::new(Box::new(expr), Operator::And, Box::new(parse_expression(pair)?)));
+    }
+    Ok(Ast::Expression(expr))
+}
+
+fn parse_logical_or_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let mut pairs = pair.clone().into_inner();
+    let mut expr = parse_expression(pairs.next().unwrap())?;
+    for pair in pairs {
+        expr = Expr::BinaryOperator(BinaryOperator::new(Box::new(expr), Operator::Or, Box::new(parse_expression(pair)?)));
+    }
+    Ok(Ast::Expression(expr))
+}
+
+fn parse_unary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let mut pairs = pair.into_inner();
+    if pairs.len() == 1 {
+        Ok(Ast::Expression(parse_expression(pairs.next().unwrap())?))
+    } else {
+        let op = pairs.next().unwrap().as_str();
+        let expr = parse_expression(pairs.next().unwrap())?;
+        Ok(Ast::Expression(expr))
     }
 }
 

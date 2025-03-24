@@ -18,21 +18,19 @@ pub struct ConstantFolding;
 
 impl OptimizerRule for ConstantFolding {
     fn optimize(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
-        plan.transform_up(|plan|  plan.map_expressions(|expr| {
-            expr.transform_up(|expr| match expr {
-                e @ Expr::Literal(_) => Ok(Transformed::no(e)),
-                e if e.foldable() => {
-                    create_physical_expr(&e).map(|phy_expr| {
-                        let value = phy_expr.eval(empty_row());
-                        let data_type = phy_expr.data_type();
-                        let new_expr = Expr::lit(value, data_type);
-                        println!("fold {:?} -> {:?}", e, new_expr);
-                        Transformed::yes(new_expr)
-                    })
-                },
-                _ => Ok(Transformed::no(expr))
-            })
-        }))
+        plan.transform_up_expressions(|expr| match expr {
+            e @ Expr::Literal(_) => Ok(Transformed::no(e)),
+            e if e.foldable() => {
+                create_physical_expr(&e).map(|phy_expr| {
+                    let value = phy_expr.eval(empty_row());
+                    let data_type = phy_expr.data_type();
+                    let new_expr = Expr::lit(value, data_type);
+                    println!("fold {:?} -> {:?}", e, new_expr);
+                    Transformed::yes(new_expr)
+                })
+            },
+            _ => Ok(Transformed::no(expr))
+        })
     }
 
     fn name(&self) -> &str {
@@ -45,13 +43,11 @@ pub struct SimplifyCasts;
 
 impl OptimizerRule for SimplifyCasts {
     fn optimize(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
-        plan.transform_up(|plan|  plan.map_expressions(|expr| {
-            expr.transform_up(|expr| match expr {
-                Expr::Cast(Cast{child, data_type}) if child.data_type() == &data_type =>
-                    Ok(Transformed::yes(*child)),
-                _ => Ok(Transformed::no(expr))
-            })
-        }))
+        plan.transform_up_expressions(|expr| match expr {
+            Expr::Cast(Cast{child, data_type}) if child.data_type() == &data_type =>
+                Ok(Transformed::yes(*child)),
+            _ => Ok(Transformed::no(expr))
+        })
     }
 
     fn name(&self) -> &str {
