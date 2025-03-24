@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use prometheus::Registry;
 use crate::config::{ApplicationConfig, BaseIOMetrics, OperatorConfig, TaskConfig, TaskContext};
@@ -118,10 +118,15 @@ pub fn execution_graph(graph: &Graph, application_config: &ApplicationConfig, re
                 .name(format!("{}-{}/{}", graph.get_node_dispaly_by_id(source_id), i + 1, parallelism));
             handles.push(builder.spawn(move || {
                 println!("start source: {}", source_id);
-                let mut source = new_source_operator(source_id, &graph, task_config)?;
-                source.open()?;
-                source.run(terminated)?;
-                source.close()
+                let result = run_task(source_id, &graph, task_config, terminated.clone());
+                match result {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        println!("source: {} run error:{:?}", source_id, e);
+                        terminated.store(true, Ordering::Release);
+                        Err(e)
+                    },
+                }
             }).map_err(|_| "failed to spawn thread")?);
         }
     }
@@ -137,4 +142,11 @@ pub fn execution_graph(graph: &Graph, application_config: &ApplicationConfig, re
     } else {
         Ok(())
     }
+}
+
+fn run_task(source_id: u16, graph: &Graph, task_config: TaskConfig, terminated: Arc<AtomicBool>) -> Result<()> {
+    let mut source = new_source_operator(source_id, &graph, task_config)?;
+    source.open()?;
+    source.run(terminated)?;
+    source.close()
 }
