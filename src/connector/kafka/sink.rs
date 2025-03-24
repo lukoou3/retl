@@ -68,7 +68,7 @@ impl Sink for KafkaSink {
     }
 
     fn close(&mut self) -> Result<()> {
-        self.producer.flush(Duration::from_secs(5)).map_err(|e| e.to_string())
+        self.producer.flush(Duration::from_secs(30)).map_err(|e| e.to_string())
     }
 }
 
