@@ -120,6 +120,132 @@ impl PhysicalExpr for Substring {
 
 }
 
+#[derive(Debug, Clone)]
+pub struct StringSplit {
+    str: Arc<dyn PhysicalExpr>,
+    delimiter: Arc<dyn PhysicalExpr>,
+}
+
+impl StringSplit {
+    pub fn new(str: Arc<dyn PhysicalExpr>, delimiter: Arc<dyn PhysicalExpr>) -> Self {
+        Self {str, delimiter}
+    }
+}
+
+impl PartialEq for StringSplit {
+    fn eq(&self, other: &Self) -> bool {
+        self.str.eq(&other.str)
+            && self.delimiter.eq(&other.delimiter)
+    }
+}
+
+impl Eq for StringSplit{}
+
+impl Hash for StringSplit{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.str.hash(state);
+        self.delimiter.hash(state);
+    }
+}
+
+impl PhysicalExpr for StringSplit {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn data_type(&self) -> DataType {
+        DataType::string_array_type().clone()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let str = self.str.eval(input);
+        if str.is_null() {
+            return Value::Null;
+        }
+        let delimiter = self.delimiter.eval(input);
+        if delimiter.is_null() {
+            return Value::Null;
+        }
+        let str = str.get_string();
+        let delimiter = delimiter.get_string();
+        let split_string: Vec<_> = str.split(delimiter).map(|s| Value::String(Arc::new(s.to_string()))).collect();
+        Value::Array(Arc::new(split_string))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SplitPart {
+    str: Arc<dyn PhysicalExpr>,
+    delimiter: Arc<dyn PhysicalExpr>,
+    part: Arc<dyn PhysicalExpr>,
+}
+
+impl SplitPart {
+    pub fn new(str: Arc<dyn PhysicalExpr>, delimiter: Arc<dyn PhysicalExpr>, part: Arc<dyn PhysicalExpr>) -> Self {
+        Self {str, delimiter, part}
+    }
+}
+
+impl PartialEq for SplitPart {
+    fn eq(&self, other: &Self) -> bool {
+        self.str.eq(&other.str)
+            && self.delimiter.eq(&other.delimiter)
+            && self.part.eq(&other.part)
+    }
+}
+
+impl Eq for SplitPart{}
+
+impl Hash for SplitPart{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.str.hash(state);
+        self.delimiter.hash(state);
+        self.part.hash(state);
+    }
+}
+
+impl PhysicalExpr for SplitPart {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let str = self.str.eval(input);
+        if str.is_null() {
+            return Value::Null;
+        }
+        let delimiter = self.delimiter.eval(input);
+        if delimiter.is_null() {
+            return Value::Null;
+        }
+        let part = self.part.eval(input);
+        if part.is_null() {
+            return Value::Null;
+        }
+        let str = str.get_string();
+        let delimiter = delimiter.get_string();
+        let part = part.get_int();
+        let split_string: Vec<_> = str.split(delimiter).collect();
+        let len = split_string.len();
+
+        let index = match part.cmp(&0) {
+            std::cmp::Ordering::Less => len as i32 + part,
+            std::cmp::Ordering::Equal => return Value::Null,
+            std::cmp::Ordering::Greater => part - 1,
+        } as usize;
+
+        if index < len {
+            Value::String(Arc::new(split_string[index].to_string()))
+        } else {
+            Value::empty_string()
+        }
+    }
+}
+
+
+
 // Convert the given `start` and `count` to valid byte indices within `input` string
 //
 // Input `start` and `count` are equivalent to PostgreSQL's `substr(s, start, count)`

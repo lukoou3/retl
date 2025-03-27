@@ -2,7 +2,9 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
 use std::fmt::{Debug, Display, Formatter};
+use std::string::ToString;
 
+static EMPTY_STRING_VALUE: LazyLock<Value> = LazyLock::new(|| Value::String(Arc::new("".to_string())));
 // static EMPTY_BINARY:Arc<Vec<u8>> = Arc::new(Vec::new());
 static EMPTY_BINARY: LazyLock<Arc<Vec<u8>>> = LazyLock::new(|| Arc::new(Vec::new()));
 static EMPTY_ROW: LazyLock<Arc<dyn Row>> = LazyLock::new(|| Arc::new(GenericRow::new(Vec::new())));
@@ -103,6 +105,10 @@ impl Value {
 
     pub fn null() -> Self {
         Value::Null
+    }
+
+    pub fn empty_string() -> Self {
+        EMPTY_STRING_VALUE.clone()
     }
 
     #[inline]

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
+use std::sync::LazyLock;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize, Serializer};
 use crate::expr::AttributeReference;
@@ -15,9 +16,11 @@ static STRING_TYPE: DataType = DataType::String;
 static DATE_TYPE: DataType = DataType::Date;
 static TIMESTAMP_TYPE: DataType = DataType::Timestamp;
 static BINARY_TYPE: DataType = DataType::Binary;
+static STRING_ARRAY_TYPE: LazyLock<DataType> = LazyLock::new(|| DataType::Array(Box::new(DataType::String)));
 
 #[derive(Clone, Debug)]
 pub enum AbstractDataType {
+    Any,
     Numeric,
     Type(DataType),
     Collection(Vec<AbstractDataType>),
@@ -26,6 +29,7 @@ pub enum AbstractDataType {
 impl AbstractDataType {
     pub fn accepts_type(&self, other: &DataType) -> bool {
         match self {
+            AbstractDataType::Any => true,
             AbstractDataType::Numeric => other.is_numeric_type(),
             AbstractDataType::Type(data_type) => data_type == other,
             AbstractDataType::Collection(data_types) => data_types.iter().any(|data_type| data_type.accepts_type(other)),
@@ -34,6 +38,7 @@ impl AbstractDataType {
 
     pub fn default_concrete_type(&self) -> DataType {
         match self {
+            AbstractDataType::Any => panic!("Any type is not supported"),
             AbstractDataType::Numeric => DataType::Double,
             AbstractDataType::Type(dt) => dt.clone(),
             AbstractDataType::Collection(dts) => dts[0].default_concrete_type(),
@@ -119,6 +124,10 @@ impl DataType {
 
     pub fn binary_type() -> &'static DataType {
         &BINARY_TYPE
+    }
+
+    pub fn string_array_type() -> &'static DataType {
+        &STRING_ARRAY_TYPE
     }
 }
 

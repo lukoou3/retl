@@ -24,6 +24,11 @@ impl TreeNode for Expr {
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
             | Expr::Literal(_) => Transformed::no(self),
+            Expr::UnresolvedExtractValue(UnresolvedExtractValue { child, extraction }) => (child, extraction)
+                .map_elements(f)?
+                .update_data(|(new_child, new_extraction)| {
+                    Expr::UnresolvedExtractValue(UnresolvedExtractValue::new(new_child, new_extraction))
+                }),
             Expr::Alias(Alias {
                 child,
                 name,

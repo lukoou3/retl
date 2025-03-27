@@ -5,6 +5,7 @@ use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::expr::*;
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode};
+use crate::types::DataType;
 
 pub trait AnalyzerRule: Debug {
     /// Rewrite `plan`
@@ -56,6 +57,14 @@ impl ResolveReferences {
                         Some(a) => Ok(Transformed::yes(Expr::AttributeReference(AttributeReference::new_with_expr_id(
                             name.clone(), a.data_type.clone(), a.expr_id)))),
                         None =>  Ok(Transformed::no(expr)),
+                    }
+                },
+                Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) if child.resolved() => {
+                    match child.data_type() {
+                        DataType::Array(_) => Ok(Transformed::yes(Expr::ScalarFunction(Box::new(GetArrayItem::new(child.clone(), extraction.clone()))))),
+                        _ => {
+                            Err(format!("Can't extract value from {:?}, {:?}", child, extraction))
+                        }
                     }
                 },
                 e if e.resolved() => Ok(Transformed::no(expr)),
@@ -112,6 +121,20 @@ impl AnalyzerRule for ResolveFunctions {
                                     "concat" => {
                                         let args = arguments.into_iter().map(|arg| arg.clone()).collect();
                                         Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Concat::new(args)))))
+                                    },
+                                    "split" => {
+                                        if arguments.len() != 2 {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(StringSplit::new(
+                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
+                                    },
+                                    "split_part" => {
+                                        if arguments.len() != 3 {
+                                            return Err(format!("{} args not match: {:?}", name, arguments));
+                                        }
+                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(SplitPart::new(
+                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
                                     },
                                     "current_timestamp" | "now" => {
                                         if arguments.is_empty() {

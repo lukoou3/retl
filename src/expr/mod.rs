@@ -7,6 +7,8 @@ mod collection;
 mod datetime;
 mod conditional;
 mod null;
+mod complex_type_extractor;
+mod arithmetic;
 
 pub use expr::*;
 pub use expr_fn::*;
@@ -16,5 +18,7 @@ pub use collection::*;
 pub use datetime::*;
 pub use conditional::*;
 pub use null::*;
+pub use complex_type_extractor::*;
+pub use arithmetic::*;
 
 

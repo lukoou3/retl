@@ -83,18 +83,6 @@ impl ScalarFunction for Substring {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int), AbstractDataType::Type(DataType::Int)])
     }
 
-    fn check_input_data_types(&self) -> Result<()> {
-        if self.str.data_type() != DataType::string_type() {
-            Err(format!("{:?} requires string type, not {}", self.str, self.str.data_type()))
-        } else if self.pos.data_type() != DataType::int_type() {
-            Err(format!("{:?} requires int type, not {}", self.pos, self.pos.data_type()))
-        } else if self.len.data_type() != DataType::int_type() {
-            Err(format!("{:?} requires int type, not {}", self.len, self.len.data_type()))
-        }  else {
-            Ok(())
-        }
-    }
-
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
         let mut  iter = args.into_iter();
         if let (Some(first), Some(second), Some(third)) = (iter.next(), iter.next(), iter.next()) {
@@ -104,3 +92,97 @@ impl ScalarFunction for Substring {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct StringSplit {
+    pub str: Box<Expr>,
+    pub delimiter: Box<Expr>,
+}
+
+impl StringSplit {
+    pub fn new(str: Box<Expr>, delimiter: Box<Expr>) -> StringSplit {
+        StringSplit{str, delimiter}
+    }
+}
+
+impl ScalarFunction for StringSplit {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "StringSplit"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_array_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.str, &self.delimiter]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String)])
+    }
+
+    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
+        let mut  iter = args.into_iter();
+        if let (Some(first), Some(second)) = (iter.next(), iter.next()) {
+            Box::new(StringSplit::new(Box::new(first), Box::new(second)))
+        } else {
+            panic!("args count not match")
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SplitPart {
+    pub str: Box<Expr>,
+    pub delimiter: Box<Expr>,
+    pub part: Box<Expr>,
+}
+
+impl SplitPart {
+    pub fn new(str: Box<Expr>, delimiter: Box<Expr>, part: Box<Expr>) -> SplitPart {
+        SplitPart{str, delimiter, part}
+    }
+}
+
+impl ScalarFunction for SplitPart {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "SplitPart"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.str, &self.delimiter, &self.part]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int)])
+    }
+
+    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
+        let mut  iter = args.into_iter();
+        if let (Some(first), Some(second), Some(third)) = (iter.next(), iter.next(), iter.next()) {
+            Box::new(SplitPart::new(Box::new(first), Box::new(second), Box::new(third)))
+        } else {
+            panic!("args count not match")
+        }
+    }
+}
+
+
+
+
+
+
+

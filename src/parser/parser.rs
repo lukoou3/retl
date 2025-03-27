@@ -9,7 +9,7 @@ use pest_derive::Parser;
 use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnresolvedFunction};
+use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, UnresolvedExtractValue, UnresolvedFunction};
 use crate::logical_plan::{Filter, LogicalPlan, Project};
 use crate::types::*;
 
@@ -42,7 +42,11 @@ pub fn parse_expr(sql: &str) -> Result<Expr> {
 }
 
 pub fn parse_data_type(sql: &str) -> Result<DataType> {
-    let pair = SqlParser::parse(Rule::singleDataType, sql).map_err(|e| format!("{:?}", e))?.next().unwrap();
+    let pair = if sql.trim().ends_with(">") {
+        SqlParser::parse(Rule::singleDataType, sql).map_err(|e| format!("{:?}", e))?.next().unwrap()
+    } else {
+        SqlParser::parse(Rule::singleTableSchema, sql).map_err(|e| format!("{:?}", e))?.next().unwrap()
+    };
     match parse_ast(pair)? {
         Ast::DataType(dt) => Ok(dt),
         x => Err(format!("not a data type:{:?}", x)),
@@ -62,6 +66,7 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
         match pair.as_rule() {
             Rule::singleQuery | Rule::singleExpression | Rule::singleDataType =>
                 pair = pair.into_inner().next().unwrap(),
+            Rule::singleTableSchema => return parse_single_table_schema(pair),
             Rule::queryPrimary => return parse_query_primary_ast(pair),
             Rule::namedExpressionSeq => return parse_named_expression_seq(pair).map(|x| Ast::Projects(x)),
             Rule::functionCall => return parse_function_call(pair).map(|x| Ast::Expression(x)),
@@ -77,6 +82,7 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
             Rule::addSubExpression | Rule::mulDivExpression => return parse_arithmetic_expression(pair).map(|x| Ast::Expression(x)),
             Rule::comparisonExpression => return parse_comparison_expression(pair).map(|x| Ast::Expression(x)),
             Rule::unaryExpression => return parse_unary_expression_ast(pair),
+            Rule::primaryExpression => return parse_primary_expression_ast(pair),
             Rule::arrayDataType => return parse_array_data_type(pair).map(|x| Ast::DataType(x)),
             Rule::structDataType => return parse_struct_data_type(pair).map(|x| Ast::DataType(x)),
             Rule::primitiveDataType => return parse_primitive_data_type(pair).map(|x| Ast::DataType(x)),
@@ -87,6 +93,27 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
                     // return parse_ast(pairs.next().unwrap());
                 } else {
                     return Err(format!("Expected a single child but found {}:{}", pairs.len(), pairs.into_iter().map(|pair| pair.as_str()).join(", ")))
+                }
+            }
+        }
+    }
+}
+
+fn parse_identifier(mut pair: Pair<Rule>) -> Result<&str> {
+    loop {
+        match pair.as_rule() {
+            Rule::unquotedIdentifier => return Ok(pair.as_str()),
+            Rule::quotedIdentifier => {
+                let s = pair.as_str();
+                assert!(s.starts_with('`') && s.ends_with('`'));
+                return Ok( &s[1..s.len() - 1]);
+            },
+            _ => {
+                let mut pairs = pair.into_inner();
+                if pairs.len() == 1 {
+                    pair = pairs.next().unwrap();
+                } else {
+                    return Err(format!("identifier expected a single child but found {}:{}", pairs.len(), pairs.into_iter().map(|pair| pair.as_str()).join(", ")))
                 }
             }
         }
@@ -124,6 +151,10 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
     Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child})))
 }
 
+fn parse_single_table_schema(pair: Pair<Rule>) -> Result<Ast> {
+    parse_col_type_list(pair.into_inner().next().unwrap()).map(|x| Ast::DataType(x))
+}
+
 fn parse_logical_not_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
     let mut pairs:Vec<_> = pair.clone().into_inner().collect();
     let mut expr = parse_expression(pairs.last().unwrap().clone())?;
@@ -156,10 +187,47 @@ fn parse_unary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
     if pairs.len() == 1 {
         Ok(Ast::Expression(parse_expression(pairs.next().unwrap())?))
     } else {
-        let op = pairs.next().unwrap().as_str();
-        let expr = parse_expression(pairs.next().unwrap())?;
-        Ok(Ast::Expression(expr))
+        match pairs.next().unwrap().as_rule() {
+            Rule::PLUS => {
+                let expr = parse_expression(pairs.next().unwrap())?;
+                Ok(Ast::Expression(expr))
+            },
+            Rule::MINUS => {
+                let expr = parse_expression(pairs.next().unwrap())?;
+                Ok(Ast::Expression(Expr::ScalarFunction(Box::new(UnaryMinus::new(Box::new(expr))))))
+            },
+            r => Err(format!("Expected a unary expression but found {:?}", r))
+        }
     }
+}
+
+fn parse_primary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let mut pairs = pair.into_inner();
+    let mut expr = parse_expression(pairs.next().unwrap())?;
+    for pair in pairs {
+        match pair.as_rule() {
+            Rule::subscriptOp => {
+                let index = parse_expression(pair)?;
+                expr = Expr::UnresolvedExtractValue(UnresolvedExtractValue::new(Box::new(expr), Box::new(index)));
+            },
+            _ => return Err(format!("Expected a subscriptOp expression but found {:?}", pair))
+        }
+    }
+    Ok(Ast::Expression(expr))
+}
+
+fn parse_col_type_list(pair: Pair<Rule>) -> Result<DataType> {
+    let fields:Vec<_> = pair.into_inner().map(|col_type| {
+        let mut pairs = col_type.into_inner();
+        let name = parse_identifier(pairs.next().unwrap()).unwrap().to_string();
+        let tp = parse_ast(pairs.next().unwrap()).unwrap();
+        if let Ast::DataType(data_type) = tp {
+            Field { name, data_type }
+        } else {
+            panic!("Expected a data type but found {:?}", tp)
+        }
+    }).collect();
+    Ok(DataType::Struct(Fields(fields)))
 }
 
 fn parse_array_data_type(pair: Pair<Rule>) -> Result<DataType> {
@@ -174,7 +242,7 @@ fn parse_array_data_type(pair: Pair<Rule>) -> Result<DataType> {
 fn parse_struct_data_type(pair: Pair<Rule>) -> Result<DataType> {
     let fields:Vec<_> = pair.into_inner().map(|complex| {
         let mut pairs = complex.into_inner();
-        let name = pairs.next().unwrap().as_str().to_string();
+        let name = parse_identifier(pairs.next().unwrap()).unwrap().to_string();
         let tp = parse_ast(pairs.next().unwrap()).unwrap();
         if let Ast::DataType(data_type) = tp {
             Field { name, data_type }
@@ -186,7 +254,7 @@ fn parse_struct_data_type(pair: Pair<Rule>) -> Result<DataType> {
 }
 
 fn parse_primitive_data_type(pair: Pair<Rule>) -> Result<DataType> {
-    match pair.as_str() {
+    match parse_identifier(pair)? {
         "boolean" => Ok(DataType::Boolean),
         "int" | "integer" => Ok(DataType::Int),
         "bigint" | "long" => Ok(DataType::Long),
@@ -196,7 +264,7 @@ fn parse_primitive_data_type(pair: Pair<Rule>) -> Result<DataType> {
         "date" => Ok(DataType::Date),
         "timestamp" => Ok(DataType::Timestamp),
         "binary" => Ok(DataType::Binary),
-        _ => Err(format!("not supported data type: {:?}", pair))
+        pair => Err(format!("not supported data type: {:?}", pair))
     }
 }
 
@@ -216,7 +284,7 @@ fn parse_named_expression_seq(pair: Pair<Rule>) -> Result<Vec<Expr>> {
             }
         } else {
             let ast = parse_ast(pairs[0].clone())?;
-            let name = pairs.last().unwrap().as_str().to_string();
+            let name = parse_identifier(pairs.last().unwrap().clone())?;
             if let Ast::Expression(child) = ast {
                 named_expressions.push(child.alias(name));
             } else {
@@ -248,7 +316,7 @@ fn parse_datatype(pair: Pair<Rule>) -> Result<DataType> {
 
 fn parse_function_call(pair: Pair<Rule>) -> Result<Expr> {
     let mut pairs = pair.into_inner();
-    let name = pairs.next().unwrap().as_str().to_string();
+    let name = parse_identifier(pairs.next().unwrap())?.to_string();
     let args_pair = pairs.next().unwrap();
     let arguments:Vec<_> = args_pair.into_inner().map(|pair| {
         parse_expression(pair).unwrap()
@@ -445,7 +513,7 @@ fn parse_constant(pair: Pair<Rule>) -> Result<Expr> {
 }
 
 fn parse_column_reference(pair: Pair<Rule>) -> Result<Expr> {
-    Ok(Expr::UnresolvedAttribute(pair.as_str().to_string()))
+    Ok(Expr::UnresolvedAttribute(parse_identifier(pair)?.to_string()))
 }
 
 

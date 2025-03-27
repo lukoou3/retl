@@ -3,6 +3,7 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use itertools::Itertools;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::binary_expr;
@@ -13,6 +14,7 @@ use crate::types::{AbstractDataType, DataType};
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum Expr {
     UnresolvedAttribute(String),
+    UnresolvedExtractValue(UnresolvedExtractValue),
     BoundReference(BoundReference),
     AttributeReference(AttributeReference),
     Alias(Alias),
@@ -32,7 +34,7 @@ pub enum Expr {
 impl Expr {
     pub fn foldable(&self) -> bool {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) | Expr::BoundReference(_) => false,
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_) | Expr::BoundReference(_) => false,
             // We should never fold named expressions in order to not remove the alias.
             Expr::AttributeReference(_) | Expr::Alias(_)  => false,
             Expr::Literal(_)  => true,
@@ -44,7 +46,7 @@ impl Expr {
 
     pub fn data_type(&self) -> &DataType {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_)  =>
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_)  =>
                 panic!("UnresolvedExpr:{:?}", self),
             Expr::BoundReference(b) => &b.data_type,
             Expr::AttributeReference(a) => &a.data_type,
@@ -82,6 +84,7 @@ impl Expr {
     pub fn check_input_data_types(&self) -> Result<()> {
         match self {
             Expr::UnresolvedAttribute(_)
+             | Expr::UnresolvedExtractValue(_)
              | Expr::UnresolvedFunction(_)
              | Expr::BoundReference(_)
              | Expr::AttributeReference(_)
@@ -161,6 +164,8 @@ impl Expr {
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
             | Expr::Literal(_) => Vec::new(),
+            Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) =>
+                vec![child, extraction],
             Expr::Alias(Alias{ child, ..})
             | Expr::Cast(Cast{ child, ..})
             | Expr::Not(child)
@@ -269,6 +274,18 @@ impl<'a> TreeNodeContainer<'a, Self> for Expr {
         mut f: F,
     ) -> Result<Transformed<Self>> {
         f(self)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
+pub struct UnresolvedExtractValue {
+    pub child: Box<Expr>,
+    pub extraction: Box<Expr>,
+}
+
+impl UnresolvedExtractValue {
+    pub fn new(child: Box<Expr>, extraction: Box<Expr>) -> Self {
+        Self { child, extraction, }
     }
 }
 
@@ -477,7 +494,27 @@ pub trait ScalarFunction: Debug + Send + Sync + CloneScalarFunction {
     fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
         None
     }
-    fn check_input_data_types(&self) -> Result<()>;
+    fn check_input_data_types(&self) -> Result<()> {
+        match self.expects_input_types() {
+            None => {
+                Ok(())
+            },
+            Some(input_types) => {
+                let mut mismatches = Vec::new();
+                for (i, (tp, input_type)) in self.args().into_iter().zip(input_types.iter()).enumerate() {
+                    if !input_type.accepts_type(tp.data_type()) {
+                        mismatches.push(format!("{} argument {} requires {:?}, but get {}", self.name(), i + 1, input_type, tp.data_type()));
+                    }
+                }
+                if mismatches.is_empty() {
+                    Ok(())
+                } else {
+                    Err(mismatches.into_iter().join(" "))
+                }
+            },
+        }
+
+    }
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction>;
 }
 

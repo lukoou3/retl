@@ -7,6 +7,7 @@ sources:
   - type: faker
     outputs: [ faker_source ]
     schema: "struct<id:bigint, cate:string, str:string, nuallable_int:int, in_bytes:bigint, out_bytes:bigint>"
+    #schema: "id bigint, `cate` string, str string, nuallable_int int, in_bytes bigint, out_bytes bigint"
     rows_per_second: 1
     number_of_rows: 100
     fields: [
@@ -24,7 +25,10 @@ transforms:
     outputs: [ query ]
     sql: |
       select 
-          id, cate, str, substr(str, 1, cast(2 as bigint)) a
+          `id`, cate, str, substr(str, 1, 2) a,
+          split(str, '_') str_split,
+          split_part(str, '_', 2) `str_split_part`,
+          split(str, '_')[1] str_split_idx
       from tbl
       where id % 2 = 1
   - type: query

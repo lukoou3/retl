@@ -53,6 +53,10 @@ pub fn create_physical_expr(
             } else if let Some(expr::Concat{children}) = any.downcast_ref::<expr::Concat>() {
                 let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
                 Ok(Arc::new(Concat::new(args)))
+            } else if let Some(expr::StringSplit{str, delimiter}) = any.downcast_ref::<expr::StringSplit>() {
+                Ok(Arc::new(StringSplit::new(create_physical_expr(str)?, create_physical_expr(delimiter)?)))
+            } else if let Some(expr::SplitPart{str, delimiter, part}) = any.downcast_ref::<expr::SplitPart>() {
+                Ok(Arc::new(SplitPart::new(create_physical_expr(str)?, create_physical_expr(delimiter)?, create_physical_expr(part)?)))
             } else if let Some(_) = any.downcast_ref::<expr::CurrentTimestamp>() {
                 Ok(Arc::new(CurrentTimestamp))
             } else if let Some(expr::FromUnixTime{sec, format}) = any.downcast_ref::<expr::FromUnixTime>() {
@@ -70,6 +74,10 @@ pub fn create_physical_expr(
             } else if let Some(expr::Coalesce{children}) = any.downcast_ref::<expr::Coalesce>() {
                 let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
                 Ok(Arc::new(Coalesce::new(args)))
+            } else if let Some(expr::GetArrayItem{child, ordinal}) = any.downcast_ref::<expr::GetArrayItem>() {
+                Ok(Arc::new(GetArrayItem::new(create_physical_expr(child)?, create_physical_expr(ordinal)?, func.data_type().clone())))
+            } else if let Some(expr::UnaryMinus{child}) = any.downcast_ref::<expr::UnaryMinus>() {
+                Ok(Arc::new(UnaryMinus::new(create_physical_expr(child)?)))
             } else {
                 Err(format!("Not implemented:{:?}", func))
             }
