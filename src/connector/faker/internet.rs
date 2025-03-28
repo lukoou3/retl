@@ -24,7 +24,6 @@ impl Faker for Ipv4Faker {
     fn gene_value(&mut self) -> Value {
         let mut buf = String::with_capacity(15);
         let ip = rand::rng().random_range(self.start..self.end);
-        buf.clear();
         buf.push_str(&((ip >> 24) & 0xff).to_string());
         buf.push('.');
         buf.push_str(&((ip >> 16) & 0xff).to_string());
