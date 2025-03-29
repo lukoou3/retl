@@ -1,6 +1,8 @@
-use std::any::Any;
-use crate::expr::{Expr, ScalarFunction};
+use crate::Result;
+use crate::expr::{CreateScalarFunction, Expr, ScalarFunction, create_physical_expr};
+use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct UnaryMinus {
@@ -13,10 +15,16 @@ impl UnaryMinus {
     }
 }
 
-impl ScalarFunction for UnaryMinus {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for UnaryMinus {
+    fn from_args(args: Vec<Expr>) -> crate::Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        Ok(Box::new(UnaryMinus::new(Box::new(args[0].clone()))))
     }
+}
+
+impl ScalarFunction for UnaryMinus {
 
     fn name(&self) -> &str {
         "UnaryMinus"
@@ -34,7 +42,7 @@ impl ScalarFunction for UnaryMinus {
         Some(vec![AbstractDataType::Numeric])
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        Box::new(UnaryMinus::new(Box::new(args[0].clone())))
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        Ok(Arc::new(phy::UnaryMinus::new(create_physical_expr(&self.child)?)))
     }
 }

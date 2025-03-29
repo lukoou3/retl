@@ -1,6 +1,7 @@
-use std::any::Any;
+use std::sync::Arc;
 use crate::Result;
-use crate::expr::{Expr, ScalarFunction};
+use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
+use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::DataType;
 
 #[derive(Debug, Clone)]
@@ -16,10 +17,20 @@ impl If {
     }
 }
 
-impl ScalarFunction for If {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for If {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 3 {
+            return Err(format!("requires 3 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let predicate = iter.next().unwrap();
+        let true_value = iter.next().unwrap();
+        let false_value = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(predicate), Box::new(true_value), Box::new(false_value))))
     }
+}
+
+impl ScalarFunction for If {
 
     fn name(&self) -> &str {
         "If"
@@ -43,13 +54,9 @@ impl ScalarFunction for If {
         }
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second), Some(third)) = (iter.next(), iter.next(), iter.next()) {
-            Box::new(Self::new(Box::new(first), Box::new(second), Box::new(third)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{predicate, true_value, false_value} = self;
+        Ok(Arc::new(phy::If::new(create_physical_expr(predicate)?, create_physical_expr(true_value)?, create_physical_expr(false_value)?)))
     }
 }
 
@@ -65,10 +72,25 @@ impl CaseWhen {
     }
 }
 
-impl ScalarFunction for CaseWhen {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for CaseWhen {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        let mut branches = Vec::new();
+        for i in (0..args.len()).step_by(2) {
+            if i + 1 >= args.len() {
+                break
+            }
+            branches.push((args[i].clone(), args[i + 1].clone()));
+        }
+        let else_value= if args.len() % 2 == 1 {
+            args[args.len() - 1].clone()
+        } else {
+            Expr::null_lit()
+        };
+        Ok(Box::new(Self::new(branches, Box::new(else_value))))
     }
+}
+
+impl ScalarFunction for CaseWhen {
 
     fn name(&self) -> &str {
         "CaseWhen"
@@ -100,20 +122,13 @@ impl ScalarFunction for CaseWhen {
         Ok(())
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut branches = Vec::new();
-        for i in (0..args.len()).step_by(2) {
-            if i + 1 >= args.len() {
-                break
-            }
-            branches.push((args[i].clone(), args[i + 1].clone()));
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{branches, else_value} = self;
+        let mut physical_branches = Vec::new();
+        for (condition, value) in branches {
+            physical_branches.push((create_physical_expr(condition)?, create_physical_expr(value)?));
         }
-        let else_value= if args.len() % 2 == 1 {
-            args[args.len() - 1].clone()
-        } else {
-            Expr::null_lit()
-        };
-        Box::new(Self::new(branches, Box::new(else_value)))
+        Ok(Arc::new(phy::CaseWhen::new(physical_branches, create_physical_expr(else_value)?)))
     }
 }
 

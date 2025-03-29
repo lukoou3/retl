@@ -21,4 +21,3 @@ pub use null::*;
 pub use complex_type_extractor::*;
 pub use arithmetic::*;
 
-

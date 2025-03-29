@@ -1,15 +1,23 @@
-use std::any::Any;
+use std::sync::Arc;
+use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::Result;
-use crate::expr::{Expr, ScalarFunction};
+use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
+use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::DataType;
 
 #[derive(Debug, Clone)]
 pub struct CurrentTimestamp;
 
-impl ScalarFunction for CurrentTimestamp {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for CurrentTimestamp {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if !args.is_empty() {
+            return Err("requires no arguments".to_string());
+        }
+        Ok(Box::new(CurrentTimestamp))
     }
+}
+
+impl ScalarFunction for CurrentTimestamp {
 
     fn name(&self) -> &str {
         "CurrentTimestamp"
@@ -31,8 +39,8 @@ impl ScalarFunction for CurrentTimestamp {
         Ok(())
     }
 
-    fn rewrite_args(&self, _: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        Box::new(CurrentTimestamp)
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        Ok(Arc::new(phy::CurrentTimestamp))
     }
 }
 
@@ -48,11 +56,19 @@ impl FromUnixTime {
     }
 }
 
-impl ScalarFunction for FromUnixTime {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for FromUnixTime {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 1 || args.len() > 2 {
+            return Err(format!("requires 1 or 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let sec = iter.next().unwrap();
+        let format = iter.next().unwrap_or(Expr::string_lit(NORM_DATETIME_FMT));
+        Ok(Box::new(Self::new(Box::new(sec), Box::new(format))))
     }
+}
 
+impl ScalarFunction for FromUnixTime {
     fn name(&self) -> &str {
         "FromUnixTime"
     }
@@ -75,16 +91,25 @@ impl ScalarFunction for FromUnixTime {
         }
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second)) = (iter.next(), iter.next()) {
-            Box::new(FromUnixTime::new(Box::new(first), Box::new(second)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{sec, format} = self;
+        Ok(Arc::new(phy::FromUnixTime::new(create_physical_expr(sec)?, create_physical_expr(format)?)))
     }
 }
 
+pub struct UnixTimestamp;
+
+impl CreateScalarFunction for UnixTimestamp {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() > 2 {
+            return Err(format!("requires 0-2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let time_expr = iter.next().unwrap_or(Expr::ScalarFunction(Box::new(CurrentTimestamp)));
+        let format = iter.next().unwrap_or(Expr::string_lit(NORM_DATETIME_FMT));
+        Ok(Box::new(ToUnixTimestamp::new(Box::new(time_expr), Box::new(format))))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ToUnixTimestamp {
@@ -98,11 +123,19 @@ impl ToUnixTimestamp {
     }
 }
 
-impl ScalarFunction for ToUnixTimestamp {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for ToUnixTimestamp {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 1 || args.len() > 2 {
+            return Err(format!("requires 1 or 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let time_expr = iter.next().unwrap();
+        let format = iter.next().unwrap_or(Expr::string_lit(NORM_DATETIME_FMT));
+        Ok(Box::new(Self::new(Box::new(time_expr), Box::new(format))))
     }
+}
 
+impl ScalarFunction for ToUnixTimestamp {
     fn name(&self) -> &str {
         "ToUnixTimestamp"
     }
@@ -125,20 +158,8 @@ impl ScalarFunction for ToUnixTimestamp {
         }
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second)) = (iter.next(), iter.next()) {
-            Box::new(ToUnixTimestamp::new(Box::new(first), Box::new(second)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{time_expr, format} = self;
+        Ok(Arc::new(phy::ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
     }
 }
-
-
-
-
-
-
-
-

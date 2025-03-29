@@ -1,6 +1,8 @@
-use std::any::Any;
-use crate::expr::{Expr, ScalarFunction};
+use crate::Result;
+use crate::expr::{CreateScalarFunction, Expr, ScalarFunction, create_physical_expr};
+use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct GetArrayItem {
@@ -14,17 +16,29 @@ impl GetArrayItem {
     }
 }
 
-impl ScalarFunction for GetArrayItem {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+impl CreateScalarFunction for GetArrayItem {
+    fn from_args(args: Vec<Expr>) -> crate::Result<Box<dyn ScalarFunction>> {
+        if args.len() != 2 {
+            return Err(format!("requires 2 argument, found:{}", args.len()));
+        }
 
+        let child = args[0].clone();
+        let ordinal = args[1].clone();
+
+        Ok(Box::new(GetArrayItem::new(
+            Box::new(child),
+            Box::new(ordinal),
+        )))
+    }
+}
+
+impl ScalarFunction for GetArrayItem {
     fn name(&self) -> &str {
         "GetArrayItem"
     }
 
     fn data_type(&self) -> &DataType {
-        if let DataType::Array( data_type) = self.child.data_type() {
+        if let DataType::Array(data_type) = self.child.data_type() {
             data_type.as_ref()
         } else {
             panic!("GetArrayItem child must be array")
@@ -36,19 +50,17 @@ impl ScalarFunction for GetArrayItem {
     }
 
     fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
-        Some(vec![AbstractDataType::Any, AbstractDataType::Type(DataType::Int)])
+        Some(vec![
+            AbstractDataType::Any,
+            AbstractDataType::Type(DataType::Int),
+        ])
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second)) = (iter.next(), iter.next()) {
-            Box::new(GetArrayItem::new(Box::new(first), Box::new(second)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        Ok(Arc::new(phy::GetArrayItem::new(
+            create_physical_expr(&self.child)?,
+            create_physical_expr(&self.ordinal)?,
+            self.data_type().clone(),
+        )))
     }
 }
-
-
-
-

@@ -1,6 +1,7 @@
-use std::any::Any;
+use std::sync::Arc;
 use crate::Result;
-use crate::expr::{Expr, ScalarFunction};
+use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
+use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
 
 #[derive(Debug, Clone)]
@@ -14,10 +15,18 @@ impl Length {
     }
 }
 
-impl ScalarFunction for Length {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for Length {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
     }
+}
+
+impl ScalarFunction for Length {
 
     fn name(&self) -> &str {
         "Length"
@@ -39,13 +48,8 @@ impl ScalarFunction for Length {
         }
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let Some(child) = iter.next() {
-            Box::new(Length::new(Box::new(child)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        Ok(Arc::new(phy::Length::new(create_physical_expr(&self.child)?)))
     }
 }
 
@@ -62,10 +66,20 @@ impl Substring {
     }
 }
 
-impl ScalarFunction for Substring {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for Substring {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(format!("requires 2 or 3 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let str = iter.next().unwrap();
+        let pos = iter.next().unwrap();
+        let len = iter.next().unwrap_or(Expr::int_lit(i32::MAX));
+        Ok(Box::new(Self::new(Box::new(str), Box::new(pos), Box::new(len))))
     }
+}
+
+impl ScalarFunction for Substring {
 
     fn name(&self) -> &str {
         "Substring"
@@ -83,13 +97,9 @@ impl ScalarFunction for Substring {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int), AbstractDataType::Type(DataType::Int)])
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second), Some(third)) = (iter.next(), iter.next(), iter.next()) {
-            Box::new(Substring::new(Box::new(first), Box::new(second), Box::new(third)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{str, pos, len} = self;
+        Ok(Arc::new(phy::Substring::new(create_physical_expr(str)?, create_physical_expr(pos)?, create_physical_expr(len)?)))
     }
 }
 
@@ -105,10 +115,19 @@ impl StringSplit {
     }
 }
 
-impl ScalarFunction for StringSplit {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for StringSplit {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 2 {
+            return Err(format!("requires 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let str = iter.next().unwrap();
+        let delimiter = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(str), Box::new(delimiter))))
     }
+}
+
+impl ScalarFunction for StringSplit {
 
     fn name(&self) -> &str {
         "StringSplit"
@@ -126,13 +145,9 @@ impl ScalarFunction for StringSplit {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String)])
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second)) = (iter.next(), iter.next()) {
-            Box::new(StringSplit::new(Box::new(first), Box::new(second)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{str, delimiter} = self;
+        Ok(Arc::new(phy::StringSplit::new(create_physical_expr(str)?, create_physical_expr(delimiter)?)))
     }
 }
 
@@ -149,10 +164,20 @@ impl SplitPart {
     }
 }
 
-impl ScalarFunction for SplitPart {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl CreateScalarFunction for SplitPart {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 3 {
+            return Err(format!("requires 3 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let str = iter.next().unwrap();
+        let delimiter = iter.next().unwrap();
+        let part = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(str), Box::new(delimiter), Box::new(part))))
     }
+}
+
+impl ScalarFunction for SplitPart {
 
     fn name(&self) -> &str {
         "SplitPart"
@@ -170,13 +195,9 @@ impl ScalarFunction for SplitPart {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int)])
     }
 
-    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
-        let mut  iter = args.into_iter();
-        if let (Some(first), Some(second), Some(third)) = (iter.next(), iter.next(), iter.next()) {
-            Box::new(SplitPart::new(Box::new(first), Box::new(second), Box::new(third)))
-        } else {
-            panic!("args count not match")
-        }
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{str, delimiter, part} = self;
+        Ok(Arc::new(phy::SplitPart::new(create_physical_expr(str)?, create_physical_expr(delimiter)?, create_physical_expr(part)?)))
     }
 }
 

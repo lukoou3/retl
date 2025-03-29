@@ -3,11 +3,12 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::sync::Arc;
 use itertools::Itertools;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::binary_expr;
-use crate::physical_expr::{can_cast, PhysicalExpr};
+use crate::physical_expr::{self as phy, can_cast, PhysicalExpr};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::{AbstractDataType, DataType};
 
@@ -183,7 +184,7 @@ impl Expr {
                 arguments.iter().map(|a| a).collect(),
         }
     }
-
+    
     pub fn alias(self, name: impl Into<String>) -> Expr {
         Expr::Alias(Alias::new(self, name.into()))
     }
@@ -483,8 +484,7 @@ impl In {
     }
 }
 
-pub trait ScalarFunction: Debug + Send + Sync + CloneScalarFunction {
-    fn as_any(&self) -> &dyn Any;
+pub trait ScalarFunction: Debug + Send + Sync + CreateScalarFunction + ExtendScalarFunction {
     fn name(&self) -> &str;
     fn foldable(&self) -> bool {
         self.args().iter().all(|arg| arg.foldable())
@@ -515,16 +515,36 @@ pub trait ScalarFunction: Debug + Send + Sync + CloneScalarFunction {
         }
 
     }
+    
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>>;
+}
+
+pub trait CreateScalarFunction {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> where Self: Sized;
+}
+
+
+pub trait ExtendScalarFunction {
+    fn clone_box(&self) -> Box<dyn ScalarFunction>;
+    fn as_any(&self) -> &dyn Any;
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
     fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction>;
 }
 
-pub trait CloneScalarFunction {
-    fn clone_box(&self) -> Box<dyn ScalarFunction>;
-}
-
-impl<T: ScalarFunction + Clone + 'static> CloneScalarFunction for T {
+impl<T: ScalarFunction + Clone + 'static> ExtendScalarFunction for T {
     fn clone_box(&self) -> Box<dyn ScalarFunction> {
         Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        self
+    }
+
+    fn rewrite_args(&self, args: Vec<Expr>) -> Box<dyn ScalarFunction> {
+        Self::from_args(args).unwrap()
     }
 }
 
@@ -575,4 +595,76 @@ impl Hash for Box<dyn ScalarFunction> {
             x.hash(state);
         }
     }
+}
+
+pub fn create_physical_expr(
+    e: &Expr,
+) -> Result<Arc<dyn PhysicalExpr>> {
+    match e {
+        Expr::BoundReference(BoundReference{ordinal, data_type}) =>
+            Ok(Arc::new(phy::BoundReference::new(*ordinal, data_type.clone()))),
+        Expr::Alias(Alias{child, ..}) =>
+            create_physical_expr(child),
+        Expr::Literal(Literal{value, data_type}) =>
+            Ok(Arc::new(phy::Literal::new(value.clone(), data_type.clone()))),
+        Expr::Cast(Cast{child, data_type}) =>
+            Ok(Arc::new(phy::Cast::new(create_physical_expr(child)?, data_type.clone()))),
+        Expr::Not(child) =>
+            Ok(Arc::new(phy::Not::new(create_physical_expr(child)?))),
+        Expr::IsNull(child) =>
+            Ok(Arc::new(phy::IsNull::new(create_physical_expr(child)?))),
+        Expr::IsNotNull(child) =>
+            Ok(Arc::new(phy::IsNotNull::new(create_physical_expr(child)?))),
+        Expr::BinaryOperator(BinaryOperator{left, op, right}) => match op {
+            Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo => {
+                let l = create_physical_expr(left)?;
+                let r = create_physical_expr(right)?;
+                Ok(Arc::new(phy::BinaryArithmetic::new(l, op.clone(), r)))
+            }
+            Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
+                Ok(Arc::new(phy::BinaryComparison::new(create_physical_expr(left)?, op.clone(), create_physical_expr(right)?))),
+            Operator::And =>
+                Ok(Arc::new(phy::And::new(create_physical_expr(left)?, create_physical_expr(right)?))),
+            Operator::Or =>
+                Ok(Arc::new(phy::Or::new(create_physical_expr(left)?, create_physical_expr(right)?))),
+        },
+        Expr::Like(Like{expr, pattern}) =>
+            Ok(Arc::new(phy::Like::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
+        Expr::RLike(Like{expr, pattern}) =>
+            Ok(Arc::new(phy::RLike::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
+        Expr::In(In{value, list}) => {
+            let value = create_physical_expr(value)?;
+            let list = list.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
+            Ok(Arc::new(phy::In::new(value, list)))
+        },
+        Expr::ScalarFunction(func) => func.create_physical_expr(),
+        _ => Err(format!("Not implemented:{:?}", e)),
+    }
+
+}
+
+#[macro_export]
+macro_rules! match_downcast {
+    ($func:expr, $($type:ident { $($field:ident),* } => $block:block),* $(,)? _ => $else_block:block) => {{
+        $(
+            if $func.as_any().downcast_ref::<$type>().is_some() {
+                let f = $func.into_any().downcast::<$type>().unwrap();
+                let $type { $($field),* } = *f; // 解构 Box<T> 到指定字段
+                $block
+            } else
+        )*
+        $else_block
+    }};
+}
+
+#[macro_export]
+macro_rules! match_downcast_ref {
+    ($func:expr, $($type:ident { $($field:ident),* } => $block:block),* $(,)? _ => $else_block:block) => {{
+        $(
+            if let Some($type { $($field),* }) = $func.as_any().downcast_ref::<$type>() {
+                $block
+            } else
+        )*
+        $else_block
+    }};
 }

@@ -1,9 +1,8 @@
-use std::env::args;
 use crate::analysis::AnalyzerRule;
 use crate::data::Value;
-use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen, Coalesce};
+use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen, Coalesce, ScalarFunction};
 use crate::logical_plan::LogicalPlan;
-use crate::Operator;
+use crate::{match_downcast, match_downcast_ref, Operator};
 use crate::tree_node::{Transformed, TreeNode};
 use crate::types::{AbstractDataType, DataType};
 
@@ -235,6 +234,64 @@ impl AnalyzerRule for IfCoercion {
                 }
                 Ok(Transformed::no(Expr::ScalarFunction(func)))
             }
+            e => Ok(Transformed::no(e))
+        })
+    }
+
+    fn name(&self) -> &str {
+        "IfCoercion"
+    }
+}
+
+#[derive(Debug)]
+pub struct IfCoercion2;
+
+impl AnalyzerRule for IfCoercion2 {
+    fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
+        plan.transform_up_expressions(|expr| match expr {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::ScalarFunction(func) => {
+                match_downcast! { func,
+                    If { predicate, true_value, false_value } => {
+                        Ok(Transformed::no(Expr::ScalarFunction(Box::new(If::new(predicate, true_value, false_value)))))
+                    },
+                    CaseWhen { branches, else_value } => {
+                       Ok(Transformed::no(Expr::ScalarFunction(Box::new(CaseWhen::new(branches, else_value)))))
+                    },
+                    _ => {
+                        Ok(Transformed::no(Expr::ScalarFunction(func)))
+                    }
+                }
+            },
+            e => Ok(Transformed::no(e))
+        })
+    }
+
+    fn name(&self) -> &str {
+        "IfCoercion"
+    }
+}
+
+#[derive(Debug)]
+pub struct IfCoercion3;
+
+impl AnalyzerRule for IfCoercion3 {
+    fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
+        plan.transform_up_expressions(|expr| match expr {
+            e if !e.children_resolved() => Ok(Transformed::no(e)),
+            Expr::ScalarFunction(func) => {
+                match_downcast_ref! { func,
+                    If { predicate, true_value, false_value } => {
+                        Ok(Transformed::no(Expr::ScalarFunction(Box::new(If::new(predicate.clone(), true_value.clone(), false_value.clone())))))
+                    },
+                    CaseWhen{ branches, else_value} => {
+                       Ok(Transformed::no(Expr::ScalarFunction(Box::new(CaseWhen::new(branches.clone(), else_value.clone())))))
+                    },
+                    _ => {
+                        Ok(Transformed::no(Expr::ScalarFunction(func)))
+                    }
+                }
+            },
             e => Ok(Transformed::no(e))
         })
     }

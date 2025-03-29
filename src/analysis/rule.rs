@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
+use crate::analysis::lookup_function;
 use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::expr::*;
 use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
@@ -110,97 +111,10 @@ impl AnalyzerRule for ResolveFunctions {
                     expr.transform_up(|expr| {
                         match &expr {
                             Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) => {
-                                match name.to_lowercase().as_str() {
-                                    "length" => {
-                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Length::new(Box::new(arguments[0].clone()))))))
-                                    },
-                                    "substring" | "substr" => {
-                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Substring::new(
-                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
-                                    },
-                                    "concat" => {
-                                        let args = arguments.into_iter().map(|arg| arg.clone()).collect();
-                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Concat::new(args)))))
-                                    },
-                                    "split" => {
-                                        if arguments.len() != 2 {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(StringSplit::new(
-                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
-                                    },
-                                    "split_part" => {
-                                        if arguments.len() != 3 {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(SplitPart::new(
-                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
-                                    },
-                                    "current_timestamp" | "now" => {
-                                        if arguments.is_empty() {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(CurrentTimestamp))))
-                                        } else {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                    },
-                                    "from_unixtime" => {
-                                        if arguments.len() == 1 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(FromUnixTime::new(
-                                                Box::new(arguments[0].clone()), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
-                                        } else if arguments.len() == 2 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(FromUnixTime::new(
-                                                Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
-                                        } else {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                    },
-                                    "unix_timestamp" => {
-                                        if arguments.len() == 0 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
-                                                Box::new(Expr::ScalarFunction(Box::new(CurrentTimestamp))), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
-                                        } else if arguments.len() == 1 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
-                                                Box::new(arguments[0].clone()), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
-                                        }
-                                        else if arguments.len() == 2 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
-                                                Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
-                                        } else {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                    },
-                                    "to_unix_timestamp" => {
-                                        if arguments.len() == 1 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
-                                                Box::new(arguments[0].clone()), Box::new(Expr::string_lit(NORM_DATETIME_FMT)))))))
-                                        } else if arguments.len() == 2 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(ToUnixTimestamp::new(
-                                                Box::new(arguments[0].clone()), Box::new(arguments[1].clone()))))))
-                                        } else {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                    },
-                                    "if" => {
-                                        Ok(Transformed::yes(Expr::ScalarFunction(Box::new(If::new(
-                                            Box::new(arguments[0].clone()), Box::new(arguments[1].clone()), Box::new(arguments[2].clone()))))))
-                                    },
-                                    "nvl" => {
-                                        if arguments.len() == 2 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Coalesce::new(arguments.clone())))))
-                                        } else {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                    },
-                                    "coalesce" => {
-                                        if arguments.len() >= 1 {
-                                            Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Coalesce::new(arguments.clone())))))
-                                        } else {
-                                            return Err(format!("{} args not match: {:?}", name, arguments));
-                                        }
-                                    },
-                                    _ => Err(format!("UnresolvedFunction: {}", name))
+                                match lookup_function(name, arguments.clone()) {
+                                    Ok(e) => Ok(Transformed::yes(Expr::ScalarFunction(e))),
+                                    Err(e) => Err(e)
                                 }
-
                             },
                             e if e.resolved() => Ok(Transformed::no(expr)),
                             e => Ok(Transformed::no(expr)),
