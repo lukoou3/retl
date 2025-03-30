@@ -25,6 +25,17 @@ transforms:
     outputs: [ query ]
     sql: |
       select 
+          `id`, cate, str, substr(str, 1, 2) a,
+          split(str, '_')[1] str_split_idx,
+          length(str) len,
+          concat_ws(',', cate, str) concat_ws,
+          regexp_extract(str, '_(\d+)', 1) extract
+      from tbl
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query3 ]
+    sql: |
+      select 
           `id`, cate, str, substr(str, 1, 2) a,nuallable_int,if(nuallable_int is null, 3, cast(4 as bigint)) i,
           split(str, '_') str_split,
           split_part(str, '_', 2) `str_split_part`,

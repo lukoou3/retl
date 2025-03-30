@@ -54,6 +54,57 @@ impl ScalarFunction for Length {
 }
 
 #[derive(Debug, Clone)]
+pub struct ConcatWs {
+    pub sep: Box<Expr>,
+    pub str_args: Vec<Expr>,
+}
+
+impl ConcatWs {
+    pub fn new(sep: Box<Expr>, str_args: Vec<Expr>) -> ConcatWs {
+        ConcatWs{sep, str_args}
+    }
+}
+
+impl CreateScalarFunction for ConcatWs {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 2 {
+            return Err(format!("requires at least 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let sep = iter.next().unwrap();
+        let str_args = iter.collect();
+        Ok(Box::new(Self::new(Box::new(sep), str_args)))
+    }
+}
+
+impl ScalarFunction for ConcatWs {
+    fn name(&self) -> &str {
+        "ConcatWs"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        let mut args = vec![self.sep.as_ref()];
+        args.extend(self.str_args.iter());
+        args
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        let mut types = Vec::with_capacity(self.str_args.len() + 1);
+        types.resize(self.str_args.len() + 1, AbstractDataType::Type(DataType::String));
+        Some(types)
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{sep, str_args} = self;
+        Ok(Arc::new(phy::ConcatWs::new(create_physical_expr(sep)?, str_args.iter().map(|arg| create_physical_expr(arg)).collect::<Result<Vec<_>>>()?)))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Substring {
     pub str: Box<Expr>,
     pub pos: Box<Expr>,
@@ -198,6 +249,192 @@ impl ScalarFunction for SplitPart {
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
         let Self{str, delimiter, part} = self;
         Ok(Arc::new(phy::SplitPart::new(create_physical_expr(str)?, create_physical_expr(delimiter)?, create_physical_expr(part)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StringReplace {
+    pub str: Box<Expr>,
+    pub search: Box<Expr>,
+    pub replace: Box<Expr>,
+}
+
+impl StringReplace {
+    pub fn new(str: Box<Expr>, search: Box<Expr>, replace: Box<Expr>) -> StringReplace {
+        StringReplace{str, search, replace}
+    }
+}
+
+impl CreateScalarFunction for StringReplace {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 3 {
+            return Err(format!("requires 3 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let str = iter.next().unwrap();
+        let search = iter.next().unwrap();
+        let replace = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(str), Box::new(search), Box::new(replace))))
+    }
+}
+
+impl ScalarFunction for StringReplace {
+    fn name(&self) -> &str {
+        "StringReplace"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.str, &self.search, &self.replace]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String)])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{str, search, replace} = self;
+        Ok(Arc::new(phy::StringReplace::new(create_physical_expr(str)?, create_physical_expr(search)?, create_physical_expr(replace)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StringTrim {
+    pub src_str: Box<Expr>,
+    pub trim_str: Box<Expr>,
+}
+
+impl StringTrim {
+    pub fn new(src_str: Box<Expr>, trim_str: Box<Expr>) -> StringTrim {
+        StringTrim{src_str, trim_str}
+    }
+}
+
+impl CreateScalarFunction for StringTrim {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 1 || args.len() > 2 {
+            return Err(format!("requires 1 or 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let src_str = iter.next().unwrap();
+        let trim_str = iter.next().unwrap_or(Expr::string_lit(" "));
+        Ok(Box::new(Self::new(Box::new(src_str), Box::new(trim_str))))
+    }
+}
+
+impl ScalarFunction for StringTrim {
+    fn name(&self) -> &str {
+        "StringTrim"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.src_str, &self.trim_str]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String),AbstractDataType::Type(DataType::String)])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{src_str, trim_str} = self;
+        Ok(Arc::new(phy::StringTrim::new(create_physical_expr(src_str)?, create_physical_expr(trim_str)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Lower {
+    pub child: Box<Expr>,
+}
+
+impl Lower {
+    pub fn new(child: Box<Expr>) -> Lower {
+        Lower{child}
+    }
+}
+
+impl CreateScalarFunction for Lower {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for Lower {
+    fn name(&self) -> &str {
+        "Lower"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String)])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{child} = self;
+        Ok(Arc::new(phy::Lower::new(create_physical_expr(child)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Upper {
+    pub child: Box<Expr>,
+}
+
+impl Upper {
+    pub fn new(child: Box<Expr>) -> Upper {
+        Upper{child}
+    }
+}
+
+impl CreateScalarFunction for Upper {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for Upper {
+    fn name(&self) -> &str {
+        "Upper"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Type(DataType::String)])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{child} = self;
+        Ok(Arc::new(phy::Upper::new(create_physical_expr(child)?)))
     }
 }
 

@@ -53,3 +53,104 @@ impl PhysicalExpr for UnaryMinus {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Least {
+    children: Vec<Arc<dyn PhysicalExpr>>
+}
+
+impl Least {
+    pub fn new(children: Vec<Arc<dyn PhysicalExpr>>) -> Least {
+        Least { children }
+    }
+}
+
+impl PartialEq for Least{
+    fn eq(&self, other: &Least) -> bool {
+        self.children.eq(&other.children)
+    }
+}
+
+impl Eq for Least{}
+
+impl Hash for Least{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.children.hash(state);
+    }
+}
+
+impl PhysicalExpr for Least {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.children[0].data_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        self.children.iter().fold(Value::Null, |r, c| {
+            let v = c.eval(input);
+            if v.is_null() {
+                r
+            } else {
+                if r.is_null() || v < r {
+                    v
+                } else {
+                    r
+                }
+            }
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Greatest {
+    children: Vec<Arc<dyn PhysicalExpr>>
+}
+
+impl Greatest {
+    pub fn new(children: Vec<Arc<dyn PhysicalExpr>>) -> Greatest {
+        Greatest { children }
+    }
+}
+
+impl PartialEq for Greatest{
+    fn eq(&self, other: &Greatest) -> bool {
+        self.children.eq(&other.children)
+    }
+}
+
+impl Eq for Greatest{}
+
+impl Hash for Greatest{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.children.hash(state);
+    }
+}
+
+impl PhysicalExpr for Greatest {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.children[0].data_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        self.children.iter().fold(Value::Null, |r, c| {
+            let v = c.eval(input);
+            if v.is_null() {
+                r
+            } else {
+                if r.is_null() || v > r {
+                    v
+                } else {
+                    r
+                }
+            }
+        })
+    }
+}
+

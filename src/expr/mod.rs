@@ -9,6 +9,7 @@ mod conditional;
 mod null;
 mod complex_type_extractor;
 mod arithmetic;
+mod regexp;
 
 pub use expr::*;
 pub use expr_fn::*;
@@ -20,4 +21,5 @@ pub use conditional::*;
 pub use null::*;
 pub use complex_type_extractor::*;
 pub use arithmetic::*;
+pub use regexp::*;
 

@@ -59,19 +59,28 @@ macro_rules! init_expressions {
 
 fn builtin_function_registry() -> FunctionRegistry {
     let expressions = init_expressions!(
-        // str
-        "length" => Length,
+        "if" => If,
+        "nvl" => Nvl,
+        "coalesce" => Coalesce,
+        "greatest" => Greatest,
+        "least" => Least,
+        // string functions
+        "length" | "char_length" | "character_length" => Length,
         "substring" | "substr" => Substring,
+        "concat_ws" => ConcatWs,
         "concat" => Concat,
         "split" => StringSplit,
         "split_part" => SplitPart,
+        "replace" => StringReplace,
+        "regexp_replace" => RegExpReplace,
+        "regexp_extract" => RegExpExtract,
+        "trim" => StringTrim,
+        "lower" | "lcase" => Lower,
+        "upper" | "ucase" => Upper,
         "current_timestamp" | "now" => CurrentTimestamp,
         "from_unixtime" => FromUnixTime,
         "unix_timestamp" => UnixTimestamp,
         "to_unix_timestamp" => ToUnixTimestamp,
-        "if" => If,
-        "coalesce" => Coalesce,
-        "nvl" => Nvl,
     );
     FunctionRegistry { expressions }
 }

@@ -1,14 +1,215 @@
 use std::any::Any;
+use std::borrow::Cow;
 use std::fmt::{Debug};
 use std::hash::Hash;
 use std::iter::zip;
 use std::sync::Arc;
+use log::error;
 use memchr::memchr3;
-use regex::{Regex, RegexBuilder};
+use regex::{Error, Regex, RegexBuilder};
 use crate::Result;
 use crate::data::{empty_row, Row, Value};
 use crate::physical_expr::{Literal, PhysicalExpr};
 use crate::types::DataType;
+
+#[derive(Debug)]
+pub struct RegExpExtract {
+    subject: Arc<dyn PhysicalExpr>,
+    regexp: Arc<dyn PhysicalExpr>,
+    idx: Arc<dyn PhysicalExpr>,
+    regexp_static: Option<Regex>,
+}
+
+impl RegExpExtract {
+    pub fn new(subject: Arc<dyn PhysicalExpr>, regexp: Arc<dyn PhysicalExpr>, idx: Arc<dyn PhysicalExpr>) -> RegExpExtract {
+        let regexp_static = if let Some(literal) = regexp.as_any().downcast_ref::<Literal>() {
+            let value = literal.eval(empty_row());
+            if value.is_null() {
+                None
+            } else {
+                match Regex::new(value.get_string()) {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        error!("Failed to compile regexp: {:?}", e);
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        };
+        RegExpExtract { subject, regexp, idx, regexp_static, }
+    }
+}
+
+impl PartialEq for RegExpExtract {
+    fn eq(&self, other: &Self) -> bool {
+        self.subject.eq(&other.subject)
+            && self.regexp.eq(&other.regexp)
+            && self.idx.eq(&other.idx)
+    }
+}
+
+impl Eq for RegExpExtract{}
+
+impl Hash for RegExpExtract{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.subject.hash(state);
+        self.regexp.hash(state);
+        self.idx.hash(state);
+    }
+}
+
+impl PhysicalExpr for RegExpExtract {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let subject = self.subject.eval(input);
+        if subject.is_null() {
+            return Value::Null;
+        }
+        let regexp = self.regexp.eval(input);
+        if regexp.is_null() {
+            return Value::Null;
+        }
+        let idx = self.idx.eval(input);
+        if idx.is_null() {
+            return Value::Null;
+        }
+        let source = subject.get_string();
+        let idx = idx.get_int();
+        if idx < 0 {
+            return Value::Null;
+        }
+        let idx = idx as usize;
+        if let Some(regexp) = &self.regexp_static {
+            match regexp.captures(source) {
+                Some(captures) => {
+                    match captures.get(idx) {
+                        Some(m) => Value::String(Arc::new(m.as_str().to_string())),
+                        None => Value::Null,
+                    }
+                },
+                None => Value::empty_string(),
+            }
+        } else {
+            match Regex::new(regexp.get_string()) {
+                Ok(regexp) => match regexp.captures(source) {
+                    Some(captures) => {
+                        match captures.get(idx) {
+                            Some(m) => Value::String(Arc::new(m.as_str().to_string())),
+                            None => Value::Null,
+                        }
+                    },
+                    None => Value::empty_string(),
+                },
+                Err(e) => {
+                    error!("Failed to compile regexp: {:?}", e);
+                    Value::Null
+                }
+            }
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct RegExpReplace {
+    subject: Arc<dyn PhysicalExpr>,
+    regexp: Arc<dyn PhysicalExpr>,
+    rep: Arc<dyn PhysicalExpr>,
+    regexp_static: Option<Regex>,
+}
+
+impl RegExpReplace {
+    pub fn new(subject: Arc<dyn PhysicalExpr>, regexp: Arc<dyn PhysicalExpr>, rep: Arc<dyn PhysicalExpr>) -> RegExpReplace {
+        let regexp_static = if let Some(literal) = regexp.as_any().downcast_ref::<Literal>() {
+            let value = literal.eval(empty_row());
+            if value.is_null() {
+                None
+            } else {
+                match Regex::new(value.get_string()) {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        error!("Failed to compile regexp: {:?}", e);
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        };
+        RegExpReplace { subject, regexp, rep, regexp_static, }
+    }
+}
+
+impl PartialEq for RegExpReplace {
+    fn eq(&self, other: &Self) -> bool {
+        self.subject.eq(&other.subject)
+            && self.regexp.eq(&other.regexp)
+            && self.rep.eq(&other.rep)
+    }
+}
+
+impl Eq for RegExpReplace{}
+
+impl Hash for RegExpReplace{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.subject.hash(state);
+        self.regexp.hash(state);
+        self.rep.hash(state);
+    }
+}
+
+impl PhysicalExpr for RegExpReplace {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let subject = self.subject.eval(input);
+        if subject.is_null() {
+            return Value::Null;
+        }
+        let regexp = self.regexp.eval(input);
+        if regexp.is_null() {
+            return Value::Null;
+        }
+        let rep = self.rep.eval(input);
+        if rep.is_null() {
+            return Value::Null;
+        }
+        let source = subject.get_string();
+        let replacement = rep.get_string();
+        if let Some(regexp) = &self.regexp_static {
+            match regexp.replace_all(source, replacement) {
+                Cow::Borrowed(s) => subject,
+                Cow::Owned(s) => Value::String(Arc::new(s)),
+            }
+        } else {
+            match Regex::new(regexp.get_string()) {
+                Ok(regexp) => match regexp.replace_all(source, replacement) {
+                    Cow::Borrowed(s) => subject,
+                    Cow::Owned(s) => Value::String(Arc::new(s)),
+                },
+                Err(e) => {
+                    error!("Failed to compile regexp: {:?}", e);
+                    Value::Null
+                }
+            }
+        }
+    }
+}
 
 // Like expression
 #[derive(Debug, Clone)]

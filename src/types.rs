@@ -52,6 +52,34 @@ impl AbstractDataType {
             _ => false,
         }
     }
+
+    pub fn string_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::String)
+    }
+
+    pub fn numeric_type(&self) -> AbstractDataType {
+        AbstractDataType::Numeric
+    }
+
+    pub fn int_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Int)
+    }
+
+    pub fn long_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Long)
+    }
+
+    pub fn float_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Float)
+    }
+
+    pub fn double_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Double)
+    }
+
+    pub fn string_array_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::string_array_type().clone())
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]

@@ -53,6 +53,71 @@ impl PhysicalExpr for Length {
 }
 
 #[derive(Debug, Clone)]
+pub struct ConcatWs {
+    sep: Arc<dyn PhysicalExpr>,
+    str_args: Vec<Arc<dyn PhysicalExpr>>,
+}
+
+impl ConcatWs {
+    pub fn new(sep: Arc<dyn PhysicalExpr>, str_args: Vec<Arc<dyn PhysicalExpr>>) -> Self {
+        Self { sep, str_args }
+    }
+}
+
+impl PartialEq for ConcatWs {
+    fn eq(&self, other: &Self) -> bool {
+        self.sep.eq(&other.sep)
+            && self.str_args.eq(&other.str_args)
+    }
+}
+
+impl Eq for ConcatWs{}
+
+impl Hash for ConcatWs{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.sep.hash(state);
+        self.str_args.hash(state);
+    }
+}
+
+impl PhysicalExpr for ConcatWs {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let sep = self.sep.eval(input);
+        if sep.is_null() {
+            return Value::Null;
+        }
+        let sep = sep.get_string();
+        if self.str_args.is_empty() {
+            return  Value::empty_string();
+        }
+        let mut first = true;
+        let mut rst = String::with_capacity(self.str_args.len() + sep.len() * self.str_args.len());
+        for arg in self.str_args.iter() {
+            let value = arg.eval(input);
+            if value.is_null() {
+                continue;
+            }
+            if first {
+                first = false;
+                rst.push_str(value.get_string());
+            } else {
+                rst.push_str(sep);
+                rst.push_str(value.get_string());
+            }
+        }
+        Value::String(Arc::new(rst))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Substring {
     str: Arc<dyn PhysicalExpr>,
     pos: Arc<dyn PhysicalExpr>,
@@ -241,6 +306,219 @@ impl PhysicalExpr for SplitPart {
         } else {
             Value::empty_string()
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StringReplace {
+    str: Arc<dyn PhysicalExpr>,
+    search: Arc<dyn PhysicalExpr>,
+    replace: Arc<dyn PhysicalExpr>,
+}
+
+impl StringReplace {
+    pub fn new(str: Arc<dyn PhysicalExpr>, search: Arc<dyn PhysicalExpr>, replace: Arc<dyn PhysicalExpr>) -> Self {
+        Self {str, search, replace}
+    }
+}
+
+impl PartialEq for StringReplace {
+    fn eq(&self, other: &Self) -> bool {
+        self.str.eq(&other.str)
+            && self.search.eq(&other.search)
+            && self.replace.eq(&other.replace)
+    }
+}
+
+impl Eq for StringReplace{}
+
+impl Hash for StringReplace{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.str.hash(state);
+        self.search.hash(state);
+        self.replace.hash(state);
+    }
+}
+
+impl PhysicalExpr for StringReplace {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let str = self.str.eval(input);
+        if str.is_null() {
+            return Value::Null;
+        }
+        let search = self.search.eval(input);
+        if search.is_null() {
+            return Value::Null;
+        }
+        let replace = self.replace.eval(input);
+        if replace.is_null() {
+            return Value::Null;
+        }
+        let s = str.get_string();
+        let search = search.get_string();
+        let replace = replace.get_string();
+        if s.contains(search) {
+            Value::string(s.replace(search, replace))
+        } else {
+            str
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StringTrim {
+    src_str: Arc<dyn PhysicalExpr>,
+    trim_str: Arc<dyn PhysicalExpr>,
+}
+
+impl StringTrim {
+    pub fn new(src_str: Arc<dyn PhysicalExpr>, trim_str: Arc<dyn PhysicalExpr>) -> Self {
+        Self {src_str, trim_str}
+    }
+}
+
+impl PartialEq for StringTrim {
+    fn eq(&self, other: &Self) -> bool {
+        self.src_str.eq(&other.src_str)
+            && self.trim_str.eq(&other.trim_str)
+    }
+}
+
+impl Eq for StringTrim{}
+
+impl Hash for StringTrim{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.src_str.hash(state);
+        self.trim_str.hash(state);
+    }
+}
+
+impl PhysicalExpr for StringTrim {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let src_str = self.src_str.eval(input);
+        if src_str.is_null() {
+            return Value::Null;
+        }
+        let trim_str = self.trim_str.eval(input);
+        if trim_str.is_null() {
+            return Value::Null;
+        }
+        let src = src_str.get_string();
+        let trim = trim_str.get_string();
+        if trim.is_empty() {
+            src_str
+        } else {
+            let trimmed = src.trim_matches(|c| trim.contains(c));
+            if trimmed.len() == src.len() {
+                src_str
+            } else {
+                Value::string(trimmed)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Lower {
+    child: Arc<dyn PhysicalExpr>,
+}
+
+impl Lower {
+    pub fn new(child: Arc<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PartialEq for Lower {
+    fn eq(&self, other: &Self) -> bool {
+        self.child.eq(&other.child)
+    }
+}
+
+impl Eq for Lower{}
+
+impl Hash for Lower{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.child.hash(state);
+    }
+}
+
+impl PhysicalExpr for Lower {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let child = self.child.eval(input);
+        if child.is_null() {
+            return Value::Null;
+        }
+        let child = child.get_string();
+        Value::string(child.to_lowercase())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Upper {
+    child: Arc<dyn PhysicalExpr>,
+}
+
+impl Upper {
+    pub fn new(child: Arc<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PartialEq for Upper {
+    fn eq(&self, other: &Self) -> bool {
+        self.child.eq(&other.child)
+    }
+}
+
+impl Eq for Upper{}
+
+impl Hash for Upper{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.child.hash(state);
+    }
+}
+
+impl PhysicalExpr for Upper {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let child = self.child.eval(input);
+        if child.is_null() {
+            return Value::Null;
+        }
+        let child = child.get_string();
+        Value::string(child.to_uppercase())
     }
 }
 
