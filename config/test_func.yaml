@@ -1,0 +1,52 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "num bigint, str string"
+    rows_per_second: 1
+    number_of_rows: 5
+    fields: [
+      { "name": "num", "type": "int", "min": 1, "max": 1000000, "random": false, "null_rate": 0.3 },
+      { "name": "str", "type": "string", "regex": "[a-z]{2}_[0-9]{1,3}", "null_rate": 0.3 }
+    ]
+
+transforms:
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query ]
+    sql: |
+      select 
+          num,
+          str,
+          nvl(num, 0) `nvl(num, 0)`,
+          coalesce(num, str, 0) `coalesce(num, str, 0)`,
+          greatest(num, 3) `greatest(num, 3)`,
+          least(num, 3) `least(num, 3)`,
+          lower(str) `lower(str)`,
+          upper(str) `upper(str)`,
+          trim(str) `trim(str)`,
+          length(str) `length(str)`,
+          concat_ws('|', num, str) `concat_ws('|', num, str)`,
+          concat(num, '|', str) `concat(num, '|', str)`,
+          split(str, '_') `split(str, '_')`,
+          split_part(str, '_', 1) `split_part(str, '_', 1)`,
+          replace(str, '_', '|') `replace(str, '_', '|')`,
+          regexp_replace(str, '_(\d+)', '|0') `regexp_replace(str, '_(\d+)', '|0')`,
+          regexp_extract(str, '_(\d+)', 1) `regexp_extract(str, '_(\d+)', 1)`,
+          now() `now`,
+          from_unixtime(1) `from_unixtime(1)`
+      from tbl
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ query ]
+    print_mode: stdout
+    encoding:
+      codec: json
+
+active_sinks: [print_sink]

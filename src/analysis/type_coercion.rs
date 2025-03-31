@@ -1,6 +1,6 @@
 use crate::analysis::AnalyzerRule;
 use crate::data::Value;
-use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen, Coalesce, ScalarFunction};
+use crate::expr::{BinaryOperator, In, Expr, If, CaseWhen, Coalesce, Least, Greatest, ScalarFunction};
 use crate::logical_plan::LogicalPlan;
 use crate::{match_downcast, match_downcast_ref, Operator};
 use crate::tree_node::{Transformed, TreeNode};
@@ -321,6 +321,28 @@ impl AnalyzerRule for FunctionArgumentConversion {
                             return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Coalesce::new(children)))))
                         }
                     }
+                } else if let Some(Least{children}) = any.downcast_ref::<Least>() {
+                    if ! children.into_iter().all(|e| e.data_type() == children[0].data_type()) {
+                        let mut types = Vec::with_capacity(children.len());
+                        for e in children {
+                            types.push(e.data_type().clone());
+                        }
+                        if let Some(common_type) = find_wider_type_without_string_promotion(types) {
+                            let children = children.into_iter().map(|e|cast_if_not_same_type(e.clone(), &common_type)).collect();
+                            return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Least::new(children)))))
+                        }
+                    }
+                } else if let Some(Greatest{children}) = any.downcast_ref::<Greatest>() {
+                    if ! children.into_iter().all(|e| e.data_type() == children[0].data_type()) {
+                        let mut types = Vec::with_capacity(children.len());
+                        for e in children {
+                            types.push(e.data_type().clone());
+                        }
+                        if let Some(common_type) = find_wider_type_without_string_promotion(types) {
+                            let children = children.into_iter().map(|e|cast_if_not_same_type(e.clone(), &common_type)).collect();
+                            return Ok(Transformed::yes(Expr::ScalarFunction(Box::new(Greatest::new(children)))))
+                        }
+                    }
                 }
                 Ok(Transformed::no(Expr::ScalarFunction(func)))
             }
@@ -374,6 +396,20 @@ fn find_wider_common_type(types: Vec<DataType>) -> Option<DataType> {
         }
     })
 }
+
+fn find_wider_type_without_string_promotion(types: Vec<DataType>) -> Option<DataType> {
+    types.into_iter().fold(Some(DataType::Null), |r, c| {
+        match r {
+            Some(d) => find_wider_type_without_string_promotion_for_two(d, c),
+            _ => None
+        }
+    })
+}
+
+fn find_wider_type_without_string_promotion_for_two(type1:  DataType, type2:  DataType) -> Option<DataType> {
+    find_tightest_common_type(type1, type2)
+}
+
 
 fn find_wider_type_for_two(type1:  DataType, type2:  DataType) -> Option<DataType> {
     find_tightest_common_type(type1.clone(), type2.clone()).or_else(|| string_promotion(&type1, &type2))
