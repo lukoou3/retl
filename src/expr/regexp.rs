@@ -99,7 +99,7 @@ impl ScalarFunction for RegExpReplace {
 
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
         let Self{subject, regexp, rep} = self;
-        Ok(Arc::new(phy::Substring::new(create_physical_expr(subject)?, create_physical_expr(regexp)?, create_physical_expr(rep)?)))
+        Ok(Arc::new(phy::RegExpReplace::new(create_physical_expr(subject)?, create_physical_expr(regexp)?, create_physical_expr(rep)?)))
     }
 }
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
-use crate::types::DataType;
+use crate::types::{AbstractDataType, DataType};
 use crate::physical_expr::{self as phy, PhysicalExpr};
 
 #[derive(Debug, Clone)]
@@ -35,12 +35,10 @@ impl ScalarFunction for Concat {
         self.children.iter().collect()
     }
 
-    fn check_input_data_types(&self) -> Result<()> {
-        if !self.children.iter().all(|child| child.data_type() == DataType::string_type()) {
-            Err("Concat requires string type".to_string())
-        } else {
-            Ok(())
-        }
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        let mut types = Vec::with_capacity(self.children.len());
+        types.resize(self.children.len(), AbstractDataType::string_type());
+        Some(types)
     }
 
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {

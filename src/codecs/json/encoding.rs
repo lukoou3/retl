@@ -1,6 +1,7 @@
 use std::io::Write;
+use crate::codecs::json::RowWriter;
 use crate::Result;
-use crate::codecs::{RowWriter, Serializer};
+use crate::codecs::Serializer;
 use crate::data::{Row, Value};
 use crate::types::{DataType, Field, Schema};
 
@@ -8,19 +9,29 @@ use crate::types::{DataType, Field, Schema};
 #[derive(Debug, Clone)]
 pub struct JsonSerializer {
     pub schema: Schema,
+    pub pretty: bool,
     pub bytes: Vec<u8>,
 }
 
 impl JsonSerializer {
     pub fn new(schema: Schema) -> Self {
-        Self { schema, bytes: Vec::new() }
+        Self { schema, pretty: false, bytes: Vec::new() }
+    }
+
+    pub fn new_with_pretty(schema: Schema) -> Self {
+        Self { schema, pretty: true, bytes: Vec::new() }
     }
 }
 
 impl Serializer for JsonSerializer {
     fn serialize(&mut self, row: &dyn Row) -> Result<&[u8]> {
         self.bytes.clear();
-        match serde_json::to_writer(&mut self.bytes, &RowWriter::new(row, &self.schema.fields)) {
+        let rst = if self.pretty {
+            serde_json::to_writer_pretty(&mut self.bytes, &RowWriter::new(row, &self.schema.fields))
+        } else {
+            serde_json::to_writer(&mut self.bytes, &RowWriter::new(row, &self.schema.fields))
+        };
+        match rst {
             Ok(_) => Ok(&self.bytes),
             Err(e) => Err(e.to_string())
         }

@@ -9,7 +9,7 @@ use isahc::prelude::Configurable;
 use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use crate::codecs::JsonSerializer;
+use crate::codecs::json::JsonSerializer;
 use crate::Result;
 use crate::config::{SinkConfig, SinkProvider, TaskContext};
 use crate::connector::batch::{BatchConfig, BatchSettings};

@@ -48,5 +48,6 @@ sinks:
     print_mode: stdout
     encoding:
       codec: json
+      pretty: true
 
 active_sinks: [print_sink]

@@ -3,7 +3,7 @@ use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
 use crate::physical_expr::{self as phy, PhysicalExpr};
-use crate::types::DataType;
+use crate::types::{AbstractDataType, DataType};
 
 #[derive(Debug, Clone)]
 pub struct CurrentTimestamp;
@@ -81,14 +81,8 @@ impl ScalarFunction for FromUnixTime {
         vec![&self.sec, &self.format]
     }
 
-    fn check_input_data_types(&self) -> Result<()> {
-        if self.sec.data_type() != DataType::long_type() {
-            Err(format!("{:?} requires long type, not {}", self.sec, self.sec.data_type()))
-        } else if self.format.data_type() != DataType::string_type() {
-            Err(format!("{:?} requires string type, not {}", self.format, self.format.data_type()))
-        } else {
-            Ok(())
-        }
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::long_type(), AbstractDataType::string_type()])
     }
 
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {

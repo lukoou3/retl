@@ -1,7 +1,8 @@
 use crate::connector::Sink;
 use crate::data::Row;
 use crate::Result;
-use crate::codecs::{JsonSerializer, Serializer};
+use crate::codecs::Serializer;
+use crate::codecs::json::JsonSerializer;
 use crate::types::Schema;
 use log::{debug, info, warn};
 use std::str::FromStr;

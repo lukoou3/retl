@@ -1,29 +1,15 @@
 use std::fmt::Debug;
-use serde::{Deserialize, Serialize};
+use dyn_clone::DynClone;
 use typetag::serde;
 use crate::Result;
 use crate::data::Row;
-use crate::codecs::{CsvSerializer, JsonSerializer};
 use crate::types::Schema;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "codec", rename_all = "snake_case")]
-pub enum SerializerConfig {
-    Json,
-    Csv,
+#[serde(tag = "codec")]
+pub trait SerializerConfig: DynClone + Debug + Send + Sync {
+    fn build(&self, schema: Schema) -> Result<Box<dyn Serializer>>;
 }
-
-impl SerializerConfig {
-    pub fn build(&self, schema: Schema) -> Result<Box<dyn Serializer>> {
-        match self {
-            SerializerConfig::Json =>
-                Ok(Box::new(JsonSerializer::new(schema))),
-            SerializerConfig::Csv =>
-                Ok(Box::new(CsvSerializer::new(schema))),
-        }
-
-    }
-}
+dyn_clone::clone_trait_object!(SerializerConfig);
 
 
 pub trait Serializer: Debug {

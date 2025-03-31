@@ -2,14 +2,14 @@ use serde::{Deserialize, Serialize};
 use crate::config::{SinkConfig, SinkProvider, TaskContext};
 use crate::connector::Sink;
 use crate::connector::print::{PrintMode, PrintSink};
-use crate::codecs::{JsonSerializer, Serializer, SerializerConfig};
+use crate::codecs::{SerializerConfig};
 use crate::types::Schema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrintSinkConfig {
     #[serde(default)]
     print_mode: PrintMode,
-    encoding: SerializerConfig,
+    encoding: Box<dyn SerializerConfig>,
 }
 
 #[typetag::serde(name = "print")]

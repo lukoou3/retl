@@ -94,7 +94,7 @@ impl ScalarFunction for ConcatWs {
 
     fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
         let mut types = Vec::with_capacity(self.str_args.len() + 1);
-        types.resize(self.str_args.len() + 1, AbstractDataType::Type(DataType::String));
+        types.resize(self.str_args.len() + 1, AbstractDataType::string_type());
         Some(types)
     }
 

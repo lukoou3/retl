@@ -1,4 +1,4 @@
-use crate::codecs::{Deserializer, RowVisitor};
+use crate::codecs::Deserializer;
 use crate::data::{GenericRow, Row};
 use crate::types::Schema;
 

@@ -11,7 +11,7 @@ use crate::types::Schema;
 pub struct KafkaSourceConfig {
     topics: Vec<String>,
     properties: HashMap<String, String>,
-    decoding: DeserializerConfig,
+    decoding: Box<dyn DeserializerConfig>,
 }
 
 #[typetag::serde(name = "kafka")]
@@ -54,7 +54,7 @@ impl SourceProvider for KafkaSourceProvider {
 pub struct KafkaSinkConfig {
     topic: String,
     properties: HashMap<String, String>,
-    encoding: SerializerConfig,
+    encoding: Box<dyn SerializerConfig>,
 }
 
 #[typetag::serde(name = "kafka")]
