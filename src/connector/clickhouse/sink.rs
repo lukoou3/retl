@@ -124,7 +124,7 @@ impl Sink for ClickHouseSink {
         let interval_ms = self.batch_config.interval_ms;
         let subtask_index =  self.task_context.task_config.subtask_index;
         let thread_name = format!("flush-{}-{}/{}", self.connection_config.table, subtask_index + 1, self.task_context.task_config.subtask_parallelism);
-        let flush_handle = thread::Builder::new().name(thread_name).stack_size(128 * 1024).spawn(move || {
+        let flush_handle = thread::Builder::new().name(thread_name).stack_size(512 * 1024).spawn(move || {
             ClickHouseSink::process_flush_block(subtask_index, base_iometrics, buffer_pool, insert_sql, column_descs, connection_config, stoped, shared_blocks, interval_ms)
         }).map_err(|e| e.to_string())?;
         self.flush_handle = Some(flush_handle);

@@ -1,0 +1,40 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_object_stat ]
+    schema: "__time timestamp,object_uuid string,item_uuid string,vsys_id int,device_id string,device_group string,data_center string,template_uuid string,chart_uuid string,version int,object_type string,in_bytes bigint,out_bytes bigint,bytes bigint,new_in_sessions bigint,new_out_sessions bigint,sessions bigint"
+    rows_per_second: 2
+    fields: [
+      { "name": "__time", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "object_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-0[0-9]{3}8001122" },
+      { "name": "item_uuid", "type": "string", "regex": "b0cd3b0f-b5ac-499b-8bad-b0[0-9]{2}a2886f88" },
+      { "name": "device_id", "type": "string", "options": [ "001", "002" ] },
+      { "name": "device_group", "type": "string", "options": [ "group-mock" ] },
+      { "name": "data_center", "type": "string", "options": [ "center-mock" ] },
+      { "name": "vsys_id", "type": "int", "options": [1] },
+      { "name": "version", "type": "int", "options": [1] },
+      { "name": "object_type", "type": "string", "options": ["interval", "ATTR_SSL_ESNI", "port", "ip", "ATTR_DESTINATION_PORT", "ip_protocol", "keyword", "ATTR_TUNNEL_LEVEL", "fqdn", "application", "tunnel_level", "boolean", "ATTR_APP_ID", "ATTR_IP_PROTOCOL"] },
+      { "name": "in_bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "out_bytes", "type": "long", "min": 100, "max": 10000, "null_rate": 0.2 },
+      { "name": "bytes", "type": "eval", "expression": "nvl(in_bytes, 0) + nvl(out_bytes, 0)" },
+      { "name": "new_in_sessions", "type": "long", "min": 1, "max": 10 },
+      { "name": "new_out_sessions", "type": "long", "min": 1, "max": 5, "null_rate": 0.2 },
+      { "name": "sessions", "type": "eval", "expression": "nvl(new_in_sessions, 0) + nvl(new_out_sessions, 0)" }
+    ]
+
+sinks:
+  - type: postgres
+    name: postgres_sink
+    inputs: [ faker_object_stat ]
+    connect_params: "host=localhost user=postgres password=123456 dbname=postgres"
+    table: object_statistics
+    upsert: true
+    batch_max_rows: 50000
+    batch_interval_ms: 5000
+
+
+active_sinks: [postgres_sink]

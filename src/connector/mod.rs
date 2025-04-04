@@ -7,6 +7,7 @@ pub mod starrocks;
 pub mod batch;
 pub mod clickhouse;
 mod mysql;
+mod postgres;
 
 pub use source::*;
 pub use sink::*;

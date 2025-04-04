@@ -36,6 +36,7 @@ lz4_flex = "0.11"
 cityhash-rs = "1.0.1"
 anyhow = "1.0"
 mysql = "26.0"
+postgres = { version = "0.19", features = ["with-chrono-0_4"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 rdkafka = { version = "0.37.0", features = ["cmake-build"] }
