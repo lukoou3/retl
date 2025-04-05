@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use rdkafka::{ClientConfig, Message};
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use crate::Result;
@@ -10,6 +11,8 @@ use crate::config::TaskContext;
 use crate::connector::Source;
 use crate::execution::{Collector, PollStatus};
 use crate::types::Schema;
+
+static POLL_TIMEOUT: Duration = Duration::from_millis(200);
 
 pub struct KafkaSource {
     task_context: TaskContext,
@@ -75,7 +78,7 @@ impl Source for KafkaSource {
     }
 
     fn poll_next(&mut self, out: &mut dyn Collector) -> Result<PollStatus> {
-        let message =  self.consumer.poll(std::time::Duration::from_secs(1));
+        let message =  self.consumer.poll(POLL_TIMEOUT);
         match message {
             Some(Ok(message)) => {
                 // 处理消息

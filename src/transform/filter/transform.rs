@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::config::TaskContext;
 use crate::data::Row;
-use crate::execution::Collector;
+use crate::execution::{Collector, TimeService};
 use crate::physical_expr::PhysicalExpr;
 use crate::transform::Transform;
 use crate::types::Schema;
@@ -24,7 +24,7 @@ impl Transform for FilterTransform {
         &self.schema
     }
 
-    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> crate::Result<()> {
+    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> crate::Result<()> {
         let value = self.predicate.eval(row);
         if !value.is_null() && value.get_boolean() {
             out.collect(row)?;

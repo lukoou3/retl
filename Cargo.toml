@@ -12,6 +12,7 @@ pest_derive  = "2.7.15"
 memchr = "2.7.4"
 regex = { version = "1.11.1", features = ["std", "unicode", "perf"] }
 regex-syntax = {version = "0.8.5", features = ["unicode"]}
+ahash = "0.8"
 #indexmap = "2.7"
 bytes = "1.10.0"
 chrono = "0.4.39"

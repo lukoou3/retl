@@ -5,6 +5,7 @@ use prometheus::Registry;
 use crate::config::{ApplicationConfig, BaseIOMetrics, OperatorConfig, TaskConfig, TaskContext};
 use crate::Result;
 use crate::connector::Source;
+use crate::datetime_utils::current_timestamp_millis;
 use crate::execution::{Collector, Graph, MultiCollector, Node, PollStatus, SinkCollector, TransformCollector};
 use crate::parser::parse_schema;
 use crate::types::Schema;
@@ -32,8 +33,13 @@ impl SourceOperator {
                 return Ok(());
             }
             match self.source.poll_next(self.out.as_mut())? {
-                PollStatus::More => continue,
-                PollStatus::End => return Ok(()),
+                PollStatus::More => {
+                    self.out.check_timer(current_timestamp_millis())?;
+                },
+                PollStatus::End => {
+                    self.out.check_timer(current_timestamp_millis())?;
+                    return Ok(());
+                },
             }
         }
     }

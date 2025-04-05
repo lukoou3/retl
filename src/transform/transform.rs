@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use crate::Result;
 use crate::data::Row;
-use crate::execution::Collector;
+use crate::execution::{Collector, TimeService};
 use crate::types::Schema;
 
 pub trait Transform: Debug {
@@ -11,7 +11,11 @@ pub trait Transform: Debug {
         Ok(())
     }
 
-    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> Result<()> ;
+    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> Result<()> ;
+
+    fn on_time(&mut self, time: u64, out: &mut dyn Collector) -> Result<()> {
+        Ok(())
+    }
 
     fn close(&mut self) -> Result<()> {
         Ok(())

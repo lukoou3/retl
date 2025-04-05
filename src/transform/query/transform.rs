@@ -1,7 +1,7 @@
 use crate::config::TaskContext;
 use crate::Result;
 use crate::data::{Row};
-use crate::execution::Collector;
+use crate::execution::{Collector, TimeService};
 use crate::transform::{ProcessOperator, Transform};
 use crate::types::Schema;
 
@@ -23,7 +23,7 @@ impl Transform for QueryTransform {
         &self.schema
     }
 
-    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> Result<()> {
+    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> Result<()> {
         self.task_context.base_iometrics.num_records_in_inc_by(1);
         let rows = self.process_operator.process(row, out)?;
         self.task_context.base_iometrics.num_records_out_inc_by(rows);

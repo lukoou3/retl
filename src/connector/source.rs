@@ -1,8 +1,6 @@
 use std::fmt::Debug;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use crate::data::Row;
-use crate::execution::{Collector, PollStatus};
+use crate::execution::{Collector, PollStatus, TimeService};
 use crate::Result;
 use crate::types::Schema;
 
