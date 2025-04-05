@@ -1,6 +1,7 @@
+use retl::config::TaskContext;
 use retl::connector::faker::{CharsStringFaker, Faker, FakerSource, RangeIntFaker, RangeLongFaker, RegexStringFaker};
 use retl::connector::Source;
-use retl::execution::PrintCollector;
+use retl::execution::{PollStatus, PrintCollector};
 use retl::types::Schema;
 
 fn main() {
@@ -13,8 +14,13 @@ fn main() {
         (0,Box::new(RegexStringFaker::new("12[a-z]{2}"))),
         (0,Box::new(RegexStringFaker::new("12[a-z]{2,4}"))),
     ];
-    let mut source: Box<dyn Source> = Box::new(FakerSource::new(Schema::new(Vec::new()), fakes, 3, 1000, 1000));
+    let mut source: Box<dyn Source> = Box::new(FakerSource::new(TaskContext::default(), Schema::new(Vec::new()), fakes, 3, 1000, 1000));
     let mut out = PrintCollector;
     source.open().unwrap();
-    source.run(&mut out);
+    loop {
+        match source.poll_next(&mut out).unwrap() {
+            PollStatus::More => continue,
+            PollStatus::End => break,
+        }
+    }
 }

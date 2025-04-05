@@ -62,12 +62,16 @@ transforms:
 
 sinks:
   - type: print
+    name: print_sink
     inputs: [ faker_source ]
     print_mode: 'log_warn'
     encoding:
       codec: json
-#  - type: print
-#    inputs: [ query ]
-#    print_mode: log_warn
-#    encoding:
-#      codec: json
+  - type: print
+    name: print_query
+    inputs: [ query ]
+    print_mode: log_warn
+    encoding:
+      codec: json
+
+active_sinks: [print_sink]

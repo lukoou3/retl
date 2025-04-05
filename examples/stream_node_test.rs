@@ -1,12 +1,17 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use flexi_logger::with_thread;
 use retl::config::{SinkConfig, SourceConfig, TaskContext, TransformConfig};
 use retl::connector::print::{PrintSinkConfig};
 use retl::connector::faker::{FakerSourceConfig};
-use retl::execution::{Collector, SinkCollector, TransformCollector};
+use retl::execution::{Collector, PollStatus, SinkCollector, TransformCollector};
 use retl::transform::QueryTransformConfig;
 use retl::types::{DataType, Field, Schema};
 
 fn main() {
+    println!("Size of VecDeque<i32>: {} bytes", size_of::<VecDeque<i32>>());
+
     flexi_logger::Logger::try_with_str("info")
         .unwrap()
         .format(with_thread)
@@ -66,6 +71,10 @@ fn main() {
     let mut transform_collector = TransformCollector::new(transform, Box::new(sink_collector));
     transform_collector.open().unwrap();
     source.open().unwrap();
-    source.run(&mut transform_collector);
-
+    loop {
+        match source.poll_next(&mut transform_collector).unwrap() {
+            PollStatus::More => continue,
+            PollStatus::End => break,
+        }
+    }
 }

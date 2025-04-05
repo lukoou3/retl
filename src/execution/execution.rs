@@ -5,7 +5,7 @@ use prometheus::Registry;
 use crate::config::{ApplicationConfig, BaseIOMetrics, OperatorConfig, TaskConfig, TaskContext};
 use crate::Result;
 use crate::connector::Source;
-use crate::execution::{Collector, Graph, MultiCollector, Node, SinkCollector, TransformCollector};
+use crate::execution::{Collector, Graph, MultiCollector, Node, PollStatus, SinkCollector, TransformCollector};
 use crate::parser::parse_schema;
 use crate::types::Schema;
 
@@ -27,7 +27,15 @@ impl SourceOperator {
     }
 
     pub fn run(&mut self, terminated: Arc<AtomicBool>) -> Result<()> {
-        self.source.run(self.out.as_mut(), terminated)
+        loop {
+            if terminated.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            match self.source.poll_next(self.out.as_mut())? {
+                PollStatus::More => continue,
+                PollStatus::End => return Ok(()),
+            }
+        }
     }
 
     fn close(&mut self) -> Result<()> {
