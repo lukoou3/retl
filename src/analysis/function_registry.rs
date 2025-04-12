@@ -2,14 +2,15 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 use crate::Result;
 use crate::expr::*;
+use crate::expr::aggregate::*;
 
-type FunctionBuilder = dyn Fn(Vec<Expr>) -> Result<Box<dyn ScalarFunction>> + Send + Sync;
+type FunctionBuilder = dyn Fn(Vec<Expr>) -> Result<Expr> + Send + Sync;
 struct FunctionRegistry {
     expressions: HashMap<String, Box<FunctionBuilder>>
 }
 
 impl FunctionRegistry {
-    pub fn lookup_function(&self, name: &str, args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+    pub fn lookup_function(&self, name: &str, args: Vec<Expr>) -> Result<Expr> {
         let builder = self.expressions.get(name);
         match builder {
             Some(builder) => match builder(args) {
@@ -35,7 +36,7 @@ pub fn register_function(name: &str, builder: Box<FunctionBuilder>)-> Result<()>
     registry.register_function(name, builder)
 }
 
-pub fn lookup_function(name: &str, args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+pub fn lookup_function(name: &str, args: Vec<Expr>) -> Result<Expr> {
     let registry = FUNCTION_REGISTRY.lock().unwrap();
     registry.lookup_function(name, args)
 }
@@ -48,7 +49,7 @@ macro_rules! init_expressions {
                 $(
                     expressions.insert(
                         $names.to_string(),
-                        Box::new(|args| $ty::from_args(args))
+                        Box::new(|args| $ty::create_function_expr(args))
                     );
                 )+
             )*
@@ -81,6 +82,14 @@ fn builtin_function_registry() -> FunctionRegistry {
         "from_unixtime" => FromUnixTime,
         "unix_timestamp" => UnixTimestamp,
         "to_unix_timestamp" => ToUnixTimestamp,
+        // aggregate functions
+        "sum" => Sum,
+        "count" => Count,
+        "avg" | "mean" => Average,
+        "min" => Min,
+        "max" => Max,
+        "first" => First,
+        "last" => Last,
     );
     FunctionRegistry { expressions }
 }

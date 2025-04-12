@@ -78,7 +78,16 @@ impl TreeNode for Expr {
                     .collect::<Vec<_>>();
                 args.map_elements(f)?
                     .update_data(|args| Expr::ScalarFunction(func.rewrite_args(args)))
-            }
+            },
+            Expr::DeclarativeAggFunction(func) => {
+                let args = func
+                    .args()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect::<Vec<_>>();
+                args.map_elements(f)?
+                    .update_data(|args| Expr::DeclarativeAggFunction(func.rewrite_args(args)))
+            },
         })
     }
 }

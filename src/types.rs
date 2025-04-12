@@ -114,6 +114,13 @@ impl DataType {
         }
     }
 
+    pub fn is_boolean_type(&self) -> bool {
+        match self {
+            DataType::Boolean => true,
+            _ => false
+        }
+    }
+
     pub fn null_type() -> &'static DataType {
         &NULL_TYPE
     }

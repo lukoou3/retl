@@ -7,7 +7,8 @@ use std::sync::Arc;
 use itertools::Itertools;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::binary_expr;
+use crate::expr::{binary_expr, Coalesce, Greatest, Least};
+use crate::expr::aggregate::{DeclarativeAggFunction};
 use crate::physical_expr::{self as phy, can_cast, PhysicalExpr};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::{AbstractDataType, DataType};
@@ -30,6 +31,7 @@ pub enum Expr {
     RLike(Like),
     In(In),
     ScalarFunction(Box<dyn ScalarFunction>),
+    DeclarativeAggFunction(Box<dyn DeclarativeAggFunction>),
 }
 
 impl Expr {
@@ -40,6 +42,7 @@ impl Expr {
             Expr::AttributeReference(_) | Expr::Alias(_)  => false,
             Expr::Literal(_)  => true,
             Expr::ScalarFunction(f) => f.foldable(),
+            Expr::DeclarativeAggFunction(_) => false,
             _ => self.children().iter().all(|c| c.foldable()),
         }
     }
@@ -67,6 +70,7 @@ impl Expr {
             Expr::RLike(_) => DataType::boolean_type(),
             Expr::In(_) => DataType::boolean_type(),
             Expr::ScalarFunction(f) => f.data_type(),
+            Expr::DeclarativeAggFunction(f) => f.data_type(),
         }
     }
 
@@ -156,6 +160,9 @@ impl Expr {
             Expr::ScalarFunction(f) => {
                 f.check_input_data_types()
             },
+            Expr::DeclarativeAggFunction(f) => {
+                f.check_input_data_types()
+            },
         }
     }
 
@@ -180,8 +187,18 @@ impl Expr {
             Expr::In(In{value, list}) =>
                 vec![value.as_ref()].into_iter().chain(list.iter()).collect(),
             Expr::ScalarFunction(f) => f.args(),
+            Expr::DeclarativeAggFunction(f) => f.args(),
             Expr::UnresolvedFunction(UnresolvedFunction{name: _, arguments}) =>
                 arguments.iter().map(|a| a).collect(),
+        }
+    }
+
+    pub fn to_attribute(&self) -> Result<AttributeReference> {
+        match self {
+            Expr::Alias(Alias {child, name, expr_id}) =>
+                Ok(AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id)),
+            Expr::AttributeReference(a) => Ok(a.clone()),
+            _ => Err(format!("cannot convert {:?} to AttributeReference", self)),
         }
     }
     
@@ -190,6 +207,9 @@ impl Expr {
     }
 
     pub fn cast(self, data_type: DataType) -> Expr {
+        if self.data_type() == &data_type {
+            return self;
+        }
         Expr::Cast(Cast::new(self, data_type))
     }
 
@@ -221,8 +241,16 @@ impl Expr {
         Expr::Literal(Literal::new(Value::Long(v), DataType::Long))
     }
 
+    pub fn double_lit(v: f64) -> Expr {
+        Expr::Literal(Literal::new(Value::Double(v), DataType::Double))
+    }
+
     pub fn string_lit(s:impl  Into<String>) -> Expr {
         Expr::Literal(Literal::new(Value::string(s), DataType::String))
+    }
+
+    pub fn boolean_lit(v: bool) -> Expr {
+        Expr::Literal(Literal::new(Value::Boolean(v), DataType::Boolean))
     }
 
     pub fn null_lit() -> Expr {
@@ -231,6 +259,10 @@ impl Expr {
 
     pub fn and(self, other: Expr) -> Expr {
         binary_expr(self, Operator::And, other)
+    }
+
+    pub fn or(self, other: Expr) -> Expr {
+        binary_expr(self, Operator::Or, other)
     }
 
     /// Return `self == other`
@@ -260,6 +292,22 @@ impl Expr {
             Box::new(other),
         ))
     }
+
+    pub fn coalesce(self, other: Expr) -> Expr {
+        Expr::ScalarFunction(Box::new(Coalesce::new(vec![self, other])))
+    }
+
+    pub fn greatest(self, other: Expr) -> Expr {
+        Expr::ScalarFunction(Box::new(Greatest::new(vec![self, other])))
+    }
+
+    pub fn least(self, other: Expr) -> Expr {
+        Expr::ScalarFunction(Box::new(Least::new(vec![self, other])))
+    }
+}
+
+pub fn coalesce2(arg1: Expr, arg2: Expr) -> Expr {
+    Expr::ScalarFunction(Box::new(Coalesce::new(vec![arg1, arg2])))
 }
 
 impl<'a> TreeNodeContainer<'a, Self> for Expr {
@@ -394,6 +442,10 @@ impl AttributeReference {
     pub fn with_expr_id(&self, expr_id: u32) -> Self {
         AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id: self.expr_id }
     }
+
+    pub fn new_instance(&self) -> Self {
+        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id: ExprIdGenerator::get_next_expr_id() }
+    }
 }
 
 struct ExprIdGenerator {
@@ -521,8 +573,11 @@ pub trait ScalarFunction: Debug + Send + Sync + CreateScalarFunction + ExtendSca
 
 pub trait CreateScalarFunction {
     fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> where Self: Sized;
-}
 
+    fn create_function_expr(args: Vec<Expr>) -> Result<Expr> where Self: Sized {
+        Ok(Expr::ScalarFunction(Self::from_args(args)?))
+    }
+}
 
 pub trait ExtendScalarFunction {
     fn clone_box(&self) -> Box<dyn ScalarFunction>;

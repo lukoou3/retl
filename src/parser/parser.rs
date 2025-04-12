@@ -10,7 +10,7 @@ use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, UnresolvedExtractValue, UnresolvedFunction};
-use crate::logical_plan::{Filter, LogicalPlan, Project};
+use crate::logical_plan::{Aggregate, Filter, LogicalPlan, Project};
 use crate::types::*;
 
 #[derive(Parser)]
@@ -125,6 +125,7 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
     let mut project_list: Vec<_> = Vec::new();
     let mut from: Option<LogicalPlan> = None;
     let mut filter: Option<Expr> = None;
+    let mut group_exprs: Option<Vec<Expr>> = None;
     for pair in query.into_inner() {
         match pair.as_rule() {
             Rule::selectClause => {
@@ -141,6 +142,9 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
             Rule::whereClause => {
                 filter = Some(parse_expression(pair)?);
             },
+            Rule::aggregationClause => {
+                group_exprs = Some(pair.into_inner().map(|pair| parse_expression(pair).unwrap()).collect());
+            },
             _ => {}
         }
     }
@@ -148,7 +152,11 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
     if let Some(filter) = filter {
         child = Arc::new(LogicalPlan::Filter(Filter::new(filter, child)));
     }
-    Ok(Ast::Plan(LogicalPlan::Project(Project{project_list, child})))
+    if let Some(group_exprs) = group_exprs {
+        Ok(Ast::Plan(LogicalPlan::Aggregate(Aggregate::new(group_exprs, project_list, child))))
+    } else {
+        Ok(Ast::Plan(LogicalPlan::Project(Project::new(project_list, child))))
+    }
 }
 
 fn parse_single_table_schema(pair: Pair<Rule>) -> Result<Ast> {

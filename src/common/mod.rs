@@ -4,10 +4,42 @@ pub mod buffer_pool;
 pub mod rate_stat;
 pub mod buffer_block;
 
+use std::cell::Cell;
+use std::fmt::{Debug, Formatter};
 use std::result;
+use std::sync::{Arc, OnceLock};
 
 pub type Result<T, E = String> = result::Result<T, E>;
 
+#[derive(Clone)]
+pub struct LazyValue<T>
+where
+    T: Clone + Send + Sync + 'static
+{
+    value: OnceLock<T>,
+    init: Arc<dyn Fn() -> T + Send + Sync >,
+}
+
+impl<T> LazyValue<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    pub fn new(init: Arc<dyn Fn() -> T + Send + Sync >) -> Self {
+        LazyValue { value: OnceLock::new(), init, }
+    }
+    pub fn get(&self) -> &T {
+        self.value.get_or_init(|| (self.init)())
+    }
+}
+
+impl<T> Debug for  LazyValue<T>
+where
+    T: Clone + Send + Sync + 'static
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LazyValue").finish()
+    }
+}
 
 /// Operators applied to expressions
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Hash)]

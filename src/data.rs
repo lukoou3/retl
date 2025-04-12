@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
@@ -7,7 +8,7 @@ use std::string::ToString;
 static EMPTY_STRING_VALUE: LazyLock<Value> = LazyLock::new(|| Value::String(Arc::new("".to_string())));
 // static EMPTY_BINARY:Arc<Vec<u8>> = Arc::new(Vec::new());
 static EMPTY_BINARY: LazyLock<Arc<Vec<u8>>> = LazyLock::new(|| Arc::new(Vec::new()));
-static EMPTY_ROW: LazyLock<Arc<dyn Row>> = LazyLock::new(|| Arc::new(GenericRow::new(Vec::new())));
+static EMPTY_ROW: LazyLock<Arc<GenericRow>> = LazyLock::new(|| Arc::new(GenericRow::new(Vec::new())));
 static EMPTY_VALUES: LazyLock<Arc<Vec<Value>>> = LazyLock::new(|| Arc::new(Vec::new()));
 
 //Float wrapper over f32/f64. Just because we cannot build std::hash::Hash for floats directly we have to do it through type wrapper
@@ -36,7 +37,7 @@ pub enum Value {
     String(Arc<String>),
     Boolean(bool),
     Binary(Arc<Vec<u8>>),
-    Struct(Arc<dyn Row>),
+    Struct(Arc<dyn BaseRow>),
     Array(Arc<Vec<Value>>),
 }
 
@@ -192,7 +193,7 @@ impl Value {
         }
     }
 
-    pub fn get_struct(&self) -> Arc<dyn Row> {
+    pub fn get_struct(&self) -> Arc<dyn BaseRow> {
         if let Value::Struct(v) = self {
             v.clone()
         } else {
@@ -285,7 +286,7 @@ impl PartialOrd for Value {
     }
 }
 
-pub trait Row: Debug + Display + Send + Sync {
+pub trait Row: Debug + Display {
     fn size(&self) -> usize;
     fn len(&self) -> usize;
     fn is_null(&self, i: usize) -> bool;
@@ -299,7 +300,7 @@ pub trait Row: Debug + Display + Send + Sync {
     fn get_string(&self, i: usize) -> &str;
     fn get_boolean(&self, i: usize) -> bool;
     fn get_binary(&self, i: usize) -> Arc<Vec<u8>>;
-    fn get_struct(&self, i: usize) -> Arc<dyn Row>;
+    fn get_struct(&self, i: usize) -> Arc<dyn BaseRow>;
     fn get_array(&self, i: usize) -> Arc<Vec<Value>>;
 
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -315,11 +316,36 @@ pub trait Row: Debug + Display + Send + Sync {
     }
 }
 
+pub trait BaseRow: Row + Send + Sync {
+    fn as_row(&self) -> &dyn Row;
+}
+
+impl<T: Row + Send + Sync+ 'static> BaseRow for T {
+    fn as_row(&self) -> &dyn Row {
+        self
+    }
+}
+
 pub fn empty_row() -> &'static dyn Row {
     EMPTY_ROW.as_ref()
 }
 
 impl PartialEq for dyn Row {
+    fn eq(&self, other: &Self) -> bool {
+        let len = self.len();
+        if len != other.len() {
+            return false;
+        }
+        for i in 0..len {
+            if self.get(i) != other.get(i) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl PartialEq for dyn BaseRow {
     fn eq(&self, other: &Self) -> bool {
         let len = self.len();
         if len != other.len() {
@@ -352,7 +378,34 @@ impl PartialOrd for dyn Row {
     }
 }
 
+impl PartialOrd for dyn BaseRow {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let len = self.len();
+        if len != other.len() {
+            return None;
+        }
+        for i in 0..len {
+            match self.get(i).partial_cmp(other.get(i)) {
+                None => return None, // 某个元素无法比较
+                Some(Ordering::Equal) => continue, // 继续比较下一个元素
+                Some(ord) => return Some(ord), // 返回当前元素的比较结果
+            }
+        }
+        // 所有元素都相等
+        Some(Ordering::Equal)
+    }
+}
+
 impl Hash for dyn Row {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let len = self.len();
+        for i in 0..len {
+            self.get(i).hash(state);
+        }
+    }
+}
+
+impl Hash for dyn BaseRow {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let len = self.len();
         for i in 0..len {
@@ -489,7 +542,7 @@ impl Row for GenericRow {
         }
     }
 
-    fn get_struct(&self, i: usize) -> Arc<dyn Row> {
+    fn get_struct(&self, i: usize) -> Arc<dyn BaseRow> {
         let value = &self.values[i];
         if let Value::Struct(v) = value {
             v.clone()
@@ -507,6 +560,289 @@ impl Row for GenericRow {
         }
     }
 }
+
+impl Hash for GenericRow {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let len = self.len();
+        for i in 0..len {
+            self.get(i).hash(state);
+        }
+    }
+}
+
+impl PartialEq for GenericRow {
+    fn eq(&self, other: &Self) -> bool {
+        let len = self.len();
+        if len != other.len() {
+            return false;
+        }
+        for i in 0..len {
+            if self.get(i) != other.get(i) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl Eq for GenericRow {}
+
+#[derive(Debug)]
+pub struct JoinedRow<'a> {
+    row1: &'a dyn Row,
+    row2: &'a dyn Row,
+}
+
+impl<'a> JoinedRow<'a> {
+    pub fn new(row1: &'a dyn Row, row2: &'a dyn Row) -> JoinedRow<'a> {
+        JoinedRow { row1, row2 }
+    }
+}
+
+impl<'a> Display for JoinedRow<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, {}", self.row1, self.row2)
+    }
+}
+
+impl<'a> Row for JoinedRow<'a> {
+    fn size(&self) -> usize {
+        self.row1.size() + self.row2.size()
+    }
+
+    fn len(&self) -> usize {
+        self.row1.len() + self.row2.len()
+    }
+
+    fn is_null(&self, i: usize) -> bool {
+        if i < self.row1.len() {
+            self.row1.is_null(i)
+        } else {
+            self.row2.is_null(i - self.row1.len())
+        }
+    }
+
+    fn get(&self, i: usize) -> &Value {
+        if i < self.row1.len() {
+            self.row1.get(i)
+        } else {
+            self.row2.get(i - self.row1.len())
+        }
+    }
+
+    fn set_null_at(&mut self, i: usize) {
+        unreachable!("JoinedRow::set_null_at is not implemented")
+    }
+
+    fn update(&mut self, i: usize, value: Value) {
+        unreachable!("JoinedRow::update is not implemented")
+    }
+
+    fn get_int(&self, i: usize) -> i32 {
+        if i < self.row1.len() {
+            self.row1.get_int(i)
+        } else {
+            self.row2.get_int(i - self.row1.len())
+        }
+    }
+
+    fn get_long(&self, i: usize) -> i64 {
+        if i < self.row1.len() {
+            self.row1.get_long(i)
+        } else {
+            self.row2.get_long(i - self.row1.len())
+        }
+    }
+
+    fn get_float(&self, i: usize) -> f32 {
+        if i < self.row1.len() {
+            self.row1.get_float(i)
+        } else {
+            self.row2.get_float(i - self.row1.len())
+        }
+    }
+
+    fn get_double(&self, i: usize) -> f64 {
+        if i < self.row1.len() {
+            self.row1.get_double(i)
+        } else {
+            self.row2.get_double(i - self.row1.len())
+        }
+    }
+
+    fn get_string(&self, i: usize) -> &str {
+        if i < self.row1.len() {
+            self.row1.get_string(i)
+        } else {
+            self.row2.get_string(i - self.row1.len())
+        }
+    }
+
+    fn get_boolean(&self, i: usize) -> bool {
+        if i < self.row1.len() {
+            self.row1.get_boolean(i)
+        } else {
+            self.row2.get_boolean(i - self.row1.len())
+        }
+    }
+
+    fn get_binary(&self, i: usize) -> Arc<Vec<u8>> {
+        if i < self.row1.len() {
+            self.row1.get_binary(i)
+        } else {
+            self.row2.get_binary(i - self.row1.len())
+        }
+    }
+
+    fn get_struct(&self, i: usize) -> Arc<dyn BaseRow> {
+        if i < self.row1.len() {
+            self.row1.get_struct(i)
+        } else {
+            self.row2.get_struct(i - self.row1.len())
+        }
+    }
+
+    fn get_array(&self, i: usize) -> Arc<Vec<Value>> {
+        if i < self.row1.len() {
+            self.row1.get_array(i)
+        } else {
+            self.row2.get_array(i - self.row1.len())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MutJoinedRow<'a> {
+    row1: &'a mut dyn Row,
+    row2: &'a mut dyn Row,
+}
+
+impl<'a> MutJoinedRow<'a> {
+    pub fn new(row1: &'a mut dyn Row, row2: &'a mut dyn Row) -> MutJoinedRow<'a> {
+        MutJoinedRow { row1, row2 }
+    }
+}
+
+impl<'a> Display for MutJoinedRow<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, {}", self.row1, self.row2)
+    }
+}
+
+impl<'a> Row for MutJoinedRow<'a> {
+    fn size(&self) -> usize {
+        self.row1.size() + self.row2.size()
+    }
+
+    fn len(&self) -> usize {
+        self.row1.len() + self.row2.len()
+    }
+
+    fn is_null(&self, i: usize) -> bool {
+        if i < self.row1.len() {
+            self.row1.is_null(i)
+        } else {
+            self.row2.is_null(i - self.row1.len())
+        }
+    }
+
+    fn get(&self, i: usize) -> &Value {
+        if i < self.row1.len() {
+            self.row1.get(i)
+        } else {
+            self.row2.get(i - self.row1.len())
+        }
+    }
+
+    fn set_null_at(&mut self, i: usize) {
+        if i < self.row1.len() {
+            self.row1.set_null_at(i)
+        } else {
+            self.row2.set_null_at(i - self.row1.len())
+        }
+    }
+
+    fn update(&mut self, i: usize, value: Value) {
+        if i < self.row1.len() {
+            self.row1.update(i, value)
+        } else {
+            self.row2.update(i - self.row1.len(), value)
+        }
+    }
+
+    fn get_int(&self, i: usize) -> i32 {
+        if i < self.row1.len() {
+            self.row1.get_int(i)
+        } else {
+            self.row2.get_int(i - self.row1.len())
+        }
+    }
+
+    fn get_long(&self, i: usize) -> i64 {
+        if i < self.row1.len() {
+            self.row1.get_long(i)
+        } else {
+            self.row2.get_long(i - self.row1.len())
+        }
+    }
+
+    fn get_float(&self, i: usize) -> f32 {
+        if i < self.row1.len() {
+            self.row1.get_float(i)
+        } else {
+            self.row2.get_float(i - self.row1.len())
+        }
+    }
+
+    fn get_double(&self, i: usize) -> f64 {
+        if i < self.row1.len() {
+            self.row1.get_double(i)
+        } else {
+            self.row2.get_double(i - self.row1.len())
+        }
+    }
+
+    fn get_string(&self, i: usize) -> &str {
+        if i < self.row1.len() {
+            self.row1.get_string(i)
+        } else {
+            self.row2.get_string(i - self.row1.len())
+        }
+    }
+
+    fn get_boolean(&self, i: usize) -> bool {
+        if i < self.row1.len() {
+            self.row1.get_boolean(i)
+        } else {
+            self.row2.get_boolean(i - self.row1.len())
+        }
+    }
+
+    fn get_binary(&self, i: usize) -> Arc<Vec<u8>> {
+        if i < self.row1.len() {
+            self.row1.get_binary(i)
+        } else {
+            self.row2.get_binary(i - self.row1.len())
+        }
+    }
+
+    fn get_struct(&self, i: usize) -> Arc<dyn BaseRow> {
+        if i < self.row1.len() {
+            self.row1.get_struct(i)
+        } else {
+            self.row2.get_struct(i - self.row1.len())
+        }
+    }
+
+    fn get_array(&self, i: usize) -> Arc<Vec<Value>> {
+        if i < self.row1.len() {
+            self.row1.get_array(i)
+        } else {
+            self.row2.get_array(i - self.row1.len())
+        }
+    }
+}
+
 
 impl<'de> serde::de::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>

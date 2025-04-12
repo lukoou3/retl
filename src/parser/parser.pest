@@ -7,11 +7,13 @@ queryPrimary = {
     selectClause
     ~ fromClause
     ~ whereClause?
+    ~ aggregationClause?
 }
 
 selectClause = { ^"select" ~ namedExpressionSeq}
 fromClause = { ^"from" ~ identifier }
 whereClause = { ^"where" ~ booleanExpression }
+aggregationClause = { ^"group"~ ^"by" ~ expression ~ ("," ~ expression)* }
 
 relationPrimary = { identifier ~ (^"as"? ~ !mainKeyword ~ identifier)? }
 

@@ -12,7 +12,7 @@ pub fn sql_plan(sql: &str, schema: &Schema) -> Result<LogicalPlan> {
     temp_views.insert("tbl".to_string(), RelationPlaceholder::new("tbl".to_string(), schema.to_attributes()));
     let plan = parser::parse_query(sql)?;
     let plan = Analyzer::new(temp_views).analyze(plan)?;
-    // println!("{:?}", plan);
+    //println!("{:?}", plan);
     let optimized_plan = Optimizer::new().optimize(plan)?;
     Ok(optimized_plan)
 }

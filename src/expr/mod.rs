@@ -10,6 +10,7 @@ mod null;
 mod complex_type_extractor;
 mod arithmetic;
 mod regexp;
+pub mod aggregate;
 
 pub use expr::*;
 pub use expr_fn::*;

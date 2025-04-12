@@ -1,0 +1,230 @@
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::hash::BuildHasherDefault;
+use std::sync::Arc;
+use ahash::{AHasher};
+use crate::config::TaskContext;
+use crate::Result;
+use crate::data::{GenericRow, JoinedRow, Row};
+use crate::datetime_utils::current_timestamp_millis;
+use crate::execution::{Collector, TimeService};
+use crate::expr::{AttributeReference, BoundReference, Expr};
+use crate::physical_expr::{create_physical_expr, MutableProjection, PhysicalExpr, Projection};
+use crate::transform::Transform;
+use crate::types::Schema;
+
+pub struct TaskAggregateTransform {
+    task_context: TaskContext,
+    schema: Schema,
+    agg_func: RowAggregateFunction,
+    rst_func: RowResultFunction,
+    key_selector: RowKeySelector,
+    buffers: HashMap<GenericRow, GenericRow,BuildHasherDefault<AHasher>>,
+    max_rows: usize,
+    interval_ms: u64,
+    trigger_time_ms: u64,
+}
+
+impl TaskAggregateTransform {
+    pub fn new(task_context: TaskContext, schema: Schema, agg_exprs: Vec<Expr>, group_exprs: Vec<Expr>,  result_exprs: Vec<Expr>,
+               input_attrs: Vec<AttributeReference>) -> Result<Self> {
+        let mut agg_attrs = Vec::with_capacity(agg_exprs.len());
+        let mut final_agg_attrs = Vec::with_capacity(agg_exprs.len());
+        for expr in &agg_exprs {
+            match expr {
+                Expr::DeclarativeAggFunction(f) => {
+                    for attr in f.agg_buffer_attributes() {
+                        agg_attrs.push(attr);
+                    }
+                    final_agg_attrs.push(f.result_attribute());
+                },
+                _ => return Err(format!("not support agg expr:{:?}", expr))
+            }
+        }
+        let mut group_attrs = Vec::with_capacity(group_exprs.len());
+        for expr in &group_exprs {
+            group_attrs.push(expr.to_attribute()?);
+        }
+
+        let agg_func = RowAggregateFunction::new(agg_exprs, agg_attrs, input_attrs.clone())?;
+        let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = BoundReference::bind_references(group_exprs, input_attrs)?.iter().map(|expr| create_physical_expr(expr)).collect();
+        let key_selector = RowKeySelector::new(exprs?);
+        let rst_func = RowResultFunction::new(result_exprs, group_attrs.into_iter().chain(final_agg_attrs.into_iter()).collect())?;
+
+        let max_rows = 10000;
+        let interval_ms = 5000;
+        let trigger_time_ms = current_timestamp_millis() / interval_ms * interval_ms + interval_ms;
+        Ok(Self { task_context, schema, agg_func, rst_func, key_selector, buffers: HashMap::default(), max_rows, interval_ms,trigger_time_ms })
+    }
+}
+
+impl Debug for TaskAggregateTransform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueryTransform")
+            .field("task_context", &self.task_context)
+            .field("schema", &self.schema)
+            .field("agg_exprs", &self.agg_func.agg_exprs)
+            .field("input_attrs", &self.agg_func.input_attrs)
+            .finish()
+    }
+}
+
+impl TaskAggregateTransform {
+    fn flush(&mut self, out: &mut dyn Collector) -> Result<()> {
+        for (key, buffer) in &self.buffers {
+            let value = self.agg_func.eval(buffer);
+            let joiner = JoinedRow::new(key, value) ;
+            let row= self.rst_func.result_projection.apply(&joiner);
+            out.collect(row)?;
+        }
+        self.buffers.clear();
+        Ok(())
+    }
+}
+
+impl Transform for TaskAggregateTransform {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> Result<()> {
+        let key = self.key_selector.get_key(row);
+        if let Some(buffer) = self.buffers.get_mut(&key) {
+            self.agg_func.update(buffer, row);
+        } else {
+            let mut buffer = self.agg_func.create_aggregation();
+            self.agg_func.update(&mut buffer, row);
+            self.buffers.insert(key, buffer);
+        }
+        if self.buffers.len() >= self.max_rows {
+            self.flush(out)
+        } else {
+            time_service.register_timer(self.trigger_time_ms);
+            Ok(())
+        }
+    }
+
+    fn on_time(&mut self, time: u64, out: &mut dyn Collector) -> Result<()> {
+        self.trigger_time_ms = current_timestamp_millis() / self.interval_ms * self.interval_ms + self.interval_ms;
+        self.flush(out)
+    }
+}
+
+struct RowResultFunction {
+    result_projection: MutableProjection,
+}
+
+impl RowResultFunction {
+    fn new(result_exprs: Vec<Expr>, input: Vec<AttributeReference>) -> Result<Self> {
+        let expressions = BoundReference::bind_references(result_exprs, input)?;
+        let result_projection = MutableProjection::new(expressions)?;
+        Ok(Self { result_projection })
+    }
+}
+
+struct RowAggregateFunction {
+    agg_exprs: Vec<Expr>,
+    agg_attributes: Vec<AttributeReference>,
+    input_attrs: Vec<AttributeReference>,
+    agg_buffer_len: usize,
+    expr_agg_init: Projection,
+    process_row: ProcessRow,
+    eavl_projection: Projection,
+    agg_rst: GenericRow,
+    empty_row: GenericRow,
+}
+
+impl RowAggregateFunction {
+    fn new(agg_exprs: Vec<Expr>, agg_attributes: Vec<AttributeReference>, input_attrs: Vec<AttributeReference>) -> Result<Self> {
+        let mut agg_buffer_len = 0;
+        let mut init_exprs = Vec::new();
+        let mut eval_exprs = Vec::with_capacity(agg_exprs.len());
+        for expr in &agg_exprs {
+            match expr {
+                Expr::DeclarativeAggFunction(f) => {
+                    for e in f.initial_values() {
+                        init_exprs.push(e);
+                    }
+                    eval_exprs.push(f.evaluate_expression());
+                    agg_buffer_len += f.agg_buffer_attributes().len();
+                },
+                _ => return Err(format!("not support agg expr:{:?}", expr))
+            }
+        }
+        let expr_agg_init = Projection::new(init_exprs)?;
+        let process_row = ProcessRow::new(&agg_exprs, agg_attributes.clone(), input_attrs.clone())?;
+        let agg_rst = GenericRow::new_with_size(eval_exprs.len());
+        let eavl_projection = Projection::new_with_input_attrs(eval_exprs, agg_attributes.clone())?;
+        let empty_row = GenericRow::new(Vec::new());
+        Ok(Self { agg_exprs, agg_attributes, input_attrs, agg_buffer_len, expr_agg_init, process_row, eavl_projection, agg_rst, empty_row })
+    }
+}
+
+
+impl RowAggregateFunction {
+    fn create_aggregation(&self) -> GenericRow {
+        let mut buffer = GenericRow::new_with_size(self.agg_buffer_len);
+        self.expr_agg_init.apply_targert(&mut buffer, &self.empty_row);
+        buffer
+    }
+
+    fn update(&self, buffer: &mut GenericRow, input: &dyn Row) {
+        self.process_row.process(buffer, input);
+    }
+
+    fn eval(&mut self, buffer: &GenericRow) -> &GenericRow {
+        self.eavl_projection.apply_targert(&mut self.agg_rst, buffer);
+        &self.agg_rst
+    }
+}
+
+struct ProcessRow {
+    exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+}
+
+impl ProcessRow {
+    fn new(agg_exprs: &Vec<Expr>, agg_attributes: Vec<AttributeReference>, input_attrs: Vec<AttributeReference>) -> crate::Result<Self> {
+        let mut update_exprs = Vec::new();
+        for expr in agg_exprs {
+            match expr {
+                Expr::DeclarativeAggFunction(f) => {
+                    for e in f.update_expressions() {
+                        update_exprs.push(e);
+                    }
+                },
+                _ => panic!("not support agg expr:{:?}", expr)
+            }
+        }
+        let input = agg_attributes.into_iter().chain(input_attrs.into_iter()).collect();
+        let expressions = BoundReference::bind_references(update_exprs, input)?;
+        let exprs: crate::Result<Vec<Arc<dyn PhysicalExpr>>, String> = expressions.iter().map(|expr| create_physical_expr(expr)).collect();
+        let exprs = exprs?.into_iter().enumerate().collect();
+        Ok(Self { exprs, })
+    }
+
+    fn process(&self, row: &mut GenericRow, input: &dyn Row)  {
+        for (i, expr) in self.exprs.iter() {
+            let joiner = JoinedRow::new(row, input) ;
+            row.update(*i, expr.eval(&joiner));
+        }
+    }
+}
+
+struct RowKeySelector {
+    group_exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+}
+
+impl RowKeySelector {
+    fn new(group_exprs: Vec<Arc<dyn PhysicalExpr>>) -> Self {
+        let group_exprs: Vec<(usize, Arc<dyn PhysicalExpr>)> = group_exprs.into_iter().enumerate().map(|(index, expr)| (index, expr)).collect();
+        Self {group_exprs}
+    }
+
+    fn get_key(&self, row: &dyn Row) -> GenericRow {
+        let mut key = GenericRow::new_with_size(self.group_exprs.len());
+        for (index, expr) in &self.group_exprs {
+            key.update(*index, expr.eval(row));
+        }
+        key
+    }
+}

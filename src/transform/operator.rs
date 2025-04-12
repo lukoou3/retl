@@ -60,7 +60,7 @@ impl ProjectOperator {
 
 impl ProcessOperator for ProjectOperator {
     fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> Result<u64> {
-        self.row.fill_null();
+        // self.row.fill_null();
         for (i, expr) in self.exprs.iter().enumerate() {
             self.row.update(i, expr.eval(row));
         }

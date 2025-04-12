@@ -2,10 +2,9 @@ use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
 use crate::analysis::lookup_function;
-use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::expr::*;
-use crate::logical_plan::{LogicalPlan, RelationPlaceholder};
-use crate::tree_node::{Transformed, TreeNode};
+use crate::logical_plan::{Aggregate, LogicalPlan, Project, RelationPlaceholder};
+use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::DataType;
 
 pub trait AnalyzerRule: Debug {
@@ -112,7 +111,7 @@ impl AnalyzerRule for ResolveFunctions {
                         match &expr {
                             Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) => {
                                 match lookup_function(name, arguments.clone()) {
-                                    Ok(e) => Ok(Transformed::yes(Expr::ScalarFunction(e))),
+                                    Ok(e) => Ok(Transformed::yes(e)),
                                     Err(e) => Err(e)
                                 }
                             },
@@ -128,5 +127,42 @@ impl AnalyzerRule for ResolveFunctions {
 
     fn name(&self) -> &str {
         "ResolveFunctions"
+    }
+}
+
+#[derive(Debug)]
+pub struct GlobalAggregates;
+
+impl GlobalAggregates {
+    pub fn contains_aggregates(expr: &Expr) -> bool {
+        let mut contains = false;
+        expr.apply(|expr| {
+            match expr {
+                Expr::DeclarativeAggFunction(_) => {
+                    contains = true;
+                    Ok(TreeNodeRecursion::Stop)
+                },
+                _ => Ok(TreeNodeRecursion::Continue),
+            }
+        }).unwrap();
+        contains
+    }
+
+
+}
+
+impl AnalyzerRule for GlobalAggregates {
+    fn analyze(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        plan.transform_up(|plan| match &plan {
+            LogicalPlan::Project(Project{project_list,child})
+                if project_list.into_iter().any(|e| Self::contains_aggregates(e)) => {
+                Ok(Transformed::yes(LogicalPlan::Aggregate(Aggregate::new(vec![], project_list.clone(), child.clone()))))
+            },
+            _ => Ok(Transformed::no(plan)),
+        })
+    }
+
+    fn name(&self) -> &str {
+        "GlobalAggregates"
     }
 }

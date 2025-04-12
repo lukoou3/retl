@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use log::{error, info};
 use prometheus::Registry;
 use crate::config::{ApplicationConfig, BaseIOMetrics, OperatorConfig, TaskConfig, TaskContext};
 use crate::Result;
@@ -131,12 +132,12 @@ pub fn execution_graph(graph: &Graph, application_config: &ApplicationConfig, re
             let builder = thread::Builder::new().stack_size(1024 * 512)
                 .name(format!("{}-{}/{}", graph.get_node_dispaly_by_id(source_id), i + 1, parallelism));
             handles.push(builder.spawn(move || {
-                println!("start source: {}", source_id);
+                info!("start source: {}", source_id);
                 let result = run_task(source_id, &graph, task_config, terminated.clone());
                 match result {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        println!("source: {} run error:{:?}", source_id, e);
+                        error!("source: {} run error:{:?}", source_id, e);
                         terminated.store(true, Ordering::Release);
                         Err(e)
                     },
