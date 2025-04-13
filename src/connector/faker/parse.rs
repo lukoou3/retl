@@ -4,7 +4,7 @@ use config::Config;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
 use crate::{sql_utils, Result};
-use crate::connector::faker::{ArrayFaker, CharsStringFaker, EvalFaker, Faker, FieldFaker, FieldsFaker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, TimestampFaker, TimestampType, TimestampUnit, UnionFaker};
+use crate::connector::faker::{ArrayFaker, CharsStringFaker, EvalFaker, Faker, FieldFaker, FieldsFaker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, SequenceFaker, TimestampFaker, TimestampType, TimestampUnit, UnionFaker};
 use crate::data::Value;
 use crate::expr::BoundReference;
 use crate::physical_expr::{create_physical_expr, get_cast_func};
@@ -150,6 +150,27 @@ impl FakerConfig for DoubleFakerConfig {
             Ok(wrap_faker_necessary(faker, &self.array_config))
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct SequenceFakerConfig {
+    #[serde(default)]
+    start: i64,
+    #[serde(default = "default_sequence_step")]
+    step: i64,
+    #[serde(default = "default_sequence_batch")]
+    batch: u32,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
+}
+
+#[typetag::serde(name = "sequence")]
+impl FakerConfig for SequenceFakerConfig {
+    fn build(&self, schema: &Schema, i: usize) -> Result<Box<dyn Faker>> {
+        let faker = Box::new(SequenceFaker::new(self.start, self.step, self.batch));
+        Ok(wrap_faker_necessary(faker, &self.array_config))
+    }
+
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -339,7 +360,13 @@ fn wrap_faker_necessary(mut faker: Box<dyn Faker>, wrap_config: &WrapConfig,) ->
     faker
 }
 
+fn default_sequence_step() -> i64 {
+    1
+}
 
+fn default_sequence_batch() -> u32 {
+    1
+}
 
 fn default_ipv6_start() -> String {
     "::".to_string()

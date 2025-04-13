@@ -135,8 +135,8 @@ impl ScalarFunction for Greatest {
         let tp = self.children[0].data_type();
         if self.children.iter().all(|child| child.data_type() == tp) {
             Ok(())
-        } else if !tp.is_numeric_type() && tp != DataType::string_type() {
-            Err(format!("Coalesce requires numeric/string type, not {}", tp))
+        } else if !tp.is_orderable() {
+            Err(format!("Coalesce requires orderable type, not {}", tp))
         } else {
             Err(format!("Coalesce requires all arguments to have the same type: {:?}", self.children))
         }

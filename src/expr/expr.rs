@@ -127,8 +127,8 @@ impl Expr {
                         }
                     },
                     Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
-                        if !left.data_type().is_numeric_type() && left.data_type() != DataType::string_type()  {
-                            Err(format!("{:?} requires numeric/string type, not {}", self, left.data_type()))
+                        if !left.data_type().is_orderable()  {
+                            Err(format!("{:?} requires orderable type, not {}", self, left.data_type()))
                         } else {
                             Ok(())
                         },

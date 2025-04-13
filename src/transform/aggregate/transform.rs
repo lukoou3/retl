@@ -27,7 +27,7 @@ pub struct TaskAggregateTransform {
 
 impl TaskAggregateTransform {
     pub fn new(task_context: TaskContext, schema: Schema, agg_exprs: Vec<Expr>, group_exprs: Vec<Expr>,  result_exprs: Vec<Expr>,
-               input_attrs: Vec<AttributeReference>) -> Result<Self> {
+               input_attrs: Vec<AttributeReference>, max_rows: usize, interval_ms: u64) -> Result<Self> {
         let mut agg_attrs = Vec::with_capacity(agg_exprs.len());
         let mut final_agg_attrs = Vec::with_capacity(agg_exprs.len());
         for expr in &agg_exprs {
@@ -51,8 +51,6 @@ impl TaskAggregateTransform {
         let key_selector = RowKeySelector::new(exprs?);
         let rst_func = RowResultFunction::new(result_exprs, group_attrs.into_iter().chain(final_agg_attrs.into_iter()).collect())?;
 
-        let max_rows = 10000;
-        let interval_ms = 5000;
         let trigger_time_ms = current_timestamp_millis() / interval_ms * interval_ms + interval_ms;
         Ok(Self { task_context, schema, agg_func, rst_func, key_selector, buffers: HashMap::default(), max_rows, interval_ms,trigger_time_ms })
     }

@@ -134,7 +134,7 @@ impl DeclarativeAggFunction for Min {
 
     fn check_input_data_types(&self) -> Result<()> {
         let tp = self.child.data_type();
-        if !tp.is_numeric_type() && tp != DataType::string_type()  {
+        if !tp.is_orderable()  {
             return Err(format!("expressions must be orderable, but found {:?}", tp));
         }
         Ok(())

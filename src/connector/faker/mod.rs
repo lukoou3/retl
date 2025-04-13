@@ -1,6 +1,7 @@
 pub mod source;
 pub mod faker;
 pub mod number;
+mod sequence;
 pub mod string;
 mod timestamp;
 mod parse;
@@ -12,6 +13,7 @@ pub use source::*;
 pub use config::*;
 pub use faker::*;
 pub use number::*;
+pub use sequence::*;
 pub use string::*;
 pub use timestamp::*;
 pub use internet::*;

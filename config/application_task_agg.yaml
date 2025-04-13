@@ -6,11 +6,12 @@ env:
 sources:
   - type: faker
     outputs: [ faker_source ]
-    schema: "id bigint,ts bigint,cate_id int,in_bytes bigint,out_bytes bigint,bytes bigint,in_sessions bigint,out_sessions bigint,sessions bigint"
+    schema: "id bigint,ts bigint, timestamp timestamp,cate_id int,in_bytes bigint,out_bytes bigint,bytes bigint,in_sessions bigint,out_sessions bigint,sessions bigint"
     rows_per_second: 10
     fields: [
       { "name": "id", "type": "long", "min": 1, "max": 100000000, "random": false },
-      { "name": "ts", "type": "long", "min": 1, "max": 100000000, "random": false },
+      { "name": "ts", "type": "sequence", "start": 0, "step": 1000, "batch": 10 },
+      { "name": "timestamp", "type": "eval", "expression": "from_unixtime(ts/1000)" },
       { "name": "cate_id", "type": "int", "min": 1, "max": 3 },
       { "name": "in_bytes", "type": "long", "min": 100, "max": 10000 },
       { "name": "out_bytes", "type": "long", "min": 100, "max": 10000, "null_rate": 0.2 },
@@ -24,6 +25,22 @@ transforms:
   - type: task_aggregate
     inputs: [ faker_source ]
     outputs: [ task_aggregate ]
+    sql: |
+      select 
+          cate_id,
+          sum(in_bytes) in_bytes,
+          sum(out_bytes) out_bytes,
+          sum(bytes) bytes,
+          count(1) count,
+          avg(bytes) avg_bytes,
+          sum(bytes)/count(1) avg_bytes2,
+          min(timestamp) min_timestamp,
+          max(timestamp) max_timestamp
+      from tbl
+      group by cate_id
+  - type: task_aggregate
+    inputs: [ faker_source ]
+    outputs: [ task_aggregate2 ]
     sql: |
       select 
           cate_id,

@@ -121,6 +121,14 @@ impl DataType {
         }
     }
 
+    pub fn is_orderable(&self) -> bool {
+        match self {
+            DataType::Int | DataType::Long | DataType::Float | DataType::Double => true,
+            DataType::String | DataType::Date | DataType::Timestamp => true,
+            _ => false
+        }
+    }
+
     pub fn null_type() -> &'static DataType {
         &NULL_TYPE
     }

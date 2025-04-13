@@ -10,6 +10,18 @@ use crate::types::Schema;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskAggregateTransformConfig {
     sql: String,
+    #[serde(default = "default_max_rows")]
+    max_rows: usize,
+    #[serde(default = "default_interval_ms")]
+    interval_ms: u64,
+}
+
+fn default_max_rows() -> usize {
+    3000000
+}
+
+fn default_interval_ms() -> u64 {
+    5000
 }
 
 #[typetag::serde(name = "task_aggregate")]
@@ -26,6 +38,8 @@ impl TransformConfig for TaskAggregateTransformConfig {
                 group_exprs,
                 agg_exprs,
                 result_exprs,
+                max_rows: self.max_rows,
+                interval_ms: self.interval_ms,
             }))
         } else {
             Err(format!("plan is not aggregate plan:{:?}", plan))
@@ -40,6 +54,8 @@ pub struct TaskAggregateTransformProvider {
     group_exprs: Vec<Expr>,
     agg_exprs: Vec<Expr>,
     result_exprs: Vec<Expr>,
+    max_rows: usize,
+    interval_ms: u64,
 }
 
 impl TransformProvider for TaskAggregateTransformProvider {
@@ -48,7 +64,7 @@ impl TransformProvider for TaskAggregateTransformProvider {
         let group_exprs = self.group_exprs.clone();
         let agg_exprs = self.agg_exprs.clone();
         let result_exprs = self.result_exprs.clone();
-        let transform= TaskAggregateTransform::new(task_context, self.schema.clone(), agg_exprs, group_exprs, result_exprs, input_attrs)?;
+        let transform= TaskAggregateTransform::new(task_context, self.schema.clone(), agg_exprs, group_exprs, result_exprs, input_attrs, self.max_rows, self.interval_ms)?;
         Ok(Box::new(transform))
     }
 }
