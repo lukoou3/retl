@@ -96,7 +96,7 @@ impl Analyzer {
 
     fn check_valid_group_expr(expr: &Expr) -> Result<()> {
         expr.apply(|e| {
-            if matches!(e, Expr::DeclarativeAggFunction(_)){
+            if matches!(e, Expr::DeclarativeAggFunction(_) | Expr::TypedAggFunction(_)){
                 return Err(format!("aggregate functions are not allowed in GROUP BY, but found {:?}", e));
             }
             if !e.data_type().is_numeric_type() && e.data_type() != DataType::string_type()  {
@@ -110,7 +110,14 @@ impl Analyzer {
         match expr {
             Expr::DeclarativeAggFunction(f) => {
                 for x in f.args() {
-                    if matches!(x, Expr::DeclarativeAggFunction(_)) {
+                    if matches!(x, Expr::DeclarativeAggFunction(_) | Expr::TypedAggFunction(_)) {
+                        return Err("It is not allowed to use an aggregate function in the argument of another aggregate function.".to_string());
+                    }
+                }
+            },
+            Expr::TypedAggFunction(f) => {
+                for x in f.args() {
+                    if matches!(x, Expr::DeclarativeAggFunction(_) | Expr::TypedAggFunction(_)) {
                         return Err("It is not allowed to use an aggregate function in the argument of another aggregate function.".to_string());
                     }
                 }

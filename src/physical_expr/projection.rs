@@ -11,8 +11,10 @@ pub struct Projection {
 
 impl Projection {
     pub fn new(expressions: Vec<Expr>) -> Result<Self> {
-        let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = expressions.iter().map(|expr| create_physical_expr(expr)).collect();
-        let exprs = exprs?.into_iter().enumerate().collect();
+        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+            .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
+            .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
+        let exprs = exprs?;
         Ok(Self {exprs})
     }
 
@@ -45,8 +47,10 @@ pub struct MutableProjection {
 impl MutableProjection {
     pub fn new(expressions: Vec<Expr>) -> Result<Self> {
         let row = GenericRow::new_with_size(expressions.len());
-        let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = expressions.iter().map(|expr| create_physical_expr(expr)).collect();
-        let exprs = exprs?.into_iter().enumerate().collect();
+        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+            .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
+            .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
+        let exprs = exprs?;
         Ok(Self {exprs, row})
     }
 
@@ -81,8 +85,10 @@ pub struct MutableProjectionForAgg {
 impl MutableProjectionForAgg {
     pub fn new(expressions: Vec<Expr>) -> Result<Self> {
         let row = GenericRow::new_with_size(expressions.len());
-        let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = expressions.iter().map(|expr| create_physical_expr(expr)).collect();
-        let exprs = exprs?.into_iter().enumerate().collect();
+        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+            .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
+            .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
+        let exprs = exprs?;
         Ok(Self {exprs, row})
     }
 

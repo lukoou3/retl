@@ -6,6 +6,8 @@ mod max;
 mod first;
 mod last;
 mod average;
+mod collect_set;
+mod collect_list;
 
 pub use aggregate::*;
 pub use sum::*;
@@ -15,3 +17,5 @@ pub use max::*;
 pub use first::*;
 pub use last::*;
 pub use average::*;
+pub use collect_set::*;
+pub use collect_list::*;

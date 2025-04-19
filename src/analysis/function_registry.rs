@@ -90,6 +90,8 @@ fn builtin_function_registry() -> FunctionRegistry {
         "max" => Max,
         "first" => First,
         "last" => Last,
+        "collect_set" => CollectSet,
+        "collect_list" => CollectList,
     );
     FunctionRegistry { expressions }
 }

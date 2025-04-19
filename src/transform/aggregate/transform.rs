@@ -5,10 +5,11 @@ use std::sync::Arc;
 use ahash::{AHasher};
 use crate::config::TaskContext;
 use crate::Result;
-use crate::data::{GenericRow, JoinedRow, Row};
+use crate::data::{GenericRow, JoinedRow, Object, Row};
 use crate::datetime_utils::current_timestamp_millis;
 use crate::execution::{Collector, TimeService};
 use crate::expr::{AttributeReference, BoundReference, Expr};
+use crate::expr::aggregate::PhysicalTypedAggFunction;
 use crate::physical_expr::{create_physical_expr, MutableProjection, PhysicalExpr, Projection};
 use crate::transform::Transform;
 use crate::types::Schema;
@@ -33,6 +34,12 @@ impl TaskAggregateTransform {
         for expr in &agg_exprs {
             match expr {
                 Expr::DeclarativeAggFunction(f) => {
+                    for attr in f.agg_buffer_attributes() {
+                        agg_attrs.push(attr);
+                    }
+                    final_agg_attrs.push(f.result_attribute());
+                },
+                Expr::TypedAggFunction(f) => {
                     for attr in f.agg_buffer_attributes() {
                         agg_attrs.push(attr);
                     }
@@ -69,7 +76,7 @@ impl Debug for TaskAggregateTransform {
 
 impl TaskAggregateTransform {
     fn flush(&mut self, out: &mut dyn Collector) -> Result<()> {
-        for (key, buffer) in &self.buffers {
+        for (key, buffer) in &mut self.buffers {
             let value = self.agg_func.eval(buffer);
             let joiner = JoinedRow::new(key, value) ;
             let row= self.rst_func.result_projection.apply(&joiner);
@@ -126,6 +133,7 @@ struct RowAggregateFunction {
     input_attrs: Vec<AttributeReference>,
     agg_buffer_len: usize,
     expr_agg_init: Projection,
+    typed_functions: Vec<(usize, Box<dyn PhysicalTypedAggFunction>)>,
     process_row: ProcessRow,
     eavl_projection: Projection,
     agg_rst: GenericRow,
@@ -134,10 +142,12 @@ struct RowAggregateFunction {
 
 impl RowAggregateFunction {
     fn new(agg_exprs: Vec<Expr>, agg_attributes: Vec<AttributeReference>, input_attrs: Vec<AttributeReference>) -> Result<Self> {
+        let agg_exprs = Self::initialize_agg_functions(agg_exprs, input_attrs.clone())?;
         let mut agg_buffer_len = 0;
         let mut init_exprs = Vec::new();
         let mut eval_exprs = Vec::with_capacity(agg_exprs.len());
-        for expr in &agg_exprs {
+        let mut typed_functions = Vec::new();
+        for (i, expr) in agg_exprs.iter().enumerate() {
             match expr {
                 Expr::DeclarativeAggFunction(f) => {
                     for e in f.initial_values() {
@@ -145,6 +155,12 @@ impl RowAggregateFunction {
                     }
                     eval_exprs.push(f.evaluate_expression());
                     agg_buffer_len += f.agg_buffer_attributes().len();
+                },
+                Expr::TypedAggFunction(f) => {
+                    init_exprs.push(Expr::NoOp);
+                    eval_exprs.push(Expr::NoOp);
+                    typed_functions.push((i, f.physical_function()?));
+                    agg_buffer_len += 1;
                 },
                 _ => return Err(format!("not support agg expr:{:?}", expr))
             }
@@ -154,7 +170,32 @@ impl RowAggregateFunction {
         let agg_rst = GenericRow::new_with_size(eval_exprs.len());
         let eavl_projection = Projection::new_with_input_attrs(eval_exprs, agg_attributes.clone())?;
         let empty_row = GenericRow::new(Vec::new());
-        Ok(Self { agg_exprs, agg_attributes, input_attrs, agg_buffer_len, expr_agg_init, process_row, eavl_projection, agg_rst, empty_row })
+        Ok(Self { agg_exprs, agg_attributes, input_attrs, agg_buffer_len, expr_agg_init, typed_functions, process_row, eavl_projection, agg_rst, empty_row })
+    }
+
+    fn initialize_agg_functions(agg_exprs: Vec<Expr>, input_attrs: Vec<AttributeReference>) -> Result<Vec<Expr>> {
+        let mut exprs = Vec::with_capacity(agg_exprs.len());
+        let mut mutable_buffer_offset = 0;
+        for expr in agg_exprs {
+            match expr {
+                Expr::DeclarativeAggFunction(f) => {
+                    mutable_buffer_offset += f.agg_buffer_attributes().len();
+                    exprs.push(Expr::DeclarativeAggFunction(f));
+                },
+                e @ Expr::TypedAggFunction(_) => {
+                    let expr = BoundReference::bind_reference(e, input_attrs.clone())?;
+                    if let Expr::TypedAggFunction(f) = expr {
+                        let func = f.with_new_mutable_agg_buffer_offset(mutable_buffer_offset);
+                        exprs.push(Expr::TypedAggFunction(func));
+                    } else {
+                        return Err(format!("not support agg expr:{:?}", expr))
+                    }
+                    mutable_buffer_offset += 1;
+                },
+                _ => return Err(format!("not support agg expr:{:?}", expr))
+            }
+        }
+        Ok(exprs)
     }
 }
 
@@ -163,6 +204,9 @@ impl RowAggregateFunction {
     fn create_aggregation(&self) -> GenericRow {
         let mut buffer = GenericRow::new_with_size(self.agg_buffer_len);
         self.expr_agg_init.apply_targert(&mut buffer, &self.empty_row);
+        for (_, func) in self.typed_functions.iter() {
+            func.initialize(&mut buffer);
+        }
         buffer
     }
 
@@ -170,19 +214,24 @@ impl RowAggregateFunction {
         self.process_row.process(buffer, input);
     }
 
-    fn eval(&mut self, buffer: &GenericRow) -> &GenericRow {
+    fn eval(&mut self, buffer: &mut GenericRow) -> &GenericRow {
         self.eavl_projection.apply_targert(&mut self.agg_rst, buffer);
+        for (i, func) in self.typed_functions.iter() {
+            self.agg_rst.update(*i, func.eval(buffer));
+        }
         &self.agg_rst
     }
 }
 
 struct ProcessRow {
     exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+    functions: Vec<Box<dyn PhysicalTypedAggFunction>>
 }
 
 impl ProcessRow {
-    fn new(agg_exprs: &Vec<Expr>, agg_attributes: Vec<AttributeReference>, input_attrs: Vec<AttributeReference>) -> crate::Result<Self> {
+    fn new(agg_exprs: &Vec<Expr>, agg_attributes: Vec<AttributeReference>, input_attrs: Vec<AttributeReference>) -> Result<Self> {
         let mut update_exprs = Vec::new();
+        let mut functions = Vec::new();
         for expr in agg_exprs {
             match expr {
                 Expr::DeclarativeAggFunction(f) => {
@@ -190,20 +239,29 @@ impl ProcessRow {
                         update_exprs.push(e);
                     }
                 },
+                Expr::TypedAggFunction(f) => {
+                    update_exprs.push(Expr::NoOp);
+                    functions.push(f.physical_function()?);
+                },
                 _ => panic!("not support agg expr:{:?}", expr)
             }
         }
         let input = agg_attributes.into_iter().chain(input_attrs.into_iter()).collect();
         let expressions = BoundReference::bind_references(update_exprs, input)?;
-        let exprs: crate::Result<Vec<Arc<dyn PhysicalExpr>>, String> = expressions.iter().map(|expr| create_physical_expr(expr)).collect();
-        let exprs = exprs?.into_iter().enumerate().collect();
-        Ok(Self { exprs, })
+        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+            .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
+            .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
+        let exprs = exprs?;
+        Ok(Self { exprs, functions})
     }
 
     fn process(&self, row: &mut GenericRow, input: &dyn Row)  {
         for (i, expr) in self.exprs.iter() {
             let joiner = JoinedRow::new(row, input) ;
             row.update(*i, expr.eval(&joiner));
+        }
+        for func in self.functions.iter() {
+            func.update(row, input);
         }
     }
 }

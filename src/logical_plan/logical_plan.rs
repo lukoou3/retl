@@ -192,14 +192,26 @@ impl Aggregate {
         let mut agg_exprs = Vec::with_capacity(self.aggregate_exprs.len());
         for expr in &self.aggregate_exprs {
             expr.apply(|e| {
-                if let Expr::DeclarativeAggFunction(f) = e {
-                    f.agg_buffer_attributes();
-                    f.input_agg_buffer_attributes();
-                    f.result_attribute();
-                    if !equivalent_exprs.contains_key(e) {
-                        equivalent_exprs.insert(e.clone(), f.result_attribute());
-                        agg_exprs.push(e.clone());
-                    }
+                match e {
+                    Expr::DeclarativeAggFunction(f) => {
+                        f.agg_buffer_attributes();
+                        f.input_agg_buffer_attributes();
+                        f.result_attribute();
+                        if !equivalent_exprs.contains_key(e) {
+                            equivalent_exprs.insert(e.clone(), f.result_attribute());
+                            agg_exprs.push(e.clone());
+                        }
+                    },
+                    Expr::TypedAggFunction(f) => {
+                        f.agg_buffer_attributes();
+                        f.input_agg_buffer_attributes();
+                        f.result_attribute();
+                        if !equivalent_exprs.contains_key(e) {
+                            equivalent_exprs.insert(e.clone(), f.result_attribute());
+                            agg_exprs.push(e.clone());
+                        }
+                    },
+                    _ => ()
                 }
                 Ok(TreeNodeRecursion::Continue)
             }).unwrap();
@@ -220,7 +232,7 @@ impl Aggregate {
         let mut rewritten_result_exprs = Vec::with_capacity(self.aggregate_exprs.len());
         for expr in self.aggregate_exprs.clone() {
             let ep = expr.transform_down(|e| match e {
-                e @ Expr::DeclarativeAggFunction(_) => {
+                e @ Expr::DeclarativeAggFunction(_) | e @ Expr::TypedAggFunction(_) => {
                     let attr = Expr::AttributeReference(equivalent_exprs.get(&e).unwrap().clone());
                     Ok(Transformed::yes(attr))
                 },

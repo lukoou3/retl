@@ -23,6 +23,7 @@ impl TreeNode for Expr {
             Expr::UnresolvedAttribute(_)
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
+            | Expr::NoOp
             | Expr::Literal(_) => Transformed::no(self),
             Expr::UnresolvedExtractValue(UnresolvedExtractValue { child, extraction }) => (child, extraction)
                 .map_elements(f)?
@@ -87,6 +88,15 @@ impl TreeNode for Expr {
                     .collect::<Vec<_>>();
                 args.map_elements(f)?
                     .update_data(|args| Expr::DeclarativeAggFunction(func.rewrite_args(args)))
+            },
+            Expr::TypedAggFunction(func) => {
+                let args = func
+                    .args()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect::<Vec<_>>();
+                args.map_elements(f)?
+                    .update_data(|args| Expr::TypedAggFunction(func.rewrite_args(args)))
             },
         })
     }

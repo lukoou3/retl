@@ -8,7 +8,7 @@ use itertools::Itertools;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::{binary_expr, Coalesce, Greatest, Least};
-use crate::expr::aggregate::{DeclarativeAggFunction};
+use crate::expr::aggregate::{DeclarativeAggFunction, TypedAggFunction};
 use crate::physical_expr::{self as phy, can_cast, PhysicalExpr};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::{AbstractDataType, DataType};
@@ -17,6 +17,7 @@ use crate::types::{AbstractDataType, DataType};
 pub enum Expr {
     UnresolvedAttribute(String),
     UnresolvedExtractValue(UnresolvedExtractValue),
+    NoOp,
     BoundReference(BoundReference),
     AttributeReference(AttributeReference),
     Alias(Alias),
@@ -32,6 +33,7 @@ pub enum Expr {
     In(In),
     ScalarFunction(Box<dyn ScalarFunction>),
     DeclarativeAggFunction(Box<dyn DeclarativeAggFunction>),
+    TypedAggFunction(Box<dyn TypedAggFunction>),
 }
 
 impl Expr {
@@ -52,6 +54,7 @@ impl Expr {
         match self {
             Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_)  =>
                 panic!("UnresolvedExpr:{:?}", self),
+            Expr::NoOp => DataType::null_type(),
             Expr::BoundReference(b) => &b.data_type,
             Expr::AttributeReference(a) => &a.data_type,
             Expr::Alias(e) => e.child.data_type(),
@@ -71,6 +74,7 @@ impl Expr {
             Expr::In(_) => DataType::boolean_type(),
             Expr::ScalarFunction(f) => f.data_type(),
             Expr::DeclarativeAggFunction(f) => f.data_type(),
+            Expr::TypedAggFunction(f) => f.data_type(),
         }
     }
 
@@ -91,6 +95,7 @@ impl Expr {
             Expr::UnresolvedAttribute(_)
              | Expr::UnresolvedExtractValue(_)
              | Expr::UnresolvedFunction(_)
+             | Expr::NoOp
              | Expr::BoundReference(_)
              | Expr::AttributeReference(_)
              | Expr::Literal(_)
@@ -163,6 +168,9 @@ impl Expr {
             Expr::DeclarativeAggFunction(f) => {
                 f.check_input_data_types()
             },
+            Expr::TypedAggFunction(f) => {
+                f.check_input_data_types()
+            },
         }
     }
 
@@ -171,6 +179,7 @@ impl Expr {
             Expr::UnresolvedAttribute(_)
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
+            | Expr::NoOp
             | Expr::Literal(_) => Vec::new(),
             Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) =>
                 vec![child, extraction],
@@ -188,6 +197,7 @@ impl Expr {
                 vec![value.as_ref()].into_iter().chain(list.iter()).collect(),
             Expr::ScalarFunction(f) => f.args(),
             Expr::DeclarativeAggFunction(f) => f.args(),
+            Expr::TypedAggFunction(f) => f.args(),
             Expr::UnresolvedFunction(UnresolvedFunction{name: _, arguments}) =>
                 arguments.iter().map(|a| a).collect(),
         }

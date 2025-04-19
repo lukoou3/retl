@@ -34,8 +34,10 @@ transforms:
           count(1) count,
           avg(bytes) avg_bytes,
           sum(bytes)/count(1) avg_bytes2,
+          collect_list(in_bytes % 5) list,
           min(timestamp) min_timestamp,
-          max(timestamp) max_timestamp
+          max(timestamp) max_timestamp,
+          collect_set(in_bytes % 5) set
       from tbl
       group by cate_id
   - type: task_aggregate

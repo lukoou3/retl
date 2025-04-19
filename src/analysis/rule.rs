@@ -138,7 +138,7 @@ impl GlobalAggregates {
         let mut contains = false;
         expr.apply(|expr| {
             match expr {
-                Expr::DeclarativeAggFunction(_) => {
+                Expr::DeclarativeAggFunction(_) | Expr::TypedAggFunction(_) => {
                     contains = true;
                     Ok(TreeNodeRecursion::Stop)
                 },

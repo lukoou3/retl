@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::any::Any;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
@@ -27,6 +27,46 @@ macro_rules! hash_float_value {
 
 hash_float_value!((f64, u64), (f32, u32));
 
+pub trait Object: Send + Sync + Debug + ExtendObject {
+
+}
+
+pub trait ExtendObject {
+    fn clone_box(&self) -> Box<dyn Object>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+}
+
+impl<T: Object + Clone + Debug + Send + Sync + 'static> ExtendObject for T {
+    fn clone_box(&self) -> Box<dyn Object> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+    fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        self
+    }
+}
+
+
+impl Display for Box<dyn Object> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Object")
+    }
+}
+
+impl Clone for Box<dyn Object> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Null,
@@ -39,6 +79,7 @@ pub enum Value {
     Binary(Arc<Vec<u8>>),
     Struct(Arc<dyn BaseRow>),
     Array(Arc<Vec<Value>>),
+    Object(Box<dyn Object>),
 }
 
 impl Display for Value {
@@ -75,7 +116,8 @@ impl Display for Value {
                     write!(f, "{x}")?;
                 }
                 write!(f, "]")
-            }
+            },
+            Value::Object(v) => write!(f, "{v}"),
         }
     }
 }
@@ -226,6 +268,7 @@ impl Hash for Value {
             Binary(v) => v.hash(state),
             Struct(v) => v.hash(state),
             Array(v) => v.hash(state),
+            Object(_) => 1.hash(state),
         }
     }
 }
@@ -254,6 +297,8 @@ impl PartialEq for Value {
             (Array(_), _) => false,
             (Null, Null) => true,
             (Null, _) => false,
+            (Object(_), _) => false,
+            (_, Object(_)) => false,
         }
     }
 }
@@ -282,6 +327,8 @@ impl PartialOrd for Value {
             (Array(_), _) => None,
             (Null, Null) => Some(Ordering::Equal),
             (Null, _) => None,
+            (Object(_), _) => None,
+            (_, Object(_)) => None,
         }
     }
 }
@@ -432,6 +479,10 @@ impl GenericRow {
 
     pub fn fill_null(&mut self) {
         self.values.fill(Value::Null);
+    }
+
+    pub fn get_mut(&mut self, i: usize) -> &mut Value {
+        &mut self.values[i]
     }
 }
 
@@ -941,5 +992,4 @@ mod tests {
         println!("{}", row.is_null(2));
         println!("{}", row.is_null(3));
     }
-
 }
