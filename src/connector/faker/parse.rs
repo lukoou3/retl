@@ -4,7 +4,7 @@ use config::Config;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
 use crate::{sql_utils, Result};
-use crate::connector::faker::{ArrayFaker, CharsStringFaker, EvalFaker, Faker, FieldFaker, FieldsFaker, FormatTimestampFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, SequenceFaker, TimestampFaker, TimestampType, TimestampUnit, UnionFaker};
+use crate::connector::faker::{ArrayFaker, CharsStringFaker, EvalFaker, Faker, FieldFaker, FieldsFaker, FormatTimestampFaker, HllFaker, Ipv4Faker, Ipv6Faker, NullAbleFaker, OptionDoubleFaker, OptionIntFaker, OptionLongFaker, OptionStringFaker, RangeDoubleFaker, RangeIntFaker, RangeLongFaker, RegexStringFaker, SequenceFaker, TDigestFaker, TimestampFaker, TimestampType, TimestampUnit, UnionFaker};
 use crate::data::Value;
 use crate::expr::BoundReference;
 use crate::physical_expr::{create_physical_expr, get_cast_func};
@@ -314,6 +314,48 @@ impl FakerConfig for EvalConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct HllConfig {
+    #[serde(default = "default_hll_item_count")]
+    item_count: u64,
+    #[serde(default = "default_hll_batch_count")]
+    batch_count: u32,
+    #[serde(default = "default_hll_log2m")]
+    log2m: u32,
+    #[serde(default = "default_hll_regwidth")]
+    regwidth: u32,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
+}
+
+#[typetag::serde(name = "hll")]
+impl FakerConfig for HllConfig {
+    fn build(&self, schema: &Schema, _: usize) -> Result<Box<dyn Faker>> {
+        let faker = Box::new(HllFaker::new(self.item_count, self.batch_count, self.log2m, self.regwidth));
+        Ok(wrap_faker_necessary(faker, &self.array_config))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TDigestConfig {
+    #[serde(default = "default_tdigest_max")]
+    max: u32,
+    #[serde(default = "default_tdigest_batch_count")]
+    batch_count: u32,
+    #[serde(default = "default_tdigest_compression")]
+    compression: u32,
+    #[serde(flatten, default)]
+    array_config: WrapConfig,
+}
+
+#[typetag::serde(name = "tdigest")]
+impl FakerConfig for TDigestConfig {
+    fn build(&self, schema: &Schema, _: usize) -> Result<Box<dyn Faker>> {
+        let faker = Box::new(TDigestFaker::new(self.max, self.batch_count, self.compression));
+        Ok(wrap_faker_necessary(faker, &self.array_config))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct UnionFieldsConfig {
     fields: Vec<FieldFakerConfig>,
     weight: u32,
@@ -406,6 +448,34 @@ fn default_array_len_max() -> usize {
 
 fn default_regex() -> String {
     "[a-zA-Z]{0,5}".to_string()
+}
+
+fn default_hll_item_count() -> u64 {
+    1000000
+}
+
+fn default_hll_batch_count() -> u32 {
+    1000
+}
+
+fn default_hll_log2m() -> u32 {
+    12
+}
+
+fn default_hll_regwidth() -> u32 {
+    6
+}
+
+fn default_tdigest_max() -> u32 {
+    1000000
+}
+
+fn default_tdigest_batch_count() -> u32 {
+    1000
+}
+
+fn default_tdigest_compression() -> u32 {
+    100
 }
 
 #[cfg(test)]

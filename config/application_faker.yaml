@@ -48,11 +48,24 @@ sources:
     rows_per_second: 1
     number_of_rows: 100
     fields_desc_file: faker/faker.json
+  - type: faker
+    outputs: [ faker_sketch ]
+    schema: "id bigint, ts timestamp, cate string, nuallable_int int, hll string, tdigest string"
+    rows_per_second: 1
+    number_of_rows: 100
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "ts", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "cate", "type": "string", "options": [ "a", "b", null, "c", "d" ] },
+      { "name": "nuallable_int", "type": "int", "min": 100, "max": 10000, "null_rate": 0.3 },
+      { "name": "hll", "type": "hll", "item_count": 1000000, "batch_count": 10 },
+      { "name": "tdigest", "type": "tdigest", "max": 1000000, "batch_count": 10 }
+    ]
 
 sinks:
   - type: print
     name: print_sink
-    inputs: [ faker_source2 ]
+    inputs: [ faker_sketch ]
     print_mode: stdout
     encoding:
       codec: json

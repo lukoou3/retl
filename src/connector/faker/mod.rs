@@ -8,6 +8,7 @@ mod parse;
 mod config;
 mod internet;
 mod complex;
+mod sketch;
 
 pub use source::*;
 pub use config::*;
@@ -18,3 +19,4 @@ pub use string::*;
 pub use timestamp::*;
 pub use internet::*;
 pub use complex::*;
+pub use sketch::*;

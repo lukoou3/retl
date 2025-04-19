@@ -14,5 +14,6 @@ pub mod config;
 pub mod execution;
 pub mod optimizer;
 pub mod sql_utils;
+pub mod sketch;
 
 pub use common::*;
