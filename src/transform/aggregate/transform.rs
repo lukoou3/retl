@@ -94,13 +94,16 @@ impl Transform for TaskAggregateTransform {
 
     fn process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> Result<()> {
         let key = self.key_selector.get_key(row);
-        if let Some(buffer) = self.buffers.get_mut(&key) {
+        // 也可以这样实现
+        let buffer = self.buffers.entry(key).or_insert_with(|| self.agg_func.create_aggregation());
+        self.agg_func.update(buffer, row);
+        /* if let Some(buffer) = self.buffers.get_mut(&key) {
             self.agg_func.update(buffer, row);
         } else {
             let mut buffer = self.agg_func.create_aggregation();
             self.agg_func.update(&mut buffer, row);
             self.buffers.insert(key, buffer);
-        }
+        }*/
         if self.buffers.len() >= self.max_rows {
             self.flush(out)
         } else {
