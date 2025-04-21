@@ -17,7 +17,7 @@ impl SerializerConfig for CsvSerializerConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CsvDeserializerConfig;
 
-#[typetag::serde(name = "json")]
+#[typetag::serde(name = "csv")]
 impl DeserializerConfig for CsvDeserializerConfig {
     fn build(&self, schema: Schema) -> Result<Box<dyn Deserializer>> {
         Ok(Box::new(CsvDeserializer::new(schema)))
