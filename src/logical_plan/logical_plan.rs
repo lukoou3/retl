@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 use crate::Result;
-use crate::expr::{Alias, AttributeReference, Expr};
+use crate::expr::{Alias, AttributeReference, Expr, Generator};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 use crate::types::DataType;
 
@@ -14,6 +14,7 @@ pub enum LogicalPlan {
     Filter(Filter),
     Expression(Expression),
     Aggregate(Aggregate),
+    Generate(Generate),
 }
 
 impl LogicalPlan {
@@ -24,7 +25,8 @@ impl LogicalPlan {
             LogicalPlan::Project(Project{child, ..})
              | LogicalPlan::Filter(Filter{child, ..})
              | LogicalPlan::Expression(Expression{child, ..})
-             | LogicalPlan::Aggregate(Aggregate{child, ..})=> vec![child.as_ref()],
+             | LogicalPlan::Aggregate(Aggregate{child, ..})
+             | LogicalPlan::Generate(Generate{child, ..}) => vec![child.as_ref()],
         }
     }
 
@@ -38,12 +40,21 @@ impl LogicalPlan {
             LogicalPlan::Aggregate(Aggregate{grouping_exprs, aggregate_exprs, ..}) => {
                 grouping_exprs.iter().chain(aggregate_exprs.iter()).collect()
             },
+            LogicalPlan::Generate(g) => {
+                let mut exprs = Vec::new();
+                exprs.push(&g.generator);
+                for e in &g.generator_output {
+                    exprs.push(e);
+                }
+                exprs
+            }
         }
     }
 
     pub fn resolved(&self) -> bool {
         match self {
             LogicalPlan::UnresolvedRelation(_) => false,
+            LogicalPlan::Generate(g) => g.resolved(),
             _ => self.expressions().iter().all(|e| e.resolved()) && self.children_resolved(),
         }
     }
@@ -86,6 +97,7 @@ impl LogicalPlan {
                     }
                 }).collect()
             },
+            LogicalPlan::Generate(g) => g.output(),
         }
     }
 
@@ -165,6 +177,66 @@ impl Expression {
             e => panic!("{:?} is not allowed in expr", e),
         }
         Self { expr, child }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
+pub struct Generate {
+    pub generator: Expr,
+    pub unrequired_child_index: Vec<usize>,
+    pub outer: bool,
+    pub qualifier: Option<String>,
+    pub generator_output: Vec<Expr>,
+    pub child: Arc<LogicalPlan>,
+}
+
+impl Generate {
+    pub fn new(
+        generator: Expr,
+        unrequired_child_index: Vec<usize>,
+        outer: bool,
+        qualifier: Option<String>,
+        generator_output: Vec<Expr>,
+        child: Arc<LogicalPlan>,
+    ) -> Self {
+        for expr in &generator_output {
+            match expr {
+                Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => (),
+                e => panic!("{}", format!("{:?} is not allowed in generator_output", e)),
+            }
+        }
+        Self { generator, unrequired_child_index, outer, qualifier, generator_output, child }
+    }
+
+    pub fn resolved(&self) -> bool {
+        self.generator.resolved() && self.generator_output.iter().all(|e| e.resolved()) && self.child.resolved() && self.generator_output_check()
+    }
+
+    pub fn generator_output_check(&self) -> bool {
+        if let Expr::Generator(g) = &self.generator {
+            g.element_schema().fields.len() == self.generator_output.len()
+        } else {
+            false
+        }
+    }
+
+    pub fn output(&self) -> Vec<AttributeReference> {
+        let mut output = self.child.output();
+        for e in self.qualified_generator_output() {
+            output.push(e);
+        }
+        output
+    }
+
+    // 给输出添加表前缀，如果定义table_alias, 暂时不实现
+    fn qualified_generator_output(&self) -> Vec<AttributeReference> {
+        self.generator_output.iter().map(|e| {
+            match e {
+                Expr::AttributeReference(a) => a.clone(),
+                Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.clone(), DataType::Int, 0),
+                _ => panic!("{}", format!("{:?} is not allowed in generator_output", e)),
+            }
+        }).collect()
     }
 }
 
@@ -285,5 +357,28 @@ mod tests {
             println!("result_exprs:{:#?}", result_exprs);
             println!("child:{:#?}", child);
         }
+    }
+
+    #[test]
+    fn test_explode() {
+        let sql = r"
+        select
+            id,
+            cate,
+            data,
+            in_bytes,
+            out_bytes
+        from tbl lateral view explode(datas) v as data
+        where id > 1
+        ";
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Int),
+            Field::new("cate", DataType::String),
+            Field::new("datas", DataType::Array(Box::new(DataType::String))),
+            Field::new("in_bytes", DataType::Long),
+            Field::new("out_bytes", DataType::Long),
+        ]);
+        let optimized_plan = sql_utils::sql_plan(sql, &schema).unwrap();
+        println!("plan:{:#?}", optimized_plan);
     }
 }

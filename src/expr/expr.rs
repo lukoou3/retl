@@ -7,7 +7,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::{binary_expr, Coalesce, Greatest, Least};
+use crate::expr::{binary_expr, Coalesce, Generator, Greatest, Least};
 use crate::expr::aggregate::{DeclarativeAggFunction, TypedAggFunction};
 use crate::physical_expr::{self as phy, can_cast, PhysicalExpr};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
@@ -24,6 +24,7 @@ pub enum Expr {
     Cast(Cast),
     Literal(Literal),
     UnresolvedFunction(UnresolvedFunction),
+    UnresolvedGenerator(UnresolvedGenerator),
     Not(Box<Expr>),
     IsNull(Box<Expr>),
     IsNotNull(Box<Expr>),
@@ -34,12 +35,14 @@ pub enum Expr {
     ScalarFunction(Box<dyn ScalarFunction>),
     DeclarativeAggFunction(Box<dyn DeclarativeAggFunction>),
     TypedAggFunction(Box<dyn TypedAggFunction>),
+    Generator(Box<dyn Generator>),
 }
 
 impl Expr {
     pub fn foldable(&self) -> bool {
         match self {
             Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_) | Expr::BoundReference(_) => false,
+            Expr::UnresolvedGenerator(_) | Expr::Generator(_)=> false,
             // We should never fold named expressions in order to not remove the alias.
             Expr::AttributeReference(_) | Expr::Alias(_)  => false,
             Expr::Literal(_)  => true,
@@ -52,7 +55,7 @@ impl Expr {
 
     pub fn data_type(&self) -> &DataType {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_)  =>
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_) | Expr::UnresolvedGenerator(_)  =>
                 panic!("UnresolvedExpr:{:?}", self),
             Expr::NoOp => DataType::null_type(),
             Expr::BoundReference(b) => &b.data_type,
@@ -75,6 +78,7 @@ impl Expr {
             Expr::ScalarFunction(f) => f.data_type(),
             Expr::DeclarativeAggFunction(f) => f.data_type(),
             Expr::TypedAggFunction(f) => f.data_type(),
+            Expr::Generator(g) => g.data_type(),
         }
     }
 
@@ -95,6 +99,7 @@ impl Expr {
             Expr::UnresolvedAttribute(_)
              | Expr::UnresolvedExtractValue(_)
              | Expr::UnresolvedFunction(_)
+             | Expr::UnresolvedGenerator(_)
              | Expr::NoOp
              | Expr::BoundReference(_)
              | Expr::AttributeReference(_)
@@ -171,6 +176,9 @@ impl Expr {
             Expr::TypedAggFunction(f) => {
                 f.check_input_data_types()
             },
+            Expr::Generator(g) => {
+                g.check_input_data_types()
+            }
         }
     }
 
@@ -198,7 +206,10 @@ impl Expr {
             Expr::ScalarFunction(f) => f.args(),
             Expr::DeclarativeAggFunction(f) => f.args(),
             Expr::TypedAggFunction(f) => f.args(),
+            Expr::Generator(g) => g.args(),
             Expr::UnresolvedFunction(UnresolvedFunction{name: _, arguments}) =>
+                arguments.iter().map(|a| a).collect(),
+            Expr::UnresolvedGenerator(UnresolvedGenerator{arguments, ..}) =>
                 arguments.iter().map(|a| a).collect(),
         }
     }
@@ -450,7 +461,11 @@ impl AttributeReference {
     }
 
     pub fn with_expr_id(&self, expr_id: u32) -> Self {
-        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id: self.expr_id }
+        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id }
+    }
+
+    pub fn with_name(&self, name: String) -> Self {
+        AttributeReference{ name, data_type: self.data_type.clone(), expr_id: self.expr_id }
     }
 
     pub fn new_instance(&self) -> Self {
@@ -485,6 +500,12 @@ impl Literal {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub struct UnresolvedFunction {
+    pub name: String,
+    pub arguments: Vec<Expr>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
+pub struct UnresolvedGenerator {
     pub name: String,
     pub arguments: Vec<Expr>,
 }

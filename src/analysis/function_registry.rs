@@ -92,6 +92,8 @@ fn builtin_function_registry() -> FunctionRegistry {
         "last" => Last,
         "collect_set" => CollectSet,
         "collect_list" => CollectList,
+        // generator
+        "explode" => Explode,
     );
     FunctionRegistry { expressions }
 }

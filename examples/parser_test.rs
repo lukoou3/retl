@@ -10,9 +10,13 @@ fn main() {
 }
 fn test(){
     println!("Hello, world!");
+    let result = parser::parse_query("select a + 1 a, func('1') b, data + 10 data from tab lateral view outer explode(datas) v as data ");
+    println!("{:?}", result);
     let result = parser::parse_query("select a + 1 a, func('1') b, func2(a, 3) b, a < b + 1  e, nuallable_int in (1, 2, 3) is_in from tbl");
     println!("{:?}", result);
     let result = parser::parse_data_type("struct<int: int, bigint:bigint, struct:struct<intType: int, longType:bigint>, arrAy:Array<double>, anotherArray:Array<string>>");
+    println!("{:?}", result);
+    let result = parser::parse_data_type("id int, name string, age int, datas array<int>");
     println!("{:?}", result);
 }
 

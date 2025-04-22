@@ -1,0 +1,54 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+  web:
+    enabled: true
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "id int, name string, age int, datas array<int>"
+    rows_per_second: 1
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "name", "type": "string", "regex": "name_[a-z]{2}"  },
+      { "name": "age", "type": "int", "min": 10, "max": 30 },
+      { "name": "datas", "type": "int", "min": 0, "max": 10, "array": true, "array_len_max": 3, "null_rate": 0.3 }
+    ]
+
+transforms:
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query ]
+    sql: |
+      select 
+          id,
+          name,
+          age,
+          datas,
+          data + 10 data
+      from tbl lateral view outer explode(datas) v as data
+
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query2 ]
+    sql: |
+      select 
+          id,
+          name,
+          age,
+          datas,
+          data + 10 data
+      from tbl lateral view explode(datas) v as data
+      where data < 5
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ query2 ]
+    print_mode: log_info
+    encoding:
+      codec: json
+
+active_sinks: [print_sink]

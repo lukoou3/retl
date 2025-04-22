@@ -1,6 +1,6 @@
 use crate::expr::Expr;
 use crate::Result;
-use crate::logical_plan::{Aggregate, Expression, Filter, LogicalPlan, Project};
+use crate::logical_plan::{Aggregate, Expression, Filter, Generate, LogicalPlan, Project};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 
 impl TreeNode for LogicalPlan {
@@ -45,6 +45,12 @@ impl TreeNode for LogicalPlan {
                 .update_data(|child| {
                     LogicalPlan::Aggregate(Aggregate {grouping_exprs, aggregate_exprs, child})
                 }),
+            LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child}) =>
+                child.map_elements(f)?
+                .update_data(|child| {
+                    LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child})
+                })
+
         })
     }
 }
@@ -83,6 +89,11 @@ impl LogicalPlan {
                 Ok((grouping_exprs, aggregate_exprs).map_elements(f)?
                     .update_data(|(grouping_exprs, aggregate_exprs)|
                     LogicalPlan::Aggregate(Aggregate {grouping_exprs, aggregate_exprs, child})
+                    )
+                ),
+            LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child}) =>
+                Ok(f(generator)? .update_data(|generator|
+                        LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child})
                     )
                 ),
         }

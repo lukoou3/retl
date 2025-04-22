@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
+use itertools::Itertools;
 use crate::analysis::lookup_function;
 use crate::expr::*;
-use crate::logical_plan::{Aggregate, LogicalPlan, Project, RelationPlaceholder};
-use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
+use crate::logical_plan::{Aggregate, Generate, LogicalPlan, Project, RelationPlaceholder};
+use crate::tree_node::{Transformed, TreeNode, TreeNodeRecursion};
 use crate::types::DataType;
 
 pub trait AnalyzerRule: Debug {
@@ -78,6 +79,13 @@ impl AnalyzerRule for ResolveReferences {
     fn analyze(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
         plan.transform_up(|plan| match plan {
             p if !p.children_resolved() => Ok(Transformed::no(p)),
+            LogicalPlan::Generate(g) if g.generator.resolved() => Ok(Transformed::no(LogicalPlan::Generate(g))),
+            LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child}) => {
+                let attributes = child.output();
+                let attr_dict:HashMap<String, AttributeReference> = attributes.into_iter().map(|attr| (attr.name.clone(), attr)).collect();
+                let g = self.resolve_expr(generator, &attr_dict)?;
+                Ok(g.update_data(|generator| LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child})))
+            },
             p => {
                 //println!("");
                 //println!("plan:{:?}", p);
@@ -99,6 +107,48 @@ impl AnalyzerRule for ResolveReferences {
 }
 
 #[derive(Debug)]
+pub struct ResolveGenerate;
+
+impl AnalyzerRule for ResolveGenerate {
+    fn analyze(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        plan.transform_up(|plan| match plan {
+            LogicalPlan::Generate(g) if !g.child.resolved() || !g.generator.resolved() =>
+                Ok(Transformed::no(LogicalPlan::Generate(g))),
+            LogicalPlan::Generate(mut generate) if !generate.resolved() => {
+                if let Expr::Generator(g) = &generate.generator {
+                    let element_attrs = g.element_schema().to_attributes();
+                    let mut names = Vec::new();
+                    for e in &generate.generator_output {
+                        if let Expr::UnresolvedAttribute(name) = e {
+                            names.push(name.clone());
+                        } else {
+                            return Err(format!("generator output is not unresolvedAttribute {:?}", e));
+                        }
+                    }
+                    let generator_output = if names.len() == element_attrs.len() {
+                        names.into_iter().zip(element_attrs.into_iter()).map(|(name, attr)| Expr::AttributeReference(attr.with_name(name))).collect()
+                    } else if names.len() == 0 {
+                        element_attrs.into_iter().map(|attr| Expr::AttributeReference(attr)).collect()
+                    } else {
+                        return Err(format!("The number of aliases supplied in the AS clause does not match the number of columns output by the UDTF expected {} aliases but got {}",
+                                           element_attrs.len(), names.iter().join(", ")));
+                    };
+                    generate.generator_output = generator_output;
+                    Ok(Transformed::yes(LogicalPlan::Generate(generate)))
+                } else {
+                    return Ok(Transformed::no(LogicalPlan::Generate(generate)));
+                }
+            },
+            p => Ok(Transformed::no(p)),
+        })
+    }
+
+    fn name(&self) -> &str {
+        "ResolveGenerate"
+    }
+}
+
+#[derive(Debug)]
 pub struct ResolveFunctions;
 
 impl AnalyzerRule for ResolveFunctions {
@@ -112,6 +162,15 @@ impl AnalyzerRule for ResolveFunctions {
                             Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) => {
                                 match lookup_function(name, arguments.clone()) {
                                     Ok(e) => Ok(Transformed::yes(e)),
+                                    Err(e) => Err(e)
+                                }
+                            },
+                            Expr::UnresolvedGenerator(UnresolvedGenerator{name, arguments}) => {
+                                match lookup_function(name, arguments.clone()) {
+                                    Ok(e) => match &e {
+                                        Expr::Generator(_) => Ok(Transformed::yes(e)),
+                                        _ => Err(format!("{}  is expected to be a generator. However, it is {:?}", name, e))
+                                    },
                                     Err(e) => Err(e)
                                 }
                             },

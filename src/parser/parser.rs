@@ -9,8 +9,8 @@ use pest_derive::Parser;
 use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, UnresolvedExtractValue, UnresolvedFunction};
-use crate::logical_plan::{Aggregate, Filter, LogicalPlan, Project};
+use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, UnresolvedExtractValue, UnresolvedFunction, UnresolvedGenerator};
+use crate::logical_plan::{Aggregate, Filter, Generate, LogicalPlan, Project};
 use crate::types::*;
 
 #[derive(Parser)]
@@ -42,7 +42,8 @@ pub fn parse_expr(sql: &str) -> Result<Expr> {
 }
 
 pub fn parse_data_type(sql: &str) -> Result<DataType> {
-    let pair = if sql.trim().ends_with(">") {
+    let sql_trim = sql.trim();
+    let pair = if sql_trim.starts_with("struct<") && sql_trim.ends_with(">") {
         SqlParser::parse(Rule::singleDataType, sql).map_err(|e| format!("{:?}", e))?.next().unwrap()
     } else {
         SqlParser::parse(Rule::singleTableSchema, sql).map_err(|e| format!("{:?}", e))?.next().unwrap()
@@ -125,6 +126,7 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
     let mut project_list: Vec<_> = Vec::new();
     let mut from: Option<LogicalPlan> = None;
     let mut filter: Option<Expr> = None;
+    let mut lateral_view: Option<Generate> = None;
     let mut group_exprs: Option<Vec<Expr>> = None;
     for pair in query.into_inner() {
         match pair.as_rule() {
@@ -142,6 +144,23 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
             Rule::whereClause => {
                 filter = Some(parse_expression(pair)?);
             },
+            Rule::lateralView => {
+                let mut pairs = pair.into_inner();
+                let first = pairs.next().unwrap();
+                let outer = first.as_rule() == Rule::OUTER;
+                let name = if outer {
+                    parse_identifier(pairs.next().unwrap())?.to_string()
+                } else {
+                    parse_identifier(first)?.to_string()
+                };
+                let args_pair = pairs.next().unwrap();
+                let arguments:Vec<_> = args_pair.into_inner().map(|pair| parse_expression(pair).unwrap()).collect();
+                let table_name = parse_identifier(pairs.next().unwrap())?.to_string();
+                let col_names: Vec<_> = pairs.map(|pair| parse_identifier(pair).unwrap().to_string()).collect();
+                let generator = Expr::UnresolvedGenerator(UnresolvedGenerator{ name, arguments});
+                let generator_output: Vec<_> = col_names.into_iter().map(|name| Expr::UnresolvedAttribute(name)).collect();
+                lateral_view = Some(Generate::new(generator, vec![], outer, Some(table_name), generator_output, Arc::new(LogicalPlan::UnresolvedRelation("".to_string()))));
+            },
             Rule::aggregationClause => {
                 group_exprs = Some(pair.into_inner().map(|pair| parse_expression(pair).unwrap()).collect());
             },
@@ -149,6 +168,10 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
         }
     }
     let mut child = Arc::new(from.unwrap());
+    if let Some(mut generate) = lateral_view {
+        generate.child = child;
+        child = Arc::new(LogicalPlan::Generate(generate));
+    }
     if let Some(filter) = filter {
         child = Arc::new(LogicalPlan::Filter(Filter::new(filter, child)));
     }

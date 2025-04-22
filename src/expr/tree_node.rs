@@ -71,6 +71,11 @@ impl TreeNode for Expr {
                     Expr::UnresolvedFunction(UnresolvedFunction{name, arguments})
                 })
             },
+            Expr::UnresolvedGenerator(UnresolvedGenerator{name, arguments}) => {
+                arguments.map_elements(f)?.update_data(|arguments| {
+                    Expr::UnresolvedGenerator(UnresolvedGenerator{name, arguments})
+                })
+            },
             Expr::ScalarFunction(func) => {
                 let args = func
                     .args()
@@ -97,6 +102,15 @@ impl TreeNode for Expr {
                     .collect::<Vec<_>>();
                 args.map_elements(f)?
                     .update_data(|args| Expr::TypedAggFunction(func.rewrite_args(args)))
+            },
+            Expr::Generator(func) => {
+                let args = func
+                    .args()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect::<Vec<_>>();
+                args.map_elements(f)?
+                    .update_data(|args| Expr::Generator(func.rewrite_args(args)))
             },
         })
     }

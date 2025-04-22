@@ -1,11 +1,11 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 use crate::Result;
-use crate::data::{GenericRow, Row};
+use crate::data::{GenericRow, JoinedRow, Row};
 use crate::execution::Collector;
-use crate::expr::BoundReference;
-use crate::logical_plan::{Filter, LogicalPlan, Project};
-use crate::physical_expr::{create_physical_expr, PhysicalExpr};
+use crate::expr::{BoundReference, Expr};
+use crate::logical_plan::{Filter, Generate, LogicalPlan, Project};
+use crate::physical_expr::{create_physical_expr, PhysicalExpr, PhysicalGenerator};
 
 pub trait ProcessOperator: Debug {
     fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> Result<u64>;
@@ -68,6 +68,38 @@ impl ProcessOperator for ProjectOperator {
     }
 }
 
+#[derive(Debug)]
+pub struct GenerateOperator {
+    generator: Box<dyn PhysicalGenerator>,
+    emtpy_row: GenericRow,
+    outer: bool,
+    next: Box<dyn ProcessOperator>,
+}
+
+impl GenerateOperator {
+    pub fn new(generator: Box<dyn PhysicalGenerator>, gene_output_len: usize, outer: bool, next: Box<dyn ProcessOperator>) -> Self {
+        let emtpy_row = GenericRow::new_with_size(gene_output_len);
+        Self {generator, emtpy_row, outer, next}
+    }
+}
+
+impl ProcessOperator for GenerateOperator {
+    fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> Result<u64> {
+        let mut count = 0;
+        let gene_rows = self.generator.generate(row);
+        if self.outer && gene_rows.is_empty() {
+            let joined = JoinedRow::new(row, &self.emtpy_row);
+            count += self.next.process(&joined, out)?;
+        } else {
+            for gene_row in gene_rows.iter() {
+                let joined = JoinedRow::new(row, gene_row);
+                count += self.next.process(&joined, out)?;
+            }
+        }
+        Ok(count)
+    }
+}
+
 pub fn get_process_operator_chain(plan: LogicalPlan) -> Result<Box<dyn ProcessOperator>> {
     get_process_operator_chain_inner(plan, Box::new(OutOperator))
 }
@@ -88,6 +120,16 @@ fn get_process_operator_chain_inner(plan: LogicalPlan, out_operator: Box<dyn Pro
                 let exprs = BoundReference::bind_references(project_list, input)?;
                 let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = exprs.iter().map(|expr| create_physical_expr(expr)).collect();
                 operator = Box::new(ProjectOperator::new(exprs?, operator));
+                child_plan = child.as_ref().clone();
+            },
+            LogicalPlan::Generate(Generate{generator, outer, generator_output, child, ..}) => {
+                let input = child.output();
+                let generator = match BoundReference::bind_reference(generator.clone(), input)? {
+                    Expr::Generator(g) => g.physical_generator()?,
+                    _ => return Err(format!("not support generator: {:?}", generator)),
+                };
+                let gene_output_len = generator_output.len();
+                operator = Box::new(GenerateOperator::new(generator, gene_output_len, outer, operator));
                 child_plan = child.as_ref().clone();
             },
             LogicalPlan::RelationPlaceholder(_) => {

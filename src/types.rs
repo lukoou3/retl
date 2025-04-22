@@ -258,6 +258,10 @@ impl Schema {
     pub fn to_attributes(&self) -> Vec<AttributeReference> {
         self.fields.iter().map(|field| AttributeReference::new(field.name.clone(), field.data_type.clone())).collect()
     }
+
+    pub fn to_struct_type(&self) -> DataType {
+        DataType::Struct(Fields(self.fields.clone()))
+    }
 }
 
 impl Display for Schema {

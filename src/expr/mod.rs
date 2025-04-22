@@ -11,6 +11,7 @@ mod complex_type_extractor;
 mod arithmetic;
 mod regexp;
 pub mod aggregate;
+mod generator;
 
 pub use expr::*;
 pub use expr_fn::*;
@@ -23,4 +24,5 @@ pub use null::*;
 pub use complex_type_extractor::*;
 pub use arithmetic::*;
 pub use regexp::*;
+pub use generator::*;
 

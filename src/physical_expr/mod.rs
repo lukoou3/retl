@@ -14,6 +14,7 @@ mod conditional;
 mod complex_type_extractor;
 mod arithmetic;
 mod projection;
+mod generator;
 
 pub use crate::physical_expr::physical_expr::*;
 pub use crate::physical_expr::attribute::*;
@@ -31,3 +32,4 @@ pub use crate::physical_expr::conditional::*;
 pub use crate::physical_expr::complex_type_extractor::*;
 pub use crate::physical_expr::arithmetic::*;
 pub use crate::physical_expr::projection::*;
+pub use crate::physical_expr::generator::*;
