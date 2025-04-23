@@ -94,6 +94,7 @@ fn builtin_function_registry() -> FunctionRegistry {
         "collect_list" => CollectList,
         // generator
         "explode" => Explode,
+        "path_file_unroll" => PathFileUnroll,
     );
     FunctionRegistry { expressions }
 }

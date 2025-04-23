@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use itertools::Itertools;
 use crate::Result;
-use crate::expr::{create_physical_expr, Expr};
+use crate::expr::{create_physical_expr, Expr, Literal};
 use crate::physical_expr::{self as phy, PhysicalGenerator};
 use crate::types::{AbstractDataType, DataType, Field, Schema};
 
@@ -146,7 +146,7 @@ impl Explode {
         };
         let fields = vec![Field::new("item", tp.clone())];
         let element_schema = Schema::new(fields);
-        let data_type = DataType::Array(Box::new(tp));
+        let data_type = DataType::Array(Box::new(element_schema.to_struct_type()));
         Self { child, element_schema, data_type }
     }
 }
@@ -185,3 +185,71 @@ impl Generator for Explode {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PathFileUnroll {
+    pub path: Box<Expr>,
+    pub file: Box<Expr>,
+    pub sep: Box<Expr>,
+    pub element_schema: Schema,
+    pub data_type: DataType,
+}
+
+impl PathFileUnroll {
+    pub fn new(path: Box<Expr>, file: Box<Expr>, sep: Box<Expr>) -> Self {
+        let fields = vec![Field::new("path", DataType::String), Field::new("file", DataType::String)];
+        let element_schema = Schema::new(fields);
+        let data_type = DataType::Array(Box::new(element_schema.to_struct_type()));
+        Self { path, file, sep, element_schema, data_type }
+    }
+}
+
+impl CreateGenerator for PathFileUnroll {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn Generator>> {
+        if args.len() != 3 {
+            return Err(format!("requires 3 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let path = iter.next().unwrap();
+        let file = iter.next().unwrap();
+        let sep = iter.next().unwrap();
+        match sep {
+            Expr::Literal(Literal{value, data_type}) if data_type == DataType::String => {
+                let sep = value.get_string();
+                if sep.chars().count() == 1 {
+                    Ok(Box::new(Self::new(Box::new(path), Box::new(file), Box::new(Expr::Literal(Literal{value, data_type})))))
+                } else {
+                    Err("The third argument should be a String literal and contains one char".to_string())
+                }
+            },
+            _ => Err("The third argument should be a String literal and contains one char".to_string())
+        }
+    }
+}
+
+impl Generator for PathFileUnroll {
+    fn name(&self) -> &str {
+        "path_file_unroll"
+    }
+
+    fn element_schema(&self) -> Schema {
+        self.element_schema.clone()
+    }
+
+    fn data_type(&self) -> &DataType {
+        &self.data_type
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.path, &self.file, &self.sep]
+    }
+
+    fn physical_generator(&self) -> Result<Box<dyn PhysicalGenerator>> {
+        let path = create_physical_expr(self.path.as_ref())?;
+        let file = create_physical_expr(self.file.as_ref())?;
+        if let Expr::Literal(Literal{value, ..}) = self.sep.as_ref() {
+            Ok(Box::new(phy::PathFileUnroll::new(path, file, value.get_string().chars().next().unwrap())))
+        } else {
+            Err("The third argument should be a String literal and contains one char".to_string())
+        }
+    }
+}

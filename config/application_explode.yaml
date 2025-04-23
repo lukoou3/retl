@@ -16,6 +16,18 @@ sources:
       { "name": "age", "type": "int", "min": 10, "max": 30 },
       { "name": "datas", "type": "int", "min": 0, "max": 10, "array": true, "array_len_max": 3, "null_rate": 0.3 }
     ]
+    
+  - type: faker
+    outputs: [ faker_protocol ]
+    schema: "id int, name string, age int, app string, protocol string"
+    rows_per_second: 1
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "name", "type": "string", "regex": "name_[a-z]{2}"  },
+      { "name": "age", "type": "int", "min": 10, "max": 30 },
+      { "name": "app", "type": "string", "regex": "[m-o]{1}" , "null_rate": 0.3},
+      { "name": "protocol", "type": "string", "regex": "[a-d]{1}\\.[e-h]{1}\\.[m-o]{1}" , "null_rate": 0.3}
+    ]
 
 transforms:
   - type: query
@@ -43,10 +55,24 @@ transforms:
       from tbl lateral view explode(datas) v as data
       where data < 5
 
+  - type: query
+    inputs: [ faker_protocol ]
+    outputs: [ query_protocol ]
+    sql: |
+      select 
+          id,
+          name,
+          age,
+          app,
+          protocol,
+          app_name,
+          protocol_stack_id
+      from tbl lateral view outer path_file_unroll(protocol, app, '.') v as protocol_stack_id, app_name
+
 sinks:
   - type: print
     name: print_sink
-    inputs: [ query2 ]
+    inputs: [ query_protocol ]
     print_mode: log_info
     encoding:
       codec: json
