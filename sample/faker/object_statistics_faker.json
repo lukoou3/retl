@@ -1,0 +1,20 @@
+[
+  { "name": "timestamp_ms", "type": "timestamp", "timestamp_type": "number", "unit": "millis" },
+  { "name": "__time", "type": "eval", "expression": "from_unixtime(timestamp_ms / 1000)" },
+  { "name": "object_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-[0-9]{4}8001122" },
+  { "name": "item_uuid", "type": "string", "regex": "b0cd3b0f-b5ac-499b-8bad-b0[0-9]{2}a2886f88" },
+  { "name": "vsys_id", "type": "int", "options": [1] },
+  { "name": "device_id", "type": "string", "options": [ "9800165603247024" ] },
+  { "name": "device_group", "type": "string", "options": [ "group-mock" ] },
+  { "name": "data_center", "type": "string", "options": [ "center-mock" ] },
+  { "name": "template_uuid", "type": "string", "options": [ "29434f0e-9605-46d5-9d8a-5a928ba16d3f" ] },
+  { "name": "chart_uuid", "type": "string", "options": [ "" ] },
+  { "name": "version", "type": "int", "options": [1] },
+  { "name": "object_type", "type": "string", "options": ["interval", "ATTR_SSL_ESNI", "port", "ip", "ATTR_DESTINATION_PORT", "ip_protocol", "keyword", "ATTR_TUNNEL_LEVEL", "fqdn", "application", "tunnel_level", "boolean", "ATTR_APP_ID", "ATTR_IP_PROTOCOL"] },
+  { "name": "in_bytes", "type": "long", "min": 10000, "max": 1000000 },
+  { "name": "out_bytes", "type": "long", "min": 10000, "max": 1000000 },
+  { "name": "bytes", "type": "eval", "expression": "in_bytes + out_bytes" },
+  { "name": "new_in_sessions", "type": "long", "min": 10, "max": 100 },
+  { "name": "new_out_sessions", "type": "long", "min": 10, "max": 100 },
+  { "name": "sessions", "type": "eval", "expression": "new_in_sessions + new_out_sessions" }
+]

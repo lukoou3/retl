@@ -1,0 +1,22 @@
+[
+  { "name": "timestamp_ms", "type": "timestamp", "timestamp_type": "number", "unit": "millis" },
+  { "name": "__time", "type": "eval", "expression": "from_unixtime(timestamp_ms / 1000)" },
+  { "name": "vsys_id", "type": "int", "options": [1] },
+  { "name": "device_id", "type": "string", "options": [ "9800165603247024" ] },
+  { "name": "device_group", "type": "string", "options": [ "group-mock" ] },
+  { "name": "data_center", "type": "string", "options": [ "center-mock" ] },
+  { "name": "name", "type": "string",  "options": ["traffic_general_stat"] },
+  { "name": "sessions", "type": "long", "min": 1, "max": 10},
+  { "name": "active_sessions", "type": "long", "min": 0, "max": 5},
+  { "name": "closed_sessions", "type": "long", "min": 0, "max": 5},
+  { "name": "in_bytes", "type": "long", "min": 10000, "max": 1000000},
+  { "name": "out_bytes", "type": "long", "min": 10000, "max": 1000000},
+  { "name": "in_pkts", "type": "long", "min": 100, "max": 10000},
+  { "name": "out_pkts", "type": "long", "min": 100, "max": 10000},
+  { "name": "asymmetric_c2s_flows", "type": "long", "min": 10, "max": 10000, "null_rate": 0.5},
+  { "name": "asymmetric_s2c_flows", "type": "long", "min": 10, "max": 10000, "null_rate": 0.5},
+  { "name": "tcp_syn_pkts", "type": "long", "min": 10, "max": 10000, "null_rate": 0.5},
+  { "name": "tcp_ack_pkts", "type": "long", "min": 10, "max": 10000, "null_rate": 0.5},
+  { "name": "tcp_fin_pkts", "type": "long", "min": 10, "max": 10000, "null_rate": 0.5},
+  { "name": "tcp_rst_pkts", "type": "long", "min": 10, "max": 10000, "null_rate": 0.5}
+]

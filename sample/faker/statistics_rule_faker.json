@@ -1,0 +1,292 @@
+[
+  { "name": "name", "type": "string", "options": [ "statistics_rule" ] },
+  { "name": "timestamp_ms", "type": "timestamp", "timestamp_type": "number", "unit": "millis" },
+  { "name": "__time", "type": "eval", "expression": "from_unixtime(timestamp_ms / 1000)" },
+  { "name": "device_id", "type": "string", "options": ["9800165603247024", "9800165603191151"] },
+  { "name": "device_group", "type": "string", "options": [ "group-mock" ] },
+  { "name": "data_center", "type": "string", "options": [ "center-mock" ] },
+  { "name": "vsys_id", "type": "int", "options": [1] },
+  { "name": "template_uuid", "type": "string", "options": [ "29434f0e-9605-46d5-9d8a-5a928ba16d3f" ] },
+  { "name": "chart_uuid", "type": "string", "regex": "b0cd3b0f-b5ac-499b-8bad-b092a2886f88" },
+  { "name": "version", "type": "int", "options": [1] },
+  { 
+    "name": "union", "type": "union", "random": true,
+    "union_fields": [
+      { 
+        "weight": 20, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-00[0-1]{1}[0-9]{1}8001122" },
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 20, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-00[2-3]{1}[0-9]{1}8001122" },
+          { "name": "unique_count_1", "type": "hll", "item_count": 10000000, "batch_count": 1000 },
+          { "name": "unique_count_2", "type": "hll", "item_count": 10000000, "batch_count": 1000 }
+        ]
+      },
+      { 
+        "weight": 20, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-00[4-5]{1}[0-9]{1}8001122" },
+          { "name": "distribution_1", "type": "tdigest", "max": 100000, "batch_count": 500 },
+          { "name": "distribution_2", "type": "tdigest", "max": 100000, "batch_count": 500 }
+        ]
+      },
+      { 
+        "weight": 40, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-00[6-9]{1}[0-9]{1}8001122" },
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 },
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 },
+          { "name": "unique_count_1", "type": "hll", "item_count": 10000000, "batch_count": 1000 },
+          { "name": "unique_count_2", "type": "hll", "item_count": 10000000, "batch_count": 1000 },
+          { "name": "distribution_1", "type": "tdigest", "max": 100000, "batch_count": 500 },
+          { "name": "distribution_2", "type": "tdigest", "max": 100000, "batch_count": 500 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-010[0-9]{1}8001122" },
+          { "name": "source_ip", "type": "ipv4", "start": "192.168.10.0", "end": "192.168.10.255"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 150, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-011[0-2]{1}8001122" },
+          { "name": "destination_ip", "type": "ipv4", "start": "192.156.10.0", "end": "192.156.10.255"},
+          { "name": "unique_count_1", "type": "hll", "item_count": 10000000, "batch_count": 1000 },
+          { "name": "unique_count_2", "type": "hll", "item_count": 10000000, "batch_count": 1000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-012[0-1]{1}8001122" },
+          { "name": "source_country", "type": "string", "regex": "source_country_[a-z]{1}"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 150, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-013[0-9]{1}8001122" },
+          { "name": "source_ip", "type": "ipv4", "start": "192.168.10.0", "end": "192.168.10.255"},
+          { "name": "distribution_3", "type": "tdigest", "max": 100000, "batch_count": 500 },
+          { "name": "distribution_4", "type": "tdigest", "max": 100000, "batch_count": 500 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-014[0-9]{1}8001122" },
+          { "name": "destination_country", "type": "string", "regex": "destination_country_[a-z]{1}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-015[0-9]{1}8001122" },
+          { "name": "source_asn", "type": "long", "min": 10000, "max": 10500},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-016[0-9]{1}8001122" },
+          { "name": "destination_asn", "type": "long", "min": 10000, "max": 10500},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-017[0-9]{1}8001122" },
+          { "name": "destination_fqdn", "type": "string", "regex": "destination_fqdn_[a-p]{1,2}"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-018[0-9]{1}8001122" },
+          { "name": "destination_registered_domain", "type": "string", "regex": "destination_registered_domain_[a-p]{1,2}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-019[5-9]{1}8001122" },
+          { "name": "app", "type": "string", "regex": "app_[a-p]{1,2}"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-020[0-9]{1}8001122" },
+          { "name": "app_category", "type": "string", "regex": "app_category_[a-p]{1,2}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-021[0-9]{1}8001122" },
+          { "name": "c2s_ttl", "type": "long", "min": 10000, "max": 10500},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-022[0-9]{1}8001122" },
+          { "name": "s2c_ttl", "type": "long", "min": 10000, "max": 10500},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-023[0-9]{1}8001122" },
+          { "name": "c2s_link_id", "type": "long", "min": 10000, "max": 10200},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 400, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-024[0-9]{1}8001122" },
+          { "name": "s2c_link_id", "type": "long", "min": 10000, "max": 10200},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-025[0-9]{1}8001122" },
+          { "name": "source_port", "type": "long", "min": 10000, "max": 10200},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-026[0-9]{1}8001122" },
+          { "name": "destination_port", "type": "long", "min": 10000, "max": 10200},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-027[0-9]{1}8001122" },
+          { "name": "tls_ja3_hash", "type": "string", "regex": "tls_ja3_hash_[a-z]{1}"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-028[0-9]{1}8001122" },
+          { "name": "http_host", "type": "string", "regex": "http_host_[a-p]{1,2}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-029[0-9]{1}8001122" },
+          { "name": "tls_sni", "type": "string", "regex": "tls_sni_[a-p]{1,2}"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-030[0-9]{1}8001122" },
+          { "name": "subscriber_id", "type": "string", "regex": "subscriber_id_[a-p]{1,2}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-031[0-9]{1}8001122" },
+          { "name": "decoded_as", "type": "string", "regex": "decoded_as_[a-p]{1,2}"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-032[0-9]{1}8001122" },
+          { "name": "sled_ip", "type": "string", "regex": "sled_ip_[a-p]{1,2}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-033[0-9]{1}8001122" },
+          { "name": "flags", "type": "long", "min": 10000, "max": 10200},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 200, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-034[0-9]{1}8001122" },
+          { "name": "direction", "type": "string", "regex": "direction_[a-p]{1,2}"},
+          { "name": "count_3", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_4", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 500, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-019[0-1]{1}8001122" },
+          { "name": "source_ip", "type": "ipv4", "start": "192.168.251.0", "end": "192.168.255.255"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 500, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-019[2-3]{1}8001122" },
+          { "name": "source_ip", "type": "ipv4", "start": "192.168.251.0", "end": "192.168.255.255"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 500, "fields":[
+          { "name": "rule_uuid", "type": "string", "options": ["5aadc328-8d5e-11ec-8a00-01948001122"] },
+          { "name": "destination_ip", "type": "ipv4", "start": "192.168.251.0", "end": "192.168.255.255"},
+          { "name": "count_1", "type": "long", "min": 1000, "max": 2000000 },
+          { "name": "count_2", "type": "long", "min": 100, "max": 100000 }
+        ]
+      },
+      { 
+        "weight": 100, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-100[0-1]{1}8001122" },
+          { "name": "app", "type": "string", "regex": "app_[a-z]{1,2}"},
+          { "name": "unique_count_3", "type": "hll", "item_count": 10000000, "batch_count": 1000 },
+          { "name": "unique_count_4", "type": "hll", "item_count": 10000000, "batch_count": 1000 }
+        ]
+      },
+      { 
+        "weight": 100, "fields":[
+          { "name": "rule_uuid", "type": "string", "regex": "5aadc328-8d5e-11ec-8a00-101[0-1]{1}8001122" },
+          { "name": "destination_registered_domain", "type": "string", "regex": "destination_registered_domain_[a-z]{1,2}"},
+          { "name": "distribution_3", "type": "tdigest", "max": 100000, "batch_count": 500 },
+          { "name": "distribution_4", "type": "tdigest", "max": 100000, "batch_count": 500 }
+        ]
+      }
+    ] 
+   
+  }
+]
