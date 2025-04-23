@@ -8,6 +8,7 @@ pub mod batch;
 pub mod clickhouse;
 mod mysql;
 mod postgres;
+mod inline;
 
 pub use source::*;
 pub use sink::*;

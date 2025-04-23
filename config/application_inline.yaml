@@ -1,0 +1,33 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: inline
+    outputs: [ inline_source ]
+    schema: "id bigint, name string, score int, money int"
+    data: |
+      [
+        {"id": 1, "name": "Alice", "score": 100, "money": 1000},
+        {"id": 2, "name": "Bob", "score": 200, "money": 2000},
+        {"id": 3, "name": "Charlie", "score": 300, "money": 3000}
+      ]
+    decoding:
+      codec: json
+  - type: inline
+    outputs: [ inline_source2 ]
+    schema: "id bigint, name string, score int, money int"
+    data: '{"id": 1, "name": "Alice", "score": 100, "money": 10000}'
+    decoding:
+      codec: json
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ inline_source2 ]
+    print_mode: stdout
+    encoding:
+      codec: json
+
+active_sinks: [print_sink]
