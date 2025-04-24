@@ -38,16 +38,24 @@ base64 = "0.22"
 lz4_flex = "0.11"
 cityhash-rs = "1.0.1"
 anyhow = "1.0"
-mysql = "26.0"
-postgres = { version = "0.19", features = ["with-chrono-0_4"] }
+mysql = { version = "26.0", optional = true }
+postgres = { version = "0.19", features = ["with-chrono-0_4"], optional = true }
 murmur3 = "0.5"
 hex = "0.4"
 #hyperloglog-rs = "0.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-rdkafka = { version = "0.37.0", features = ["cmake-build"] }
+rdkafka = { version = "0.37.0", features = ["cmake-build"], optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
-rdkafka = { version = "0.37.0", features = ["cmake-build", "sasl"] }
+rdkafka = { version = "0.37.0", features = ["cmake-build", "sasl"], optional = true }
+
+[features]
+default = ["kafka", "starrocks", "clickhouse"]
+kafka = ["dep:rdkafka"]
+starrocks = []
+clickhouse = []
+mysql = ["dep:mysql"]
+postgres = ["dep:postgres"]
 
 [build]
 rustflags = ["-A", "warnings"]
