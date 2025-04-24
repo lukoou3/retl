@@ -12,7 +12,7 @@ pub trait ProcessOperator: Debug {
 }
 
 #[derive(Debug)]
-struct OutOperator;
+pub struct OutOperator;
 
 impl ProcessOperator for OutOperator {
     fn process(&mut self, row: &dyn Row, out: &mut dyn Collector) -> Result<u64> {

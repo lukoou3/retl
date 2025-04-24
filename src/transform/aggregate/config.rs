@@ -4,7 +4,7 @@ use crate::config::{TaskContext, TransformConfig, TransformProvider};
 use crate::data::{Row};
 use crate::expr::{AttributeReference, Expr};
 use crate::logical_plan::LogicalPlan;
-use crate::transform::{TaskAggregateTransform, Transform};
+use crate::transform::{TaskAggregateTransform, Transform, OutOperator, ProcessOperator, get_process_operator_chain};
 use crate::types::Schema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,10 +31,12 @@ impl TransformConfig for TaskAggregateTransformConfig {
         if let LogicalPlan::Aggregate(agg) = &plan {
             let schema = Schema::from_attributes(plan.output());
             let (group_exprs, agg_exprs, result_exprs, child) = agg.extract_exprs();
+            let child = child.as_ref().clone();
             let input_attrs = child.output();
             Ok(Box::new(TaskAggregateTransformProvider {
                 schema,
                 input_attrs,
+                child,
                 group_exprs,
                 agg_exprs,
                 result_exprs,
@@ -51,6 +53,7 @@ impl TransformConfig for TaskAggregateTransformConfig {
 pub struct TaskAggregateTransformProvider {
     schema: Schema,
     input_attrs: Vec<AttributeReference>,
+    child: LogicalPlan,
     group_exprs: Vec<Expr>,
     agg_exprs: Vec<Expr>,
     result_exprs: Vec<Expr>,
@@ -60,11 +63,17 @@ pub struct TaskAggregateTransformProvider {
 
 impl TransformProvider for TaskAggregateTransformProvider {
     fn create_transform(&self, task_context: TaskContext) -> Result<Box<dyn Transform>> {
+        let (no_pre, pre_process) = if let LogicalPlan::RelationPlaceholder(_) = &self.child {
+            (true, Box::new(OutOperator) as Box<dyn ProcessOperator>)
+        } else {
+            let process_operator = get_process_operator_chain(self.child.clone())?;
+            (false, process_operator)
+        };
         let input_attrs = self.input_attrs.clone();
         let group_exprs = self.group_exprs.clone();
         let agg_exprs = self.agg_exprs.clone();
         let result_exprs = self.result_exprs.clone();
-        let transform= TaskAggregateTransform::new(task_context, self.schema.clone(), agg_exprs, group_exprs, result_exprs, input_attrs, self.max_rows, self.interval_ms)?;
+        let transform= TaskAggregateTransform::new(task_context, self.schema.clone(), no_pre, pre_process, agg_exprs, group_exprs, result_exprs, input_attrs, self.max_rows, self.interval_ms)?;
         Ok(Box::new(transform))
     }
 }

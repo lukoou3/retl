@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::BuildHasherDefault;
+use std::mem;
 use std::sync::Arc;
 use ahash::{AHasher};
 use crate::config::TaskContext;
@@ -11,12 +12,36 @@ use crate::execution::{Collector, TimeService};
 use crate::expr::{AttributeReference, BoundReference, Expr};
 use crate::expr::aggregate::PhysicalTypedAggFunction;
 use crate::physical_expr::{create_physical_expr, MutableProjection, PhysicalExpr, Projection};
-use crate::transform::Transform;
+use crate::transform::{Transform, ProcessOperator, OutOperator};
 use crate::types::Schema;
+
+struct PreProcessCollector<'a> {
+    transform: &'a mut TaskAggregateTransform,
+    out: &'a mut dyn Collector,
+    time_service: &'a mut TimeService,
+}
+
+impl<'a> Debug for PreProcessCollector<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PreProcessCollector")
+    }
+}
+
+impl<'a> Collector for PreProcessCollector<'a> {
+    fn collect(&mut self, row: &dyn Row) -> Result<()> {
+        self.transform.post_process(row, self.out, self.time_service)
+    }
+
+    fn check_timer(&mut self, time: u64) -> Result<()> {
+        Ok(())
+    }
+}
 
 pub struct TaskAggregateTransform {
     task_context: TaskContext,
     schema: Schema,
+    no_pre: bool,
+    pre_process: Box<dyn ProcessOperator>,
     agg_func: RowAggregateFunction,
     rst_func: RowResultFunction,
     key_selector: RowKeySelector,
@@ -27,7 +52,7 @@ pub struct TaskAggregateTransform {
 }
 
 impl TaskAggregateTransform {
-    pub fn new(task_context: TaskContext, schema: Schema, agg_exprs: Vec<Expr>, group_exprs: Vec<Expr>,  result_exprs: Vec<Expr>,
+    pub fn new(task_context: TaskContext, schema: Schema, no_pre: bool, pre_process: Box<dyn ProcessOperator>, agg_exprs: Vec<Expr>, group_exprs: Vec<Expr>,  result_exprs: Vec<Expr>,
                input_attrs: Vec<AttributeReference>, max_rows: usize, interval_ms: u64) -> Result<Self> {
         let mut agg_attrs = Vec::with_capacity(agg_exprs.len());
         let mut final_agg_attrs = Vec::with_capacity(agg_exprs.len());
@@ -59,7 +84,7 @@ impl TaskAggregateTransform {
         let rst_func = RowResultFunction::new(result_exprs, group_attrs.into_iter().chain(final_agg_attrs.into_iter()).collect())?;
 
         let trigger_time_ms = current_timestamp_millis() / interval_ms * interval_ms + interval_ms;
-        Ok(Self { task_context, schema, agg_func, rst_func, key_selector, buffers: HashMap::default(), max_rows, interval_ms,trigger_time_ms })
+        Ok(Self { task_context, schema, no_pre, pre_process, agg_func, rst_func, key_selector, buffers: HashMap::default(), max_rows, interval_ms,trigger_time_ms })
     }
 }
 
@@ -75,6 +100,26 @@ impl Debug for TaskAggregateTransform {
 }
 
 impl TaskAggregateTransform {
+    fn post_process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> Result<()> {
+        let key = self.key_selector.get_key(row);
+        // 也可以这样实现
+        let buffer = self.buffers.entry(key).or_insert_with(|| self.agg_func.create_aggregation());
+        self.agg_func.update(buffer, row);
+        /* if let Some(buffer) = self.buffers.get_mut(&key) {
+            self.agg_func.update(buffer, row);
+        } else {
+            let mut buffer = self.agg_func.create_aggregation();
+            self.agg_func.update(&mut buffer, row);
+            self.buffers.insert(key, buffer);
+        }*/
+        if self.buffers.len() >= self.max_rows {
+            self.flush(out)
+        } else {
+            time_service.register_timer(self.trigger_time_ms);
+            Ok(())
+        }
+    }
+    
     fn flush(&mut self, out: &mut dyn Collector) -> Result<()> {
         for (key, buffer) in &mut self.buffers {
             let value = self.agg_func.eval(buffer);
@@ -93,21 +138,14 @@ impl Transform for TaskAggregateTransform {
     }
 
     fn process(&mut self, row: &dyn Row, out: &mut dyn Collector, time_service: &mut TimeService) -> Result<()> {
-        let key = self.key_selector.get_key(row);
-        // 也可以这样实现
-        let buffer = self.buffers.entry(key).or_insert_with(|| self.agg_func.create_aggregation());
-        self.agg_func.update(buffer, row);
-        /* if let Some(buffer) = self.buffers.get_mut(&key) {
-            self.agg_func.update(buffer, row);
+        if self.no_pre {
+            self.post_process(row, out, time_service)
         } else {
-            let mut buffer = self.agg_func.create_aggregation();
-            self.agg_func.update(&mut buffer, row);
-            self.buffers.insert(key, buffer);
-        }*/
-        if self.buffers.len() >= self.max_rows {
-            self.flush(out)
-        } else {
-            time_service.register_timer(self.trigger_time_ms);
+            let mut pre_process = mem::replace(&mut self.pre_process, Box::new(OutOperator));
+            let mut pre_out = PreProcessCollector{transform: self, out: out,time_service:time_service,};
+            let rst = pre_process.process(row, &mut pre_out);
+            self.pre_process = pre_process;
+            rst?;
             Ok(())
         }
     }
