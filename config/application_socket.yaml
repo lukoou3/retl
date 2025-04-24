@@ -1,0 +1,26 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  # {"id":"1","name":"bb","age":1300}
+  # {"id":"1", "name":"aa", "age":30}
+  # 需要先启动`nc -lk 9999`，用来发送数据，windows使用`nc -l -p 9999`命令
+  - type: socket
+    outputs: [ socket_source ]
+    schema: "id bigint, name string, age int"
+    hostname: localhost
+    port: 9999
+    decoding:
+      codec: json
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ socket_source ]
+    print_mode: stdout
+    encoding:
+      codec: json
+
+active_sinks: [ print_sink ]

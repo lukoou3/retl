@@ -14,6 +14,7 @@ mod mysql;
 #[cfg(feature = "postgres")]
 mod postgres;
 mod inline;
+mod socket;
 
 pub use source::*;
 pub use sink::*;
