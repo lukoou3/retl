@@ -83,7 +83,7 @@ impl TaskAggregateTransform {
         let key_selector = RowKeySelector::new(exprs?);
         let rst_func = RowResultFunction::new(result_exprs, group_attrs.into_iter().chain(final_agg_attrs.into_iter()).collect())?;
 
-        let trigger_time_ms = current_timestamp_millis() / interval_ms * interval_ms + interval_ms;
+        let trigger_time_ms = 0;
         Ok(Self { task_context, schema, no_pre, pre_process, agg_func, rst_func, key_selector, buffers: HashMap::default(), max_rows, interval_ms,trigger_time_ms })
     }
 }
@@ -115,7 +115,10 @@ impl TaskAggregateTransform {
         if self.buffers.len() >= self.max_rows {
             self.flush(out)
         } else {
-            time_service.register_timer(self.trigger_time_ms);
+            if self.trigger_time_ms == 0 {
+                self.trigger_time_ms = current_timestamp_millis() / self.interval_ms * self.interval_ms + self.interval_ms;
+                time_service.register_timer(self.trigger_time_ms);
+            }
             Ok(())
         }
     }
@@ -151,7 +154,7 @@ impl Transform for TaskAggregateTransform {
     }
 
     fn on_time(&mut self, time: u64, out: &mut dyn Collector) -> Result<()> {
-        self.trigger_time_ms = current_timestamp_millis() / self.interval_ms * self.interval_ms + self.interval_ms;
+        self.trigger_time_ms = 0;
         self.flush(out)
     }
 }
