@@ -8,9 +8,12 @@ pub use transform::*;
 pub use sink::*;
 pub use execution::*;
 
+use std::fs;
 use std::error::Error;
 use serde::{Deserialize, Serialize};
 use config::{Config, Value as ConfigValue};
+use regex::Regex;
+use crate::encrypt::aes_decrypt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -90,9 +93,32 @@ impl config::Source for WrapConfigValue {
 }
 
 pub fn parse_config(config_path: &str) -> Result<AppConfig, Box<dyn Error>> {
-    let config = Config::builder().add_source(config::File::from(std::path::Path::new(config_path)))
+    let content = fs::read_to_string(config_path).map_err(|e| format!("Failed to read config file: {}", e))?;
+    let key = b"fd6b639dbcff0c2a";
+    let iv = b"77b07a672d57d64c";
+    let decrypted_content = decrypt_config_content(&content, key, iv).map_err(|e| format!("Failed to decrypt config: {}", e))?;
+    let config = Config::builder().add_source(config::File::from_str(&decrypted_content, config::FileFormat::Yaml))
         .build()?.try_deserialize()?;
     Ok(config)
+}
+
+fn decrypt_config_content(content: &str, key: &[u8; 16], iv: &[u8; 16]) -> Result<String, String> {
+    let re = Regex::new(r"enc@\(([^)]+)\)").map_err(|e| format!("Regex error: {}", e))?;
+    let mut result = String::new();
+
+    for line in content.lines() {
+        let mut new_line = line.to_string();
+        for cap in re.captures_iter(line) {
+            let full_match = cap.get(0).unwrap().as_str();
+            let ciphertext = cap.get(1).unwrap().as_str();
+            let plaintext = aes_decrypt(ciphertext, key, iv)?;
+            new_line = new_line.replace(full_match, &plaintext);
+        }
+        result.push_str(&new_line);
+        result.push('\n');
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

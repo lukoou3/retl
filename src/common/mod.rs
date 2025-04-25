@@ -1,6 +1,7 @@
 pub mod date_utils;
 pub mod datetime_utils;
 pub mod buffer_pool;
+pub mod encrypt;
 pub mod rate_stat;
 pub mod buffer_block;
 
