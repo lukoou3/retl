@@ -157,3 +157,50 @@ impl ScalarFunction for ToUnixTimestamp {
         Ok(Arc::new(phy::ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct TruncTimestamp {
+    pub format: Box<Expr>,
+    pub timestamp: Box<Expr>,
+}
+
+impl TruncTimestamp {
+    pub fn new(format: Box<Expr>, timestamp: Box<Expr>) -> Self {
+        Self { format, timestamp }
+    }
+}
+
+impl CreateScalarFunction for TruncTimestamp {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 2 {
+            return Err(format!("requires  2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let format = iter.next().unwrap();
+        let timestamp = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(format), Box::new(timestamp))))
+    }
+}
+
+impl ScalarFunction for TruncTimestamp {
+    fn name(&self) -> &str {
+        "TruncTimestamp"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::timestamp_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.format, &self.timestamp]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::string_type(), AbstractDataType::timestamp_type()])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{format, timestamp} = self;
+        Ok(Arc::new(phy::TruncTimestamp::new(create_physical_expr(format)?, create_physical_expr(timestamp)?)))
+    }
+}

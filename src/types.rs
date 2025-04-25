@@ -76,6 +76,10 @@ impl AbstractDataType {
     pub fn double_type() -> AbstractDataType {
         AbstractDataType::Type(DataType::Double)
     }
+    
+    pub fn timestamp_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Timestamp)
+    }
 
     pub fn string_array_type() -> AbstractDataType {
         AbstractDataType::Type(DataType::string_array_type().clone())

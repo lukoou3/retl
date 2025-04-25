@@ -38,7 +38,11 @@ transforms:
           regexp_replace(str, '_(\d+)', '|0') `regexp_replace(str, '_(\d+)', '|0')`,
           regexp_extract(str, '_(\d+)', 1) `regexp_extract(str, '_(\d+)', 1)`,
           now() `now`,
-          from_unixtime(1) `from_unixtime(1)`
+          from_unixtime(1) `from_unixtime(1)`,
+          date_trunc('second', '2015-03-05 09:32:05.359') `date_trunc('second', '2015-03-05 09:32:05.359')`,
+          date_trunc('minute', '2015-03-05 09:32:05.359') `date_trunc('minute', '2015-03-05 09:32:05.359')`,
+          date_trunc('hour', '2015-03-05 09:32:05.359') `date_trunc('hour', '2015-03-05 09:32:05.359')`,
+          date_trunc('day', '2015-03-05 09:32:05.359') `date_trunc('day', '2015-03-05 09:32:05.359')`
       from tbl
 
 sinks:
