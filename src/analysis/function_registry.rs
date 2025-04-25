@@ -83,6 +83,7 @@ fn builtin_function_registry() -> FunctionRegistry {
         "unix_timestamp" => UnixTimestamp,
         "to_unix_timestamp" => ToUnixTimestamp,
         "date_trunc" => TruncTimestamp,
+        "date_floor" | "time_floor" => TimestampFloor,
         // aggregate functions
         "sum" => Sum,
         "count" => Count,

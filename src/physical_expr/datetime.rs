@@ -227,3 +227,50 @@ impl PhysicalExpr for TruncTimestamp {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct TimestampFloor {
+    timestamp: Arc<dyn PhysicalExpr>,
+    interval: i64,
+}
+
+impl TimestampFloor {
+    pub fn new(timestamp: Arc<dyn PhysicalExpr>, interval: i64) -> TimestampFloor {
+        TimestampFloor { timestamp, interval }
+    }
+}
+
+impl PartialEq for TimestampFloor {
+    fn eq(&self, other: &TimestampFloor) -> bool {
+        self.timestamp.eq(&other.timestamp) && self.interval.eq(&other.interval)
+    }
+}
+
+impl Eq for TimestampFloor {}
+
+impl Hash for TimestampFloor {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.timestamp.hash(state);
+        self.interval.hash(state);
+    }
+}
+
+impl PhysicalExpr for TimestampFloor {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::Timestamp
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let timestamp = self.timestamp.eval(input);
+        if timestamp.is_null() {
+            return Value::Null;
+        }
+        let micros = timestamp.get_long();
+        let interval = self.interval;
+        Value::Long(micros / interval * interval)
+    }
+}

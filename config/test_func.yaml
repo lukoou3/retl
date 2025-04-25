@@ -42,7 +42,12 @@ transforms:
           date_trunc('second', '2015-03-05 09:32:05.359') `date_trunc('second', '2015-03-05 09:32:05.359')`,
           date_trunc('minute', '2015-03-05 09:32:05.359') `date_trunc('minute', '2015-03-05 09:32:05.359')`,
           date_trunc('hour', '2015-03-05 09:32:05.359') `date_trunc('hour', '2015-03-05 09:32:05.359')`,
-          date_trunc('day', '2015-03-05 09:32:05.359') `date_trunc('day', '2015-03-05 09:32:05.359')`
+          date_trunc('day', '2015-03-05 09:32:05.359') `date_trunc('day', '2015-03-05 09:32:05.359')`,
+          date_floor('2015-03-05 09:32:05.359', '5 second') `date_floor('2015-03-05 09:32:05.359', '5 second')`,
+          date_floor('2015-03-05 09:32:05.359', '10 second') `date_floor('2015-03-05 09:32:05.359', '10 second')`,
+          date_floor('2015-03-05 09:32:05.359', '1 minute') `date_floor('2015-03-05 09:32:05.359', '1 minute')`,
+          date_floor('2015-03-05 09:32:05.359', '5 minute') `date_floor('2015-03-05 09:32:05.359', '5 minute')`,
+          date_floor('2015-03-05 09:32:05.359', '1 hour') `date_floor('2015-03-05 09:32:05.359', '1 hour')`
       from tbl
 
 sinks:

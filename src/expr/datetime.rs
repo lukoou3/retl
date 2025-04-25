@@ -1,7 +1,8 @@
 use std::sync::Arc;
+use regex::Regex;
 use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::Result;
-use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
+use crate::expr::{create_physical_expr, Literal, CreateScalarFunction, Expr, ScalarFunction};
 use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
 
@@ -202,5 +203,76 @@ impl ScalarFunction for TruncTimestamp {
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
         let Self{format, timestamp} = self;
         Ok(Arc::new(phy::TruncTimestamp::new(create_physical_expr(format)?, create_physical_expr(timestamp)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TimestampFloor {
+    pub timestamp: Box<Expr>,
+    pub interval: Box<Expr>,
+}
+
+impl TimestampFloor {
+    pub fn new(timestamp: Box<Expr>, interval: Box<Expr>) -> Self {
+        Self { timestamp, interval }
+    }
+    
+    fn parse_interval(interval: &str) -> Result<i64> {
+        let re = Regex::new(r"^\s*(\d+)\s*(\w+)\s*$").map_err(|e| e.to_string())?;
+        let caps = re.captures(interval).ok_or("Invalid interval format")?;
+        
+        let count: i64 = caps[1].parse().map_err(|e| format!("Invalid number: {}", e))?;
+        let unit_str = caps[2].to_lowercase();
+
+        let interval = match unit_str.as_str() {
+            "second" | "seconds" => count * 1_000_000,
+            "minute" | "minutes" => count * 60_000_000,
+            "hour" | "hours" => count * 3_600_000_000,
+            "day" | "days" => count * 86_400_000_000,
+            _ => return Err(format!("Unsupported time unit: {}", unit_str)),
+        };
+        Ok(interval)
+    }
+}
+
+impl CreateScalarFunction for TimestampFloor {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 2 {
+            return Err(format!("requires  2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let timestamp = iter.next().unwrap();
+        let interval = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(timestamp), Box::new(interval))))
+    }
+}
+
+impl ScalarFunction for TimestampFloor {
+    fn name(&self) -> &str {
+        "TimestampFloor"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::timestamp_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.timestamp, &self.interval]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::timestamp_type(), AbstractDataType::string_type()])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        let Self{timestamp, interval} = self;
+        match interval.as_ref() {
+            Expr::Literal(Literal{value, data_type}) if data_type == DataType::string_type() => {
+                let interval = TimestampFloor::parse_interval(value.get_string())?;
+                Ok(Arc::new(phy::TimestampFloor::new(create_physical_expr(timestamp)?, interval)))
+            },
+            _ => Err("interval argument should be a string literal.".to_string())
+        }
+        
     }
 }
