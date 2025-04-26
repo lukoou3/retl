@@ -258,8 +258,9 @@ impl Value {
             Value::Null => "null".to_string(),
             v => match data_type {
                 DataType::Int | DataType::Long | DataType::Float | DataType::Double
-                 | DataType::Boolean | DataType::String | DataType::Binary | DataType::Null =>
+                 | DataType::Boolean | DataType::Binary | DataType::Null =>
                     v.to_string(),
+                DataType::String => v.get_string().to_string(),
                 DataType::Date => date_utils::num_days_to_date(v.get_int()).to_string(),
                 DataType::Timestamp => datetime_utils::from_timestamp_micros_utc(v.get_long()).format(datetime_utils::NORM_DATETIME_FMT).to_string(),
                 DataType::Array(tp) => {

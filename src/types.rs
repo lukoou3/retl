@@ -76,6 +76,10 @@ impl AbstractDataType {
     pub fn double_type() -> AbstractDataType {
         AbstractDataType::Type(DataType::Double)
     }
+
+    pub fn boolean_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Boolean)
+    }
     
     pub fn timestamp_type() -> AbstractDataType {
         AbstractDataType::Type(DataType::Timestamp)

@@ -534,6 +534,14 @@ fn parse_constant(pair: Pair<Rule>) -> Result<Expr> {
                 _ => Err(format!("Unexpected parse_constant {:?}", v))
             }
         },
+        Rule::booleanValue => {
+            let s = pair.as_str().trim().to_lowercase();
+            match s.as_str() {
+                "true" => Ok(Expr::Literal(Literal::new(Value::Boolean(true), DataType::Boolean))),
+                "false" => Ok(Expr::Literal(Literal::new(Value::Boolean(false), DataType::Boolean))),
+                _ => Err(format!("Unexpected parse_constant {:?}", p))
+            }
+        },
         Rule::STRING => {
             let s = pair.as_str();
             let s = &s[1.. s.len() - 1];

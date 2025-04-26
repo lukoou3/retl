@@ -27,7 +27,7 @@ impl CreateScalarFunction for UnaryMinus {
 impl ScalarFunction for UnaryMinus {
 
     fn name(&self) -> &str {
-        "UnaryMinus"
+        "negative"
     }
 
     fn data_type(&self) -> &DataType {
@@ -44,6 +44,10 @@ impl ScalarFunction for UnaryMinus {
 
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
         Ok(Arc::new(phy::UnaryMinus::new(create_physical_expr(&self.child)?)))
+    }
+
+    fn sql(&self) -> String {
+        format!("(- {})", self.child.sql())
     }
 }
 

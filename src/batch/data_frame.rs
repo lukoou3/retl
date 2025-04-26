@@ -3,6 +3,7 @@ use std::io::Write;
 use std::sync::Arc;
 use prettytable::{Table, Row as TRow, Cell};
 use crate::data::{BaseRow, GenericRow, Row};
+use crate::datetime_utils::current_timestamp_millis;
 use crate::physical_expr::PhysicalExpr;
 use crate::types::Schema;
 
@@ -14,6 +15,7 @@ pub trait DataFrame {
     }
 
     fn show(&mut self) {
+        let start = current_timestamp_millis();
         let mut table = Table::new();
         let types: Vec<_> = self.schema().fields.clone().into_iter().enumerate().map(|(i, field)| (i, field.data_type)).collect();
         let mut rows = 0;
@@ -28,9 +30,16 @@ pub trait DataFrame {
             }
             rows += 1;
         }
+        let seconds = (current_timestamp_millis() - start) as f64 / 1000.0;
         //table.printstd();
         print!("{}", table.to_string());
-        println!("\n{} row(s) returned", rows);
+        if rows == 0{
+            println!("empty set ({:.2} sec)", seconds);
+        } else if rows == 1 {
+            println!("1 row in set ({:.2} sec)", seconds);
+        } else {
+            println!("{} rows in set ({:.2} sec)", rows, seconds);
+        }
     }
 }
 

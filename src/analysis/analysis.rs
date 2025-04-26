@@ -55,11 +55,14 @@ impl Analyzer {
                 },
                 p => {
                     p.map_expressions(|expr| {
-                        expr.transform_up(|e| {
-                            match e.check_input_data_types() {
+                        expr.transform_up(|e| match e {
+                            Expr::UnresolvedAttribute(name) => {
+                                Err(format!("cannot resolve {} column", name))
+                            },
+                            e => match e.check_input_data_types() {
                                 Ok(_) => Ok(Transformed::no(e)),
                                 Err(s) => Err(format!("cannot resolve {:?} due to data type mismatch: {}", e, s))
-                            }
+                            },
                         })
                     })
                 },

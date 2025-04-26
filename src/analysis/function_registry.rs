@@ -84,6 +84,10 @@ fn builtin_function_registry() -> FunctionRegistry {
         "to_unix_timestamp" => ToUnixTimestamp,
         "date_trunc" => TruncTimestamp,
         "date_floor" | "time_floor" => TimestampFloor,
+        // math functions
+        "pow" | "power" => Pow,
+        "round" => Round,
+        "bin" => Bin,
         // aggregate functions
         "sum" => Sum,
         "count" => Count,
