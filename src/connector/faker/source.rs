@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use log::debug;
 use crate::config::TaskContext;
 use crate::Result;
 use crate::connector::faker::{Faker, FieldFaker};
@@ -38,7 +39,7 @@ impl FakerSource {
             let from = faker.data_type();
             let to = fields[i].data_type.clone();
             if from != to {
-                println!("{}({}) cast from {} to {}", fields[i].name, i, from, to)
+                debug!("{}({}) cast from {} to {}", fields[i].name, i, from, to)
             }
             FieldFaker::new(i, faker, get_cast_func(from, to))
         }).collect();

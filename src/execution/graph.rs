@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::Arc;
 use itertools::Itertools;
+use log::{debug, info};
 use serde::{Serialize, Serializer};
 use crate::config::{SinkConfig, SinkOuter, SourceConfig, SourceOuter, TransformConfig, TransformOuter};
 use crate::Result;
@@ -165,23 +166,23 @@ impl Graph {
         }
     }
 
-    pub fn print_node_chains(&self) {
+    pub fn debug_node_chains(&self) {
         for id in self.source_ids.iter() {
-            println!("source id: {}", id);
+            debug!("source id: {}", id);
             let ids = vec![*id];
-            self.print_node_chains_on_sink(ids, id)
+            self.debug_node_chains_on_sink(ids, id)
         }
     }
 
-    fn print_node_chains_on_sink(&self, mut ids: Vec<u16>, id: & u16){
+    fn debug_node_chains_on_sink(&self, mut ids: Vec<u16>, id: & u16){
         let node = self.node_dict.get(id).unwrap();
         if node.is_sink() {
-            println!("{:?}", ids);
+            debug!("{:?}", ids);
         } else {
             for id in node.output_ids() {
                 let mut ids_clone = ids.clone();
                 ids_clone.push(*id);
-                self.print_node_chains_on_sink(ids_clone, id);
+                self.debug_node_chains_on_sink(ids_clone, id);
             }
         }
     }
@@ -296,7 +297,7 @@ mod tests {
         let mut parser = NodeParser::new();
         let graph = parser.parse_node_graph(&config).unwrap();
         println!("\nsource_ids:{:?}", graph.source_ids);
-        graph.print_node_chains();
+        graph.debug_node_chains();
         //println!("\n{:#?}", parser.node_dict);
         //println!("\n{:#?}", parser.unparsed_output_node_dict);
         // println!("\n{}", serde_json::to_string_pretty(&sink_nodes).unwrap());

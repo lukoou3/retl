@@ -118,7 +118,7 @@ impl Clone for Average {
 
 impl DeclarativeAggFunction for Average {
     fn name(&self) -> &str {
-        "average"
+        "avg"
     }
 
     fn data_type(&self) -> &DataType {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::Result;
-use crate::analysis::{type_coercion_rules, AnalyzerRule, GlobalAggregates, ResolveFunctions, ResolveGenerate, ResolveReferences, ResolveRelations};
+use crate::analysis::{type_coercion_rules, AnalyzerRule, GlobalAggregates, ResolveAliases, ResolveFunctions, ResolveGenerate, ResolveReferences, ResolveRelations};
 use crate::expr::Expr;
 use crate::logical_plan::{Aggregate, LogicalPlan, RelationPlaceholder};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeRecursion};
@@ -17,6 +17,7 @@ impl Analyzer {
             Box::new(ResolveReferences),
             Box::new(ResolveGenerate),
             Box::new(ResolveFunctions),
+            Box::new(ResolveAliases),
             Box::new(GlobalAggregates),
         ];
         for r in type_coercion_rules() {

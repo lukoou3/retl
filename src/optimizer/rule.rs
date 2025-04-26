@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use log::info;
+use log::{debug, info};
 use crate::data::empty_row;
 use crate::expr::{Cast, Expr};
 use crate::logical_plan::LogicalPlan;
@@ -26,7 +26,7 @@ impl OptimizerRule for ConstantFolding {
                     let value = phy_expr.eval(empty_row());
                     let data_type = phy_expr.data_type();
                     let new_expr = Expr::lit(value, data_type);
-                    info!("fold {:?} -> {:?}", e, new_expr);
+                    debug!("fold {:?} -> {:?}", e, new_expr);
                     Transformed::yes(new_expr)
                 })
             },

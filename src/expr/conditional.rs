@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use itertools::Itertools;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
 use crate::physical_expr::{self as phy, PhysicalExpr};
@@ -33,7 +34,7 @@ impl CreateScalarFunction for If {
 impl ScalarFunction for If {
 
     fn name(&self) -> &str {
-        "If"
+        "if"
     }
 
     fn data_type(&self) -> &DataType {
@@ -129,6 +130,12 @@ impl ScalarFunction for CaseWhen {
             physical_branches.push((create_physical_expr(condition)?, create_physical_expr(value)?));
         }
         Ok(Arc::new(phy::CaseWhen::new(physical_branches, create_physical_expr(else_value)?)))
+    }
+
+    fn sql(&self) -> String {
+        let Self{branches, else_value} = self;
+        let cases= branches.iter().map(|(c, v)| format!(" when {} then {}", c.sql(), v.sql())).join("");
+        format!("case{} else {} end", cases, else_value.sql())
     }
 }
 

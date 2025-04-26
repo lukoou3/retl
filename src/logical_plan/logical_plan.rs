@@ -9,6 +9,7 @@ use crate::types::DataType;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub enum LogicalPlan {
     UnresolvedRelation(String),
+    OneRowRelation,
     RelationPlaceholder(RelationPlaceholder),
     Project(Project),
     Filter(Filter),
@@ -21,6 +22,7 @@ impl LogicalPlan {
     pub fn children(&self) -> Vec<&LogicalPlan> {
         match self {
             LogicalPlan::UnresolvedRelation(_)
+             | LogicalPlan::OneRowRelation
              | LogicalPlan::RelationPlaceholder(_) => vec![],
             LogicalPlan::Project(Project{child, ..})
              | LogicalPlan::Filter(Filter{child, ..})
@@ -33,6 +35,7 @@ impl LogicalPlan {
     pub fn expressions(&self) -> Vec<&Expr> {
         match self {
             LogicalPlan::UnresolvedRelation(_)
+             | LogicalPlan::OneRowRelation
              | LogicalPlan::RelationPlaceholder(_) => vec![],
             LogicalPlan::Project(Project{project_list, ..}) => project_list.iter().collect(),
             LogicalPlan::Filter(Filter{condition, ..}) => vec![condition],
@@ -65,7 +68,7 @@ impl LogicalPlan {
 
     pub fn output(&self) -> Vec<AttributeReference> {
         match self {
-            LogicalPlan::UnresolvedRelation(_) => vec![],
+            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::OneRowRelation => vec![],
             LogicalPlan::RelationPlaceholder(RelationPlaceholder{output, ..}) => output.clone(),
             LogicalPlan::Project(Project{project_list, ..}) => {
                 project_list.iter().map(|e| {
@@ -144,7 +147,7 @@ impl Project {
     pub fn new(project_list: Vec<Expr>, child: Arc<LogicalPlan>) -> Self {
         for expr in &project_list {
             match expr {
-                Expr::Alias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => (),
+                Expr::Alias(_) | Expr::UnresolvedAlias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => (),
                 e => panic!("{}", format!("{:?} is not allowed in project list", expr)),
             }
         }
@@ -251,7 +254,7 @@ impl Aggregate {
     pub fn new(grouping_exprs: Vec<Expr>, aggregate_exprs: Vec<Expr>, child: Arc<LogicalPlan>) -> Self {
         for expr in &aggregate_exprs {
             match expr {
-                Expr::Alias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => (),
+                Expr::Alias(_) | Expr::UnresolvedAlias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => (),
                 e => panic!("{}", format!("{:?} is not allowed in aggregate exprs", e)),
             }
         }

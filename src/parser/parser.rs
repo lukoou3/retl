@@ -124,7 +124,7 @@ fn parse_identifier(mut pair: Pair<Rule>) -> Result<&str> {
 fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
     let query = pair;
     let mut project_list: Vec<_> = Vec::new();
-    let mut from: Option<LogicalPlan> = None;
+    let mut from: Option<LogicalPlan> = Some(LogicalPlan::OneRowRelation);
     let mut filter: Option<Expr> = None;
     let mut lateral_view: Option<Generate> = None;
     let mut group_exprs: Option<Vec<Expr>> = None;
@@ -308,7 +308,7 @@ fn parse_named_expression_seq(pair: Pair<Rule>) -> Result<Vec<Expr>> {
             if let Ast::Expression(e) = ast {
                 match e {
                     Expr::UnresolvedAttribute(_) | Expr::AttributeReference(_)  => named_expressions.push(e),
-                    _ => return Err(format!("Expected a named expr but found {:?}", e)),
+                    e => named_expressions.push(Expr::UnresolvedAlias(Box::new(e))),
                 }
             } else {
                 return Err(format!("Expected a projects but found {:?}", ast));

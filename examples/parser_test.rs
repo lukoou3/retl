@@ -10,6 +10,8 @@ fn main() {
 }
 fn test(){
     println!("Hello, world!");
+    let result = parser::parse_query("select a + 1 a, func('1'), data + 10  from tab");
+    println!("{:?}", result);
     let result = parser::parse_query("select a + 1 a, func('1') b, data + 10 data from tab lateral view outer explode(datas) v as data ");
     println!("{:?}", result);
     let result = parser::parse_query("select a + 1 a, func('1') b, func2(a, 3) b, a < b + 1  e, nuallable_int in (1, 2, 3) is_in from tbl");

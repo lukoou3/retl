@@ -15,5 +15,7 @@ pub mod execution;
 pub mod optimizer;
 pub mod sql_utils;
 pub mod sketch;
+#[cfg(feature = "batch")]
+pub mod batch;
 
 pub use common::*;

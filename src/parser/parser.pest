@@ -5,7 +5,7 @@ singleTableSchema = { SOI ~ colTypeList ~ EOI}
 
 queryPrimary = {
     selectClause
-    ~ fromClause
+    ~ fromClause?
     ~ lateralView?
     ~ whereClause?
     ~ aggregationClause?

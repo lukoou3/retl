@@ -32,7 +32,7 @@ impl CreateScalarFunction for RegExpExtract {
 
 impl ScalarFunction for RegExpExtract {
     fn name(&self) -> &str {
-        "RegExpExtract"
+        "regexp_extract"
     }
 
     fn data_type(&self) -> &DataType {
@@ -82,7 +82,7 @@ impl CreateScalarFunction for RegExpReplace {
 
 impl ScalarFunction for RegExpReplace {
     fn name(&self) -> &str {
-        "RegExpReplace"
+        "regexp_replace"
     }
 
     fn data_type(&self) -> &DataType {

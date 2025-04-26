@@ -54,18 +54,11 @@ fn start_web(web_config: WebConfig, registry: Registry,  terminated: Arc<AtomicB
     Ok(handles)
 }
 
-pub fn run_application() -> crate::Result<()> {
-    let args: Vec<String> = env::args().skip(1).collect();
-    let config_path = if args.len() > 0 {
-        args[0].as_str()
-    } else {
-        "config/application.yaml"
-    };
-    println!("config path: {}", config_path);
-    let config: AppConfig = crate::config::parse_config(config_path).unwrap();
+pub fn run_application(config_path: &str) -> crate::Result<()> {
+    let config: AppConfig = config::parse_config(config_path).unwrap();
     let mut parser = NodeParser::new();
     let graph = parser.parse_node_graph(&config)?;
-    graph.print_node_chains();
+    graph.debug_node_chains();
 
     let registry = Registry::new();
     let terminated: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));

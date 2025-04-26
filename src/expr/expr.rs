@@ -16,6 +16,7 @@ use crate::types::{AbstractDataType, DataType};
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum Expr {
     UnresolvedAttribute(String),
+    UnresolvedAlias(Box<Expr>),
     UnresolvedExtractValue(UnresolvedExtractValue),
     NoOp,
     BoundReference(BoundReference),
@@ -55,7 +56,8 @@ impl Expr {
 
     pub fn data_type(&self) -> &DataType {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_) | Expr::UnresolvedGenerator(_)  =>
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedAlias(_) | Expr::UnresolvedExtractValue(_)
+            | Expr::UnresolvedFunction(_) | Expr::UnresolvedGenerator(_)  =>
                 panic!("UnresolvedExpr:{:?}", self),
             Expr::NoOp => DataType::null_type(),
             Expr::BoundReference(b) => &b.data_type,
@@ -84,7 +86,8 @@ impl Expr {
 
     pub fn resolved(&self) -> bool {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedFunction(_) =>
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedAlias(_) | Expr::UnresolvedExtractValue(_)
+            | Expr::UnresolvedFunction(_) | Expr::UnresolvedGenerator(_)  =>
                 false,
             _ => self.children_resolved() && self.check_input_data_types().is_ok()
         }
@@ -97,6 +100,7 @@ impl Expr {
     pub fn check_input_data_types(&self) -> Result<()> {
         match self {
             Expr::UnresolvedAttribute(_)
+             | Expr::UnresolvedAlias(_)
              | Expr::UnresolvedExtractValue(_)
              | Expr::UnresolvedFunction(_)
              | Expr::UnresolvedGenerator(_)
@@ -192,6 +196,7 @@ impl Expr {
             Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) =>
                 vec![child, extraction],
             Expr::Alias(Alias{ child, ..})
+            | Expr::UnresolvedAlias(child)
             | Expr::Cast(Cast{ child, ..})
             | Expr::Not(child)
             | Expr::IsNull(child) | Expr::IsNotNull(child) =>
@@ -220,6 +225,45 @@ impl Expr {
                 Ok(AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id)),
             Expr::AttributeReference(a) => Ok(a.clone()),
             _ => Err(format!("cannot convert {:?} to AttributeReference", self)),
+        }
+    }
+
+    pub fn sql(&self) -> String {
+        match self {
+            Expr::UnresolvedAttribute(name) => format!("'{}", name),
+            Expr::UnresolvedAlias(child) => format!("UnresolvedAlias({})", child.sql()),
+            Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) => format!("{}[{}]", child.sql(), extraction.sql()),
+            Expr::NoOp => format!("{:?}", self),
+            Expr::BoundReference(BoundReference{ordinal, data_type}) => format!("input[{}, {}]", ordinal, data_type),
+            Expr::AttributeReference(AttributeReference{name, ..}) => format!("`{}`", name.replace("`", "``")),
+            Expr::Alias(Alias{child, name, ..}) => format!("{} as `{}`", child.sql(), name.replace("`", "``")),
+            Expr::Cast(Cast{child, data_type}) => format!("cast({} as {})", child.sql(), data_type),
+            Expr::Literal(Literal{value, data_type}) => match (value, data_type) {
+                (_, DataType::Null) => "null".to_string(),
+                (v, _) if v.is_null() => format!("cast(null as {})", data_type),
+                (v, DataType::String)  => format!("'{}'", v.get_string()),
+                (v, DataType::Date | DataType::Timestamp)  => format!("'{}'", v.to_sql_string(data_type)),
+                (v, _)  => v.to_string(),
+            },
+            Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}) => {
+                format!("{}({})", name, arguments.into_iter().map(|arg| arg.sql()).join(", "))
+            },
+            Expr::UnresolvedGenerator(UnresolvedGenerator{name, arguments}) => {
+                format!("{}({})", name, arguments.into_iter().map(|arg| arg.sql()).join(", "))
+            },
+            Expr::Not(child) => format!("not {}", child.sql()),
+            Expr::IsNull(child) => format!("{} is null", child.sql()),
+            Expr::IsNotNull(child) => format!("{} is not null", child.sql()),
+            Expr::BinaryOperator(BinaryOperator{left, op, right}) => format!("({} {} {})", left.sql(), op.sql_operator(), right.sql()),
+            Expr::Like(Like{expr, pattern}) => format!("{} like {}", expr.sql(), pattern.sql()),
+            Expr::RLike(Like{expr, pattern}) => format!("{} rlike {}", expr.sql(), pattern.sql()),
+            Expr::In(In{value, list}) => {
+                format!("{} in ({})", value.sql(), list.into_iter().map(|e| e.sql()).join(", "))
+            },
+            Expr::ScalarFunction(f) => f.sql(),
+            Expr::DeclarativeAggFunction(f) => f.sql(),
+            Expr::TypedAggFunction(f) => f.sql(),
+            Expr::Generator(f) => f.sql(),
         }
     }
     
@@ -600,6 +644,10 @@ pub trait ScalarFunction: Debug + Send + Sync + CreateScalarFunction + ExtendSca
     }
     
     fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>>;
+
+    fn sql(&self) -> String {
+        format!("{}({})", self.name(), self.args().into_iter().map(|arg| arg.sql()).join(", "))
+    }
 }
 
 pub trait CreateScalarFunction {

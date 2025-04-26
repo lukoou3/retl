@@ -21,7 +21,7 @@ impl CreateScalarFunction for CurrentTimestamp {
 impl ScalarFunction for CurrentTimestamp {
 
     fn name(&self) -> &str {
-        "CurrentTimestamp"
+        "current_timestamp"
     }
 
     fn foldable(&self) -> bool {
@@ -71,7 +71,7 @@ impl CreateScalarFunction for FromUnixTime {
 
 impl ScalarFunction for FromUnixTime {
     fn name(&self) -> &str {
-        "FromUnixTime"
+        "from_unixtime"
     }
 
     fn data_type(&self) -> &DataType {
@@ -132,7 +132,7 @@ impl CreateScalarFunction for ToUnixTimestamp {
 
 impl ScalarFunction for ToUnixTimestamp {
     fn name(&self) -> &str {
-        "ToUnixTimestamp"
+        "to_unix_timestamp"
     }
 
     fn data_type(&self) -> &DataType {
@@ -185,7 +185,7 @@ impl CreateScalarFunction for TruncTimestamp {
 
 impl ScalarFunction for TruncTimestamp {
     fn name(&self) -> &str {
-        "TruncTimestamp"
+        "date_trunc"
     }
 
     fn data_type(&self) -> &DataType {
@@ -249,7 +249,7 @@ impl CreateScalarFunction for TimestampFloor {
 
 impl ScalarFunction for TimestampFloor {
     fn name(&self) -> &str {
-        "TimestampFloor"
+        "time_floor"
     }
 
     fn data_type(&self) -> &DataType {

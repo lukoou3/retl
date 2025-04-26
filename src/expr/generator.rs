@@ -44,6 +44,10 @@ pub trait Generator: Debug + Send + Sync + CreateGenerator + ExtendGenerator {
     }
 
     fn physical_generator(&self) -> Result<Box<dyn PhysicalGenerator>>;
+
+    fn sql(&self) -> String {
+        format!("{}({})", self.name(), self.args().into_iter().map(|arg| arg.sql()).join(", "))
+    }
 }
 
 pub trait CreateGenerator {

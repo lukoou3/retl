@@ -45,6 +45,10 @@ pub trait DeclarativeAggFunction: Debug + Send + Sync + CreateDeclarativeAggFunc
             },
         }
     }
+
+    fn sql(&self) -> String {
+        format!("{}({})", self.name(), self.args().into_iter().map(|arg| arg.sql()).join(", "))
+    }
 }
 
 pub trait CreateDeclarativeAggFunction {
@@ -233,6 +237,10 @@ pub trait TypedAggFunction: Debug + Send + Sync + CreateTypedAggFunction + Exten
                 }
             },
         }
+    }
+
+    fn sql(&self) -> String {
+        format!("{}({})", self.name(), self.args().into_iter().map(|arg| arg.sql()).join(", "))
     }
 }
 

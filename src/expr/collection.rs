@@ -24,7 +24,7 @@ impl CreateScalarFunction for Concat {
 impl ScalarFunction for Concat {
 
     fn name(&self) -> &str {
-        "Concat"
+        "concat"
     }
 
     fn data_type(&self) -> &DataType {

@@ -190,6 +190,71 @@ impl AnalyzerRule for ResolveFunctions {
 }
 
 #[derive(Debug)]
+pub struct ResolveAliases;
+
+impl ResolveAliases {
+    fn has_unresolved_alias(exprs: &Vec<Expr>) -> bool {
+        exprs.iter().any(|expr| match expr {
+            Expr::UnresolvedAlias(_) => true,
+            _ => false
+        })
+    }
+
+    fn assign_aliases(exprs: Vec<Expr>) -> Vec<Expr> {
+        exprs.into_iter().map(|expr| match expr {
+            Expr::UnresolvedAlias(u) => match u.as_ref() {
+                Expr::Alias(_) | Expr::UnresolvedAlias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => *u,
+                e if !e.resolved() => Expr::UnresolvedAlias(u),
+                Expr::Cast(Cast{child, ..}) => match child.as_ref() {
+                    Expr::Alias(Alias{name, ..}) => {
+                        let name = name.clone();
+                        u.alias(name)
+                    },
+                    Expr::AttributeReference(AttributeReference{name, ..}) => {
+                        let name = name.clone();
+                        u.alias(name)
+                    },
+                    _ => *u,
+                },
+                _ => {
+                    let sql = u.sql();
+                    u.alias(sql)
+                },
+            },
+            e => e,
+        }).collect()
+    }
+ }
+
+impl AnalyzerRule for ResolveAliases {
+    fn analyze(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        plan.transform_up(|plan| match plan {
+            LogicalPlan::Project(Project{project_list,child})
+                if child.resolved() && Self::has_unresolved_alias(&project_list)=> {
+                Ok(Transformed::yes(LogicalPlan::Project(Project{
+                    project_list: Self::assign_aliases(project_list),
+                    child
+                })))
+            },
+            LogicalPlan::Aggregate(Aggregate{grouping_exprs, aggregate_exprs, child})
+                if child.resolved() && Self::has_unresolved_alias(&aggregate_exprs) => {
+                Ok(Transformed::yes(LogicalPlan::Aggregate(Aggregate{
+                    grouping_exprs,
+                    aggregate_exprs: Self::assign_aliases(aggregate_exprs),
+                    child
+                })))
+            }
+            p => Ok(Transformed::no(p)),
+        })
+    }
+
+    fn name(&self) -> &str {
+        "ResolveAliases"
+    }
+}
+
+
+#[derive(Debug)]
 pub struct GlobalAggregates;
 
 impl GlobalAggregates {

@@ -21,7 +21,7 @@ impl TreeNode for LogicalPlan {
         f: F,
     ) -> Result<Transformed<Self>> {
         Ok(match self {
-            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::RelationPlaceholder(_) => {
+            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::OneRowRelation | LogicalPlan::RelationPlaceholder(_) => {
                 Transformed::no(self)
             }
             LogicalPlan::Project(Project {
@@ -68,7 +68,7 @@ impl LogicalPlan {
         mut f: F,
     ) -> Result<Transformed<Self>> {
         match self {
-            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::RelationPlaceholder(_) =>
+            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::OneRowRelation | LogicalPlan::RelationPlaceholder(_) =>
                 Ok(Transformed::no(self)),
             LogicalPlan::Project(Project { project_list, child, }) =>
                 Ok(project_list.map_elements(f)?

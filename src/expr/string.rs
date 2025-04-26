@@ -29,7 +29,7 @@ impl CreateScalarFunction for Length {
 impl ScalarFunction for Length {
 
     fn name(&self) -> &str {
-        "Length"
+        "length"
     }
 
     fn data_type(&self) -> &DataType {
@@ -79,7 +79,7 @@ impl CreateScalarFunction for ConcatWs {
 
 impl ScalarFunction for ConcatWs {
     fn name(&self) -> &str {
-        "ConcatWs"
+        "concat_ws"
     }
 
     fn data_type(&self) -> &DataType {
@@ -133,7 +133,7 @@ impl CreateScalarFunction for Substring {
 impl ScalarFunction for Substring {
 
     fn name(&self) -> &str {
-        "Substring"
+        "substring"
     }
 
     fn data_type(&self) -> &DataType {
@@ -181,7 +181,7 @@ impl CreateScalarFunction for StringSplit {
 impl ScalarFunction for StringSplit {
 
     fn name(&self) -> &str {
-        "StringSplit"
+        "split"
     }
 
     fn data_type(&self) -> &DataType {
@@ -231,7 +231,7 @@ impl CreateScalarFunction for SplitPart {
 impl ScalarFunction for SplitPart {
 
     fn name(&self) -> &str {
-        "SplitPart"
+        "split_part"
     }
 
     fn data_type(&self) -> &DataType {
@@ -280,7 +280,7 @@ impl CreateScalarFunction for StringReplace {
 
 impl ScalarFunction for StringReplace {
     fn name(&self) -> &str {
-        "StringReplace"
+        "replace"
     }
 
     fn data_type(&self) -> &DataType {
@@ -327,7 +327,7 @@ impl CreateScalarFunction for StringTrim {
 
 impl ScalarFunction for StringTrim {
     fn name(&self) -> &str {
-        "StringTrim"
+        "trim"
     }
 
     fn data_type(&self) -> &DataType {
@@ -372,7 +372,7 @@ impl CreateScalarFunction for Lower {
 
 impl ScalarFunction for Lower {
     fn name(&self) -> &str {
-        "Lower"
+        "lower"
     }
 
     fn data_type(&self) -> &DataType {
@@ -417,7 +417,7 @@ impl CreateScalarFunction for Upper {
 
 impl ScalarFunction for Upper {
     fn name(&self) -> &str {
-        "Upper"
+        "upper"
     }
 
     fn data_type(&self) -> &DataType {

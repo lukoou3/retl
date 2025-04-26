@@ -25,6 +25,9 @@ impl TreeNode for Expr {
             | Expr::AttributeReference(_)
             | Expr::NoOp
             | Expr::Literal(_) => Transformed::no(self),
+            Expr::UnresolvedAlias(child) => f(*child)?.update_data(|child| {
+                Expr::UnresolvedAlias(Box::new(child))
+            }),
             Expr::UnresolvedExtractValue(UnresolvedExtractValue { child, extraction }) => (child, extraction)
                 .map_elements(f)?
                 .update_data(|(new_child, new_extraction)| {

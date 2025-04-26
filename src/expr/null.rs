@@ -38,7 +38,7 @@ impl CreateScalarFunction for Coalesce {
 impl ScalarFunction for Coalesce {
 
     fn name(&self) -> &str {
-        "Coalesce"
+        "coalesce"
     }
 
     fn data_type(&self) -> &DataType {

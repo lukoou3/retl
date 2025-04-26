@@ -4,6 +4,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
 use std::fmt::{Debug, Display, Formatter};
 use std::string::ToString;
+use crate::{date_utils, datetime_utils};
+use crate::types::DataType;
 
 static EMPTY_STRING_VALUE: LazyLock<Value> = LazyLock::new(|| Value::String(Arc::new("".to_string())));
 // static EMPTY_BINARY:Arc<Vec<u8>> = Arc::new(Vec::new());
@@ -250,6 +252,37 @@ impl Value {
             panic!("{:?} is not a array", self)
         }
     }
+
+    pub fn to_sql_string(&self, data_type: &DataType) -> String {
+        match self {
+            Value::Null => "null".to_string(),
+            v => match data_type {
+                DataType::Int | DataType::Long | DataType::Float | DataType::Double
+                 | DataType::Boolean | DataType::String | DataType::Binary | DataType::Null =>
+                    v.to_string(),
+                DataType::Date => date_utils::num_days_to_date(v.get_int()).to_string(),
+                DataType::Timestamp => datetime_utils::from_timestamp_micros_utc(v.get_long()).format(datetime_utils::NORM_DATETIME_FMT).to_string(),
+                DataType::Array(tp) => {
+                    let array = self.get_array();
+                    format!("[{}]", array.iter().map(|v| v.to_sql_string(tp)).collect::<Vec<_>>().join(","))
+                },
+                DataType::Struct(fields) => {
+                    let row = self.get_struct();
+                    let mut s = String::new();
+                    s.push('{');
+                    for (i, f) in fields.0.iter().enumerate() {
+                        if i > 0 {
+                            s.push(',');
+                        }
+                        s.push_str(&format!("{}:{}", f.name, row.get(i).to_sql_string(&f.data_type)));
+                    }
+                    s.push('}');
+                    s
+                },
+            }
+        }
+
+    }
 }
 
 impl Eq for Value {}
@@ -360,6 +393,14 @@ pub trait Row: Debug + Display {
             write!(f, "{}", self.get(i))?;
         }
         write!(f, "]")
+    }
+
+    fn to_generic_row(self: &Self) -> GenericRow {
+        let mut row = GenericRow::new_with_size(self.len());
+        for i in 0..self.len() {
+            row.update(i, self.get(i).clone());
+        }
+        row
     }
 }
 

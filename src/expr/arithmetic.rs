@@ -69,7 +69,7 @@ impl CreateScalarFunction for Least {
 
 impl ScalarFunction for Least {
     fn name(&self) -> &str {
-        "Least"
+        "least"
     }
 
     fn data_type(&self) -> &DataType {
@@ -120,7 +120,7 @@ impl CreateScalarFunction for Greatest {
 
 impl ScalarFunction for Greatest {
     fn name(&self) -> &str {
-        "Greatest"
+        "greatest"
     }
 
     fn data_type(&self) -> &DataType {

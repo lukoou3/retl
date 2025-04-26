@@ -72,3 +72,23 @@ pub enum Operator {
     /// Logical OR, like `||`
     Or,
 }
+
+impl Operator {
+    pub fn sql_operator(&self) -> &'static str {
+        match self {
+            Operator::Eq => "=",
+            Operator::NotEq => "!=",
+            Operator::Lt => "<",
+            Operator::LtEq => "<=",
+            Operator::Gt => ">",
+            Operator::GtEq => ">=",
+            Operator::Plus => "+",
+            Operator::Minus => "-",
+            Operator::Multiply => "*",
+            Operator::Divide => "/",
+            Operator::Modulo => "%",
+            Operator::And => "and",
+            Operator::Or=> "or",
+        }
+    }
+}
