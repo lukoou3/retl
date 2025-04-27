@@ -526,23 +526,48 @@ fn parse_constant(pair: Pair<Rule>) -> Result<Expr> {
     match p.as_rule() {
         Rule::NULL => Ok(Expr::Literal(Literal::new(Value::Null, DataType::Null))),
         Rule::number => {
-            let v:JValue = serde_json::from_str(pair.as_str()).unwrap();
-            match v {
-                JValue::Number(n) => {
-                    if n.is_f64() {
-                        Ok(Expr::Literal(Literal::new(Value::Double(n.as_f64().unwrap()), DataType::Double)))
-                    } else if n.is_i64() {
-                        let v = n.as_i64().unwrap();
-                        if v <= i32::MAX as i64 {
-                            Ok(Expr::Literal(Literal::new(Value::int(v as i32), DataType::Int)))
-                        } else {
-                            Ok(Expr::Literal(Literal::new(Value::Long(v), DataType::Long)))
-                        }
-                    } else {
-                        Err(format!("Unexpected parse_constant {:?}", n))
+            let num = p.into_inner().next().unwrap();
+            match num.as_rule() {
+                Rule::integerLiteral => {
+                    let v:JValue = serde_json::from_str(num.as_str()).unwrap();
+                    match v {
+                        JValue::Number(n) => {
+                            if n.is_f64() {
+                                Ok(Expr::Literal(Literal::new(Value::Double(n.as_f64().unwrap()), DataType::Double)))
+                            } else if n.is_i64() {
+                                let v = n.as_i64().unwrap();
+                                if v <= i32::MAX as i64 {
+                                    Ok(Expr::Literal(Literal::new(Value::int(v as i32), DataType::Int)))
+                                } else {
+                                    Ok(Expr::Literal(Literal::new(Value::Long(v), DataType::Long)))
+                                }
+                            } else {
+                                Err(format!("Unexpected parse_constant {:?}", n))
+                            }
+                        },
+                        _ => Err(format!("Unexpected parse_constant {:?}", v))
                     }
                 },
-                _ => Err(format!("Unexpected parse_constant {:?}", v))
+                Rule::bigIntLiteral => {
+                    let s = num.as_str();
+                    let s = &s[0.. s.len() - 1];
+                    Ok(Expr::Literal(Literal::new(Value::Long(s.parse::<i64>().map_err(|e| format!("parse bigint error:{}", e) ) ?), DataType::Long)))
+                },
+                Rule::decimalLiteral => {
+                    let s = num.as_str();
+                    Ok(Expr::Literal(Literal::new(Value::Double(s.parse::<f64>().map_err(|e| format!("parse double error:{}", e) ) ?), DataType::Double)))
+                },
+                Rule::floatLiteral => {
+                    let s = num.as_str();
+                    let s = &s[0.. s.len() - 1];
+                    Ok(Expr::Literal(Literal::new(Value::Float(s.parse::<f32>().map_err(|e| format!("parse float error:{}", e) ) ?), DataType::Float)))
+                },
+                Rule::doubleLiteral => {
+                    let s = num.as_str();
+                    let s = &s[0.. s.len() - 1];
+                    Ok(Expr::Literal(Literal::new(Value::Double(s.parse::<f64>().map_err(|e| format!("parse double error:{}", e) ) ?), DataType::Double)))
+                },
+                _ => Err(format!("Unexpected parse constant number {:?}", num))
             }
         },
         Rule::booleanValue => {
@@ -586,4 +611,48 @@ pub fn parse_query2(sql: &str) -> Result<(), pest::error::Error<Rule>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_number() -> Result<()>{
+        let sql = r"
+        select
+            1 a,
+            -1 b,
+            1111111122222 c,
+            1111111122255555552 d,
+            1111111122225555555555556666652 e,
+            1.2 f,
+            1.3f g,
+            1.3d h,
+            -1.3 i
+        from tab
+        ";
+        let result = parse_query(sql);
+        println!("{:?}", result);
+        println!("{:#?}", result);
+        Ok(())
+    }
+    #[test]
+    fn test_comment() -> Result<()>{
+        let sql = r"
+        select
+            a + 1 a, -- comment1
+            -- comment2
+            func('1') b,
+            /* comment3 */
+            data + 10 data,
+            /* /* nested */ */
+            d,
+            'text; -- not comment' e
+        from tab
+        ";
+        let result = parse_query(sql);
+        println!("{:?}", result);
+        println!("{:#?}", result);
+        Ok(())
+    }
 }

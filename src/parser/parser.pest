@@ -114,14 +114,29 @@ constant = { NULL | number | booleanValue | STRING }
 
 qualifiedName = { identifier ~ ("." ~ identifier)* }
 identifier = {unquotedIdentifier | quotedIdentifier}
-unquotedIdentifier = @{ (ASCII_ALPHA | ASCII_DIGIT | "_")+ } // [a-zA-Z0-9_]+
+unquotedIdentifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHA | ASCII_DIGIT | "_")* } // [a-zA-Z0-9_]+
 quotedIdentifier = { "`" ~ (!"`" ~ ANY)* ~ "`"}
 
-number = @{
-    MINUS?
-    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
-    ~ ("." ~ ASCII_DIGIT*)?
+number = {
+    doubleLiteral
+    | floatLiteral
+    | decimalLiteral
+    | bigIntLiteral
+    | integerLiteral
 }
+
+integerLiteral = @{ MINUS? ~ INTEGER_VALUE }
+bigIntLiteral = @{ MINUS? ~ BIGINT_LITERAL }
+decimalLiteral = @{ MINUS? ~ DOUBLE_VALUE }
+floatLiteral = @{ MINUS? ~ FLOAT_LITERAL }
+doubleLiteral = @{ MINUS? ~ DOUBLE_LITERAL }
+
+INTEGER_VALUE = @{ ASCII_DIGIT+ }
+BIGINT_LITERAL = @{ ASCII_DIGIT+ ~ ^"L" }
+DOUBLE_VALUE = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* }
+FLOAT_LITERAL = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* ~ ^"F" }
+DOUBLE_LITERAL = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* ~ ^"D" }
+
 
 booleanValue = { ^"true" | ^"false" }
 STRING = ${
@@ -161,4 +176,7 @@ GTE = { ">=" | "!<"}
 mainKeyword = { ^"from" | ^"where" | ^"order" }
 
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
-COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+COMMENT = _{ SIMPLE_COMMENT | BRACKETED_COMMENT }
+
+SIMPLE_COMMENT = _{ "--" ~ ("\\\n" | (!"\n" ~ ANY))* ~ ("\r"? ~ "\n")? }
+BRACKETED_COMMENT =  _{ "/*" ~ (!"*/" ~ (BRACKETED_COMMENT | ANY))* ~ "*/" }

@@ -6,8 +6,25 @@ use retl::physical_expr::create_physical_expr;
 use retl::types::DataType;
 
 fn main() {
-  test();
+    test_comment();
+    //test();
 }
+
+fn test_comment(){
+    let sql = r"
+    select
+        a + 1 a, -- comment1
+        -- comment2
+        func('1') b,
+        /* comment3 */
+        data + 10 data,
+        d
+    from tab
+    ";
+    let result = parser::parse_query(sql);
+    println!("{:#?}", result);
+}
+
 fn test(){
     println!("Hello, world!");
     let result = parser::parse_query("select a + 1 a, func('1'), data + 10  from tab");
