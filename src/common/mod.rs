@@ -71,6 +71,18 @@ pub enum Operator {
     And,
     /// Logical OR, like `||`
     Or,
+    /// Bitwise AND, like `&`
+    BitAnd,
+    /// Bitwise OR, like `|`
+    BitOr,
+    /// Bitwise XOR, like `^`
+    BitXor,
+    /// Bitwise left shift, like `<<`
+    BitShiftLeft,
+    /// Bitwise right shift, like `>>`
+    BitShiftRight,
+    /// Bitwise unsigned right shift, like `>>>`
+    BitShiftRightUnsigned,
 }
 
 impl Operator {
@@ -89,6 +101,12 @@ impl Operator {
             Operator::Modulo => "%",
             Operator::And => "and",
             Operator::Or=> "or",
+            Operator::BitAnd => "&",
+            Operator::BitOr => "|",
+            Operator::BitXor => "^",
+            Operator::BitShiftLeft => "<<",
+            Operator::BitShiftRight => ">>",
+            Operator::BitShiftRightUnsigned => ">>>",
         }
     }
 }

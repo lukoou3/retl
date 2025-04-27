@@ -55,6 +55,53 @@ impl PhysicalExpr for UnaryMinus {
 }
 
 #[derive(Debug, Clone)]
+pub struct BitwiseNot {
+    pub child: Arc<dyn PhysicalExpr>,
+}
+
+impl BitwiseNot {
+    pub fn new(child: Arc<dyn PhysicalExpr>) -> BitwiseNot {
+        BitwiseNot { child }
+    }
+}
+
+impl PartialEq for BitwiseNot {
+    fn eq(&self, other: &BitwiseNot) -> bool {
+        self.child.eq(&other.child)
+    }
+}
+
+impl Eq for BitwiseNot {}
+
+impl Hash for BitwiseNot {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.child.hash(state);
+    }
+}
+
+impl PhysicalExpr for BitwiseNot {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.child.data_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child.eval(input);
+        if value.is_null() {
+            return Value::Null;
+        }
+        match value {
+            Value::Int(v) => Value::Int(!v),
+            Value::Long(v) => Value::Long(!v),
+            _ => Value::Null
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Least {
     children: Vec<Arc<dyn PhysicalExpr>>
 }

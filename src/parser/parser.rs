@@ -9,7 +9,7 @@ use pest_derive::Parser;
 use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
-use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, UnresolvedExtractValue, UnresolvedFunction, UnresolvedGenerator};
+use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, BitwiseNot,UnresolvedExtractValue, UnresolvedFunction, UnresolvedGenerator};
 use crate::logical_plan::{Aggregate, Filter, Generate, LogicalPlan, Project};
 use crate::types::*;
 
@@ -80,7 +80,8 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
             Rule::predicateExpression => return parse_predicate_expression(pair).map(|x| Ast::Expression(x)),
             Rule::logicalAndExpression => return parse_logical_and_expression_ast(pair),
             Rule::logicalOrExpression => return parse_logical_or_expression_ast(pair),
-            Rule::addSubExpression | Rule::mulDivExpression => return parse_arithmetic_expression(pair).map(|x| Ast::Expression(x)),
+            Rule::addSubExpression | Rule::mulDivExpression | Rule::bitShiftExpression | Rule::bitAndExpression | Rule::bitXorExpression | Rule::bitOrExpression => 
+                return parse_arithmetic_expression(pair).map(|x| Ast::Expression(x)),
             Rule::comparisonExpression => return parse_comparison_expression(pair).map(|x| Ast::Expression(x)),
             Rule::unaryExpression => return parse_unary_expression_ast(pair),
             Rule::primaryExpression => return parse_primary_expression_ast(pair),
@@ -226,6 +227,10 @@ fn parse_unary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
             Rule::MINUS => {
                 let expr = parse_expression(pairs.next().unwrap())?;
                 Ok(Ast::Expression(Expr::ScalarFunction(Box::new(UnaryMinus::new(Box::new(expr))))))
+            },
+            Rule::TILDE => {
+                let expr = parse_expression(pairs.next().unwrap())?;
+                Ok(Ast::Expression(Expr::ScalarFunction(Box::new(BitwiseNot::new(Box::new(expr))))))
             },
             r => Err(format!("Expected a unary expression but found {:?}", r))
         }
@@ -482,6 +487,12 @@ fn parse_arithmetic_expression(pair: Pair<Rule>) -> Result<Expr> {
             Rule::ASTERISK => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::Multiply, Box::new(right))),
             Rule::SLASH => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::Divide, Box::new(right))),
             Rule::PERCENT => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::Modulo, Box::new(right))),
+            Rule::AMPERSAND => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::BitAnd, Box::new(right))),
+            Rule::HAT => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::BitXor, Box::new(right))),
+            Rule::PIPE => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::BitOr, Box::new(right))),
+            Rule::SHIFT_LEFT => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::BitShiftLeft, Box::new(right))),
+            Rule::SHIFT_RIGHT => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::BitShiftRight, Box::new(right))),
+            Rule::SHIFT_RIGHT_UNSIGNED => left = Expr::BinaryOperator(BinaryOperator::new(Box::new(left), Operator::BitShiftRightUnsigned, Box::new(right))),
             _ => return Err(format!("Unexpected arithmetic {:?}", arithmetic))
         }
         arithmetic_option = pairs.next();

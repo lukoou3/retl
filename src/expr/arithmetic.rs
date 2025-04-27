@@ -52,6 +52,53 @@ impl ScalarFunction for UnaryMinus {
 }
 
 #[derive(Debug, Clone)]
+pub struct BitwiseNot {
+    pub child: Box<Expr>,
+}
+
+impl BitwiseNot {
+    pub fn new(child: Box<Expr>) -> BitwiseNot {
+        BitwiseNot { child }
+    }
+}
+
+impl CreateScalarFunction for BitwiseNot {
+    fn from_args(args: Vec<Expr>) -> crate::Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        Ok(Box::new(BitwiseNot::new(Box::new(args[0].clone()))))
+    }
+}
+
+impl ScalarFunction for BitwiseNot {
+
+    fn name(&self) -> &str {
+        "bit_not"
+    }
+
+    fn data_type(&self) -> &DataType {
+        self.child.data_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Integral])
+    }
+
+    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+        Ok(Arc::new(phy::BitwiseNot::new(create_physical_expr(&self.child)?)))
+    }
+
+    fn sql(&self) -> String {
+        format!("~{}", self.child.sql())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Least {
     pub children: Vec<Expr>,
 }

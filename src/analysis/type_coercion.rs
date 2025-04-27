@@ -24,10 +24,11 @@ impl AnalyzerRule for ImplicitTypeCasts {
     fn analyze(&self, plan: LogicalPlan) -> crate::Result<Transformed<LogicalPlan>> {
         plan.transform_up_expressions(|expr| match expr {
             e if !e.children_resolved() => Ok(Transformed::no(e)),
-            Expr::BinaryOperator(BinaryOperator{left, op, right}) if left.data_type() != right.data_type() => {
+            Expr::BinaryOperator(BinaryOperator{left, op, right}) if !matches!(op, Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned) && left.data_type() != right.data_type() => {
                 match find_tightest_common_type(left.data_type().clone(), right.data_type().clone()) {
                     Some(common_type) => match op {
-                        Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo  => {
+                        Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo
+                          | Operator::BitAnd | Operator::BitOr | Operator::BitXor => {
                             if common_type.is_numeric_type() {
                                 let new_left = if left.data_type() == &common_type {
                                     left
@@ -77,7 +78,8 @@ impl AnalyzerRule for ImplicitTypeCasts {
                             } else {
                                 Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
                             }
-                        }
+                        },
+                        Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned => Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right}))),
                     }
                     None => Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
                 }
@@ -133,7 +135,7 @@ impl AnalyzerRule for PromoteStrings {
     }
 
     fn name(&self) -> &str {
-        "InConversion"
+        "PromoteStrings"
     }
 }
 

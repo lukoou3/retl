@@ -118,10 +118,66 @@ fn get_binary_arithmetic_func(op: Operator, data_type: DataType) -> Arc<BinaryFu
             DataType::Double => Arc::new(binary_double_modulo),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
+        Operator::BitAnd => match data_type {
+            DataType::Int => Arc::new(int_bitwise_and),
+            DataType::Long => Arc::new(long_bitwise_and),
+            _ => panic!("{:?} not support data type {:?}", op, data_type),
+        }
+        Operator::BitOr => match data_type {
+            DataType::Int => Arc::new(int_bitwise_or),
+            DataType::Long => Arc::new(long_bitwise_or),
+            _ => panic!("{:?} not support data type {:?}", op, data_type),
+        }
+        Operator::BitXor => match data_type {
+            DataType::Int => Arc::new(int_bitwise_x_or),
+            DataType::Long => Arc::new(long_bitwise_x_or),
+            _ => panic!("{:?} not support data type {:?}", op, data_type),
+        }
         _ => panic!("{:?} not support data type {:?}", op, data_type),
     }
 }
 
+fn int_bitwise_and(left: Value, right: Value) -> Value {
+    match (left, right) {
+        (Value::Int(x), Value::Int(y)) => Value::Int(x & y),
+        _ => Value::Null,
+    }
+}
+
+fn long_bitwise_and(left: Value, right: Value) -> Value {
+    match (left, right) {
+        (Value::Long(x), Value::Long(y)) => Value::Long(x & y),
+        _ => Value::Null,
+    }
+}
+
+fn int_bitwise_or(left: Value, right: Value) -> Value {
+    match (left, right) {
+        (Value::Int(x), Value::Int(y)) => Value::Int(x | y),
+        _ => Value::Null,
+    }
+}
+
+fn long_bitwise_or(left: Value, right: Value) -> Value {
+    match (left, right) {
+        (Value::Long(x), Value::Long(y)) => Value::Long(x | y),
+        _ => Value::Null,
+    }
+}
+
+fn int_bitwise_x_or(left: Value, right: Value) -> Value {
+    match (left, right) {
+        (Value::Int(x), Value::Int(y)) => Value::Int(x ^ y),
+        _ => Value::Null,
+    }
+}
+
+fn long_bitwise_x_or(left: Value, right: Value) -> Value {
+    match (left, right) {
+        (Value::Long(x), Value::Long(y)) => Value::Long(x ^ y),
+        _ => Value::Null,
+    }
+}
 
 fn binary_int_add(left: Value, right: Value) -> Value {
     match (left, right) {
@@ -353,6 +409,118 @@ impl PhysicalExpr for BinaryComparison {
     }
 }
 
+/// Binary Shift expression
+#[derive(Clone)]
+pub struct BinaryShift {
+    pub left: Arc<dyn PhysicalExpr>,
+    pub op: Operator,
+    pub right: Arc<dyn PhysicalExpr>,
+    pub f: Arc<BinaryFunc>
+}
+
+
+impl BinaryShift {
+    pub fn new(left: Arc<dyn PhysicalExpr>, op: Operator, right: Arc<dyn PhysicalExpr>) -> Self {
+        let f = get_binary_shift_func(op);
+        Self {left, op, right, f}
+    }
+}
+
+impl Debug for BinaryShift {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinaryShift")
+            .field("left",  &self.left)
+            .field("op", &self.op)
+            .field("right",  &self.right)
+            .finish()
+    }
+}
+
+impl PartialEq for BinaryShift {
+    fn eq(&self, other: &Self) -> bool {
+        self.left.eq(&other.left)
+            && self.op.eq(&other.op)
+            && self.right.eq(&other.right)
+    }
+}
+
+impl Hash for BinaryShift {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.left.hash(state);
+        self.op.hash(state);
+        self.right.hash(state);
+    }
+}
+
+impl Eq for BinaryShift {}
+
+impl PhysicalExpr for BinaryShift {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.left.data_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let left_value = self.left.eval(input);
+        if left_value.is_null()  {
+            return Value::Null;
+        }
+        let right_value = self.right.eval(input);
+        if right_value.is_null() {
+            return Value::Null;
+        }
+        (self.f)(left_value, right_value)
+    }
+}
+
+fn get_binary_shift_func(op: Operator) -> Arc<BinaryFunc> {
+    match op {
+        Operator::BitShiftLeft => Arc::new(binary_shift_left),
+        Operator::BitShiftRight => Arc::new(binary_shift_right),
+        Operator::BitShiftRightUnsigned => Arc::new(binary_shift_righ_unsigned),
+        _ => panic!("unsupported operator {:?}", op),
+    }
+}
+
+fn binary_shift_left(left: Value, right: Value) -> Value {
+    let n = right.get_int();
+    if n < 0 {
+        return Value::Null;
+    }
+    match left {
+        Value::Int(v) => Value::Int(v << n),
+        Value::Long(v) => Value::Long(v << n),
+        _ => Value::Null,
+    }
+}
+
+fn binary_shift_right(left: Value, right: Value) -> Value {
+    let n = right.get_int();
+    if n < 0 {
+        return Value::Null;
+    }
+    match left {
+        Value::Int(v) => Value::Int(v >> n),
+        Value::Long(v) => Value::Long(v >> n),
+        _ => Value::Null,
+    }
+}
+
+fn binary_shift_righ_unsigned(left: Value, right: Value) -> Value {
+    let n = right.get_int();
+    if n < 0 {
+        return Value::Null;
+    }
+    match left {
+        Value::Int(v) => Value::Int((v as u32 >> n) as i32),
+        Value::Long(v) => Value::Long((v as u64 >> n) as i64),
+        _ => Value::Null,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct And {
     pub left: Arc<dyn PhysicalExpr>,
@@ -466,3 +634,4 @@ impl PhysicalExpr for Or {
     }
 
 }
+

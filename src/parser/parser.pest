@@ -52,7 +52,15 @@ predicateNull = {^"is" ~ NOT? ~ ^"null"}
 // 值表达式（算术层）
 valueExpression = { comparisonExpression }
 
-comparisonExpression = { addSubExpression ~ (comparisonOperator ~ addSubExpression)? }
+comparisonExpression = { bitOrExpression ~ (comparisonOperator ~ bitOrExpression)? }
+// 位或（|）
+bitOrExpression = { bitXorExpression ~ (PIPE ~ bitXorExpression)* }
+// 位异或（^）
+bitXorExpression = { bitAndExpression ~ (HAT ~ bitAndExpression)* }
+// 位与（&）
+bitAndExpression = { bitShiftExpression ~ (AMPERSAND ~ bitShiftExpression)* }
+// 位移（<<, >>, >>>）
+bitShiftExpression = { addSubExpression ~ ((SHIFT_LEFT | SHIFT_RIGHT | SHIFT_RIGHT_UNSIGNED) ~ addSubExpression)* }
 // 加减法
 addSubExpression = { mulDivExpression ~ ((PLUS | MINUS) ~ mulDivExpression)* }
 // 乘除法
@@ -132,6 +140,13 @@ ASTERISK = { "*" }
 SLASH = { "/" }
 PERCENT = { "%" }
 TILDE = { "~" }
+AMPERSAND = { "&" }
+PIPE = { "|" }
+HAT = { "^" }
+
+SHIFT_LEFT = { "<<" }
+SHIFT_RIGHT = { ">>" }
+SHIFT_RIGHT_UNSIGNED = { ">>>" }
 
 comparisonOperator = { EQ | NEQ | NEQJ | NSEQ | LT | LTE | GT | GTE  }
 EQ = { "=" | "=="}

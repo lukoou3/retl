@@ -21,6 +21,7 @@ static STRING_ARRAY_TYPE: LazyLock<DataType> = LazyLock::new(|| DataType::Array(
 #[derive(Clone, Debug)]
 pub enum AbstractDataType {
     Any,
+    Integral,
     Numeric,
     Type(DataType),
     Collection(Vec<AbstractDataType>),
@@ -30,6 +31,7 @@ impl AbstractDataType {
     pub fn accepts_type(&self, other: &DataType) -> bool {
         match self {
             AbstractDataType::Any => true,
+            AbstractDataType::Integral => other.is_integral_type(),
             AbstractDataType::Numeric => other.is_numeric_type(),
             AbstractDataType::Type(data_type) => data_type == other,
             AbstractDataType::Collection(data_types) => data_types.iter().any(|data_type| data_type.accepts_type(other)),
@@ -39,14 +41,24 @@ impl AbstractDataType {
     pub fn default_concrete_type(&self) -> DataType {
         match self {
             AbstractDataType::Any => panic!("Any type is not supported"),
+            AbstractDataType::Integral => DataType::Int,
             AbstractDataType::Numeric => DataType::Double,
             AbstractDataType::Type(dt) => dt.clone(),
             AbstractDataType::Collection(dts) => dts[0].default_concrete_type(),
         }
     }
+    
+    pub fn is_integral_type(&self) -> bool {
+        match self {
+            AbstractDataType::Integral => true,
+            AbstractDataType::Type(data_type) => data_type.is_integral_type(),
+            _ => false,
+        }
+    }
 
     pub fn is_numeric_type(&self) -> bool {
         match self {
+            AbstractDataType::Integral => true,
             AbstractDataType::Numeric => true,
             AbstractDataType::Type(data_type) => data_type.is_numeric_type(),
             _ => false,
@@ -55,6 +67,10 @@ impl AbstractDataType {
 
     pub fn string_type() -> AbstractDataType {
         AbstractDataType::Type(DataType::String)
+    }
+    
+    pub fn integral_type(&self) -> AbstractDataType {
+        AbstractDataType::Integral
     }
 
     pub fn numeric_type(&self) -> AbstractDataType {
@@ -110,6 +126,13 @@ impl DataType {
     pub fn is_numeric_type(&self) -> bool {
         match self {
             DataType::Int | DataType::Long | DataType::Float | DataType::Double => true,
+            _ => false
+        }
+    }
+    
+    pub fn is_integral_type(&self) -> bool {
+        match self {
+            DataType::Int | DataType::Long => true,
             _ => false
         }
     }

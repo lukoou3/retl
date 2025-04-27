@@ -69,6 +69,10 @@ impl Expr {
             Expr::BinaryOperator(BinaryOperator{left, op, right:_ }) =>  match op {
                 Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo =>
                     left.data_type(),
+                Operator::BitAnd | Operator::BitOr | Operator::BitXor =>
+                    left.data_type(),
+                Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned =>
+                    left.data_type(),
                 Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
                     DataType::boolean_type(),
                 Operator::And | Operator::Or =>
@@ -127,7 +131,11 @@ impl Expr {
             },
             Expr::IsNull(_) | Expr::IsNotNull(_) => Ok(()),
             Expr::BinaryOperator(BinaryOperator{left, op, right}) => {
-                if left.data_type() != right.data_type() {
+                if matches!(op, Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned) {
+                    if !left.data_type().is_integral_type() || right.data_type() != DataType::int_type() {
+                        return Err(format!("shift Operator requires (int/long, int) type , but get {:?}", self));
+                    }
+                } else if left.data_type() != right.data_type() {
                     return Err(format!("differing types in {:?}", self));
                 }
                 match op {
@@ -140,6 +148,14 @@ impl Expr {
                             Ok(())
                         }
                     },
+                    Operator::BitAnd | Operator::BitOr | Operator::BitXor => {
+                        if !left.data_type().is_integral_type() {
+                            Err(format!("{:?} requires integral type, not {}", self, left.data_type()))
+                        }else {
+                            Ok(())
+                        }
+                    },
+                    Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned => Ok(()),
                     Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
                         if !left.data_type().is_orderable()  {
                             Err(format!("{:?} requires orderable type, not {}", self, left.data_type()))
@@ -750,11 +766,17 @@ pub fn create_physical_expr(
         Expr::IsNotNull(child) =>
             Ok(Arc::new(phy::IsNotNull::new(create_physical_expr(child)?))),
         Expr::BinaryOperator(BinaryOperator{left, op, right}) => match op {
-            Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo => {
+            Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo 
+              | Operator::BitAnd | Operator::BitOr | Operator::BitXor => {
                 let l = create_physical_expr(left)?;
                 let r = create_physical_expr(right)?;
                 Ok(Arc::new(phy::BinaryArithmetic::new(l, op.clone(), r)))
-            }
+            },
+            Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned => {
+                let l = create_physical_expr(left)?;
+                let r = create_physical_expr(right)?;
+                Ok(Arc::new(phy::BinaryShift::new(l, op.clone(), r)))
+            },
             Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
                 Ok(Arc::new(phy::BinaryComparison::new(create_physical_expr(left)?, op.clone(), create_physical_expr(right)?))),
             Operator::And =>
