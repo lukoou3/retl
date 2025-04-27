@@ -237,6 +237,7 @@ fn string_to_timestamp(v: Value) -> Value {
 pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
     match to {
         dt if dt == from => Box::new(identity),
+        dt if from == DataType::Null => Box::new(identity),
         DataType::String => match from {
             DataType::Int => Box::new(int_to_string),
             DataType::Long => Box::new(long_to_string),
@@ -294,6 +295,7 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
 pub fn can_cast(from: &DataType, to: &DataType) -> bool {
     match (from, to) {
         (from_type, to_type) if from_type == to_type => true,
+        (DataType::Null, _) => true,
         (_, DataType::String) => true,
         (DataType::String | DataType::Boolean, to_type) if to_type.is_numeric_type() => true,
         (from_type, to_type) if from_type.is_numeric_type() && to_type.is_numeric_type() => true,

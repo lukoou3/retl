@@ -154,15 +154,15 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
                     parse_identifier(first)?.to_string()
                 };
                 let args_pair = pairs.next().unwrap();
-                let arguments:Vec<_> = args_pair.into_inner().map(|pair| parse_expression(pair).unwrap()).collect();
+                let arguments:Vec<_> = args_pair.into_inner().map(parse_expression).try_collect()?;
                 let table_name = parse_identifier(pairs.next().unwrap())?.to_string();
-                let col_names: Vec<_> = pairs.map(|pair| parse_identifier(pair).unwrap().to_string()).collect();
+                let col_names: Vec<_> = pairs.map(|pair| parse_identifier(pair).map(|i| i.to_string())).try_collect()?;
                 let generator = Expr::UnresolvedGenerator(UnresolvedGenerator{ name, arguments});
                 let generator_output: Vec<_> = col_names.into_iter().map(|name| Expr::UnresolvedAttribute(name)).collect();
                 lateral_view = Some(Generate::new(generator, vec![], outer, Some(table_name), generator_output, Arc::new(LogicalPlan::UnresolvedRelation("".to_string()))));
             },
             Rule::aggregationClause => {
-                group_exprs = Some(pair.into_inner().map(|pair| parse_expression(pair).unwrap()).collect());
+                group_exprs = Some(pair.into_inner().map(parse_expression).try_collect()?);
             },
             _ => {}
         }
@@ -248,16 +248,17 @@ fn parse_primary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
 }
 
 fn parse_col_type_list(pair: Pair<Rule>) -> Result<DataType> {
-    let fields:Vec<_> = pair.into_inner().map(|col_type| {
+    let mut fields = Vec::new();
+    for col_type in pair.into_inner() {
         let mut pairs = col_type.into_inner();
-        let name = parse_identifier(pairs.next().unwrap()).unwrap().to_string();
-        let tp = parse_ast(pairs.next().unwrap()).unwrap();
+        let name = parse_identifier(pairs.next().unwrap())?.to_string();
+        let tp = parse_ast(pairs.next().unwrap())?;
         if let Ast::DataType(data_type) = tp {
-            Field { name, data_type }
+            fields.push(Field { name, data_type });
         } else {
-            panic!("Expected a data type but found {:?}", tp)
+            return Err(format!("Expected a data type but found {:?}", tp));
         }
-    }).collect();
+    }
     Ok(DataType::Struct(Fields(fields)))
 }
 
@@ -271,16 +272,17 @@ fn parse_array_data_type(pair: Pair<Rule>) -> Result<DataType> {
 }
 
 fn parse_struct_data_type(pair: Pair<Rule>) -> Result<DataType> {
-    let fields:Vec<_> = pair.into_inner().map(|complex| {
+    let mut fields = Vec::new();
+    for complex in pair.into_inner() {
         let mut pairs = complex.into_inner();
-        let name = parse_identifier(pairs.next().unwrap()).unwrap().to_string();
-        let tp = parse_ast(pairs.next().unwrap()).unwrap();
+        let name = parse_identifier(pairs.next().unwrap())?.to_string();
+        let tp = parse_ast(pairs.next().unwrap())?;
         if let Ast::DataType(data_type) = tp {
-            Field { name, data_type }
+            fields.push(Field { name, data_type });
         } else {
-            panic!("Expected a data type but found {:?}", tp)
+            return Err(format!("Expected a data type but found {:?}", tp));
         }
-    }).collect();
+    }
     Ok(DataType::Struct(Fields(fields)))
 }
 
@@ -328,7 +330,7 @@ fn parse_named_expression_seq(pair: Pair<Rule>) -> Result<Vec<Expr>> {
 }
 
 fn parse_expression(pair: Pair<Rule>) -> Result<Expr> {
-    let ast = parse_ast(pair).unwrap();
+    let ast = parse_ast(pair)?;
     if let Ast::Expression(e) = ast {
         Ok(e)
     } else {
@@ -337,7 +339,7 @@ fn parse_expression(pair: Pair<Rule>) -> Result<Expr> {
 }
 
 fn parse_datatype(pair: Pair<Rule>) -> Result<DataType> {
-    let ast = parse_ast(pair).unwrap();
+    let ast = parse_ast(pair)?;
     if let Ast::DataType(d) = ast {
         Ok(d)
     } else {
@@ -349,9 +351,7 @@ fn parse_function_call(pair: Pair<Rule>) -> Result<Expr> {
     let mut pairs = pair.into_inner();
     let name = parse_identifier(pairs.next().unwrap())?.to_string();
     let args_pair = pairs.next().unwrap();
-    let arguments:Vec<_> = args_pair.into_inner().map(|pair| {
-        parse_expression(pair).unwrap()
-    }).collect();
+    let arguments:Vec<_> = args_pair.into_inner().map(parse_expression).try_collect()?;
     Ok(Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}))
 }
 
