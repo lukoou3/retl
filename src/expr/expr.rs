@@ -258,6 +258,7 @@ impl Expr {
                 (_, DataType::Null) => "null".to_string(),
                 (v, _) if v.is_null() => format!("cast(null as {})", data_type),
                 (v, DataType::String)  => format!("'{}'", v.get_string()),
+                (v, DataType::Long)  => format!("{}L", v.get_long()),
                 (v, DataType::Date | DataType::Timestamp)  => format!("'{}'", v.to_sql_string(data_type)),
                 (v, _)  => v.to_string(),
             },
