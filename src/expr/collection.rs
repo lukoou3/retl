@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
 use crate::types::{AbstractDataType, DataType};
@@ -41,9 +40,9 @@ impl ScalarFunction for Concat {
         Some(types)
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{children} = self;
         let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
-        Ok(Arc::new(phy::Concat::new(args)))
+        Ok(Box::new(phy::Concat::new(args)))
     }
 }

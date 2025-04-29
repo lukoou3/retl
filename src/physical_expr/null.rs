@@ -1,32 +1,17 @@
 use std::any::Any;
 use std::hash::Hash;
-use std::sync::Arc;
 use crate::data::{Row, Value};
 use crate::physical_expr::PhysicalExpr;
 use crate::types::DataType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IsNull {
-    pub child: Arc<dyn PhysicalExpr>,
+    pub child: Box<dyn PhysicalExpr>,
 }
 
 impl IsNull {
-    pub fn new(child: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
         IsNull { child }
-    }
-}
-
-impl PartialEq for IsNull {
-    fn eq(&self, other: &IsNull) -> bool {
-        self.child.eq(&other.child)
-    }
-}
-
-impl Eq for IsNull{}
-
-impl Hash for IsNull {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.child.hash(state);
     }
 }
 
@@ -45,28 +30,14 @@ impl PhysicalExpr for IsNull {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IsNotNull {
-    pub child: Arc<dyn PhysicalExpr>,
+    pub child: Box<dyn PhysicalExpr>,
 }
 
 impl IsNotNull {
-    pub fn new(child: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
         IsNotNull { child }
-    }
-}
-
-impl PartialEq for IsNotNull {
-    fn eq(&self, other: &IsNotNull) -> bool {
-        self.child.eq(&other.child)
-    }
-}
-
-impl Eq for IsNotNull{}
-
-impl Hash for IsNotNull {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.child.hash(state);
     }
 }
 
@@ -85,28 +56,14 @@ impl PhysicalExpr for IsNotNull {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Coalesce {
-    children: Vec<Arc<dyn PhysicalExpr>>,
+    children: Vec<Box<dyn PhysicalExpr>>,
 }
 
 impl Coalesce {
-    pub fn new(children: Vec<Arc<dyn PhysicalExpr>>) -> Coalesce {
+    pub fn new(children: Vec<Box<dyn PhysicalExpr>>) -> Coalesce {
         Coalesce { children }
-    }
-}
-
-impl PartialEq for Coalesce{
-    fn eq(&self, other: &Coalesce) -> bool {
-        self.children.eq(&other.children)
-    }
-}
-
-impl Eq for Coalesce{}
-
-impl Hash for Coalesce{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.children.hash(state);
     }
 }
 
@@ -130,30 +87,15 @@ impl PhysicalExpr for Coalesce {
    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct In {
-    pub value: Arc<dyn PhysicalExpr>,
-    pub list: Vec<Arc<dyn PhysicalExpr>>,
+    pub value: Box<dyn PhysicalExpr>,
+    pub list: Vec<Box<dyn PhysicalExpr>>,
 }
 
 impl In {
-    pub fn new(value: Arc<dyn PhysicalExpr>, list: Vec<Arc<dyn PhysicalExpr>>) -> Self {
+    pub fn new(value: Box<dyn PhysicalExpr>, list: Vec<Box<dyn PhysicalExpr>>) -> Self {
         In { value, list }
-    }
-}
-
-impl PartialEq for In {
-    fn eq(&self, other: &In) -> bool {
-        self.value.eq(&other.value) && self.list.eq(&other.list)
-    }
-}
-
-impl Eq for In{}
-
-impl Hash for In {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
-        self.list.hash(state);
     }
 }
 

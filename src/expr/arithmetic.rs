@@ -2,7 +2,6 @@ use crate::Result;
 use crate::expr::{CreateScalarFunction, Expr, ScalarFunction, create_physical_expr};
 use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct UnaryMinus {
@@ -42,8 +41,8 @@ impl ScalarFunction for UnaryMinus {
         Some(vec![AbstractDataType::Numeric])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::UnaryMinus::new(create_physical_expr(&self.child)?)))
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::UnaryMinus::new(create_physical_expr(&self.child)?)))
     }
 
     fn sql(&self) -> String {
@@ -89,8 +88,8 @@ impl ScalarFunction for BitwiseNot {
         Some(vec![AbstractDataType::Integral])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::BitwiseNot::new(create_physical_expr(&self.child)?)))
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::BitwiseNot::new(create_physical_expr(&self.child)?)))
     }
 
     fn sql(&self) -> String {
@@ -142,8 +141,8 @@ impl ScalarFunction for Least {
         }
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::Least::new(
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::Least::new(
             self.children.iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?
         )))
     }
@@ -193,8 +192,8 @@ impl ScalarFunction for Greatest {
         }
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::Greatest::new(
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::Greatest::new(
             self.children.iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?
         )))
     }

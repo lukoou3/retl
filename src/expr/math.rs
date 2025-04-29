@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, Literal, ScalarFunction, StringSplit};
 use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
@@ -45,9 +44,9 @@ impl ScalarFunction for Pow {
         Some(vec![AbstractDataType::double_type(), AbstractDataType::double_type()])
     }
 
-    fn create_physical_expr(&self) -> crate::Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> crate::Result<Box<dyn PhysicalExpr>> {
         let Self{left, right} = self;
-        Ok(Arc::new(phy::Pow::new(create_physical_expr(left)?, create_physical_expr(right)?)))
+        Ok(Box::new(phy::Pow::new(create_physical_expr(left)?, create_physical_expr(right)?)))
     }
 }
 
@@ -93,9 +92,9 @@ impl ScalarFunction for Round {
         Some(vec![AbstractDataType::double_type(), AbstractDataType::int_type()])
     }
 
-    fn create_physical_expr(&self) -> crate::Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> crate::Result<Box<dyn PhysicalExpr>> {
         let Self{ child, scale } = self;
-        Ok(Arc::new(phy::Round::new(create_physical_expr(child)?, create_physical_expr(scale)?)))
+        Ok(Box::new(phy::Round::new(create_physical_expr(child)?, create_physical_expr(scale)?)))
     }
 }
 
@@ -141,11 +140,11 @@ impl ScalarFunction for Bin {
         Some(vec![AbstractDataType::Collection(vec![AbstractDataType::int_type(), AbstractDataType::long_type()]), AbstractDataType::boolean_type()])
     }
 
-    fn create_physical_expr(&self) -> crate::Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> crate::Result<Box<dyn PhysicalExpr>> {
         let Self{ child, padding } = self;
         match padding.as_ref() {
             Expr::Literal(Literal{value, data_type}) if data_type == DataType::boolean_type() => {
-                Ok(Arc::new(phy::Bin::new(create_physical_expr(child)?, value.get_boolean())))
+                Ok(Box::new(phy::Bin::new(create_physical_expr(child)?, value.get_boolean())))
             },
             _ =>  Err(format!("requires padding argument to be boolean literal, found:{:?}", padding.as_ref()))
         }

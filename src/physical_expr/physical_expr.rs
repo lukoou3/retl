@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use crate::data::{Row, Value};
 use crate::types::DataType;
 
-pub trait PhysicalExpr: Send + Sync + Debug + DynEq + DynHash  {
+pub trait PhysicalExpr: Debug  {
     /// Returns the physical expression as [`Any`] so that it can be
     /// downcast to a specific implementation.
     fn as_any(&self) -> &dyn Any;
@@ -13,50 +13,69 @@ pub trait PhysicalExpr: Send + Sync + Debug + DynEq + DynHash  {
     fn eval(&self, input: &dyn Row) -> Value;
 }
 
-/// [`PhysicalExpr`] can't be constrained by [`Eq`] directly because it must remain object
-/// safe. To ease implementation blanket implementation is provided for [`Eq`] types.
-pub trait DynEq {
-    fn dyn_eq(&self, other: &dyn Any) -> bool;
-}
+pub trait UnaryExpr: PhysicalExpr {
+    fn child(&self) -> &dyn PhysicalExpr;
 
-impl<T: Eq + Any> DynEq for T {
-    fn dyn_eq(&self, other: &dyn Any) -> bool {
-        other.downcast_ref::<Self>() == Some(self)
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child().eval(input);
+        if value.is_null() {
+            Value::Null
+        } else {
+            self.null_safe_eval(value)
+        }
     }
+
+    fn null_safe_eval(&self, value: Value) -> Value;
 }
 
-impl PartialEq for dyn PhysicalExpr {
-    fn eq(&self, other: &Self) -> bool {
-        self.dyn_eq(other.as_any())
+pub trait BinaryExpr: PhysicalExpr {
+    fn left(&self) -> &dyn PhysicalExpr;
+    fn right(&self) -> &dyn PhysicalExpr;
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value1 = self.left().eval(input);
+        if value1.is_null() {
+            Value::Null
+        } else {
+            let value2 = self.right().eval(input);
+            if value2.is_null() {
+                Value::Null
+            } else {
+                self.null_safe_eval(value1, value2)
+            }
+        }
     }
+
+    fn null_safe_eval(&self, value1: Value, value2: Value) -> Value;
 }
 
-impl Eq for dyn PhysicalExpr {}
-
-/// [`PhysicalExpr`] can't be constrained by [`Hash`] directly because it must remain
-/// object safe. To ease implementation blanket implementation is provided for [`Hash`]
-/// types.
-pub trait DynHash {
-    fn dyn_hash(&self, _state: &mut dyn Hasher);
-}
-
-impl<T: Hash + Any> DynHash for T {
-    fn dyn_hash(&self, mut state: &mut dyn Hasher) {
-        self.type_id().hash(&mut state);
-        self.hash(&mut state)
+pub trait TernaryExpr: PhysicalExpr {
+    fn child1(&self) -> &dyn PhysicalExpr;
+    fn child2(&self) -> &dyn PhysicalExpr;
+    fn child3(&self) -> &dyn PhysicalExpr;
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value1 = self.child1().eval(input);
+        if value1.is_null() {
+            Value::Null
+        } else {
+            let value2 = self.child2().eval(input);
+            if value2.is_null() {
+                Value::Null
+            } else {
+                let value3 = self.child3().eval(input);
+                if value3.is_null() {
+                    Value::Null
+                } else {
+                    self.null_safe_eval(value1, value2, value3)
+                }
+            }
+        }
     }
+    fn null_safe_eval(&self, value1: Value, value2: Value, value3: Value) -> Value;
 }
-
-impl Hash for dyn PhysicalExpr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.dyn_hash(state);
-    }
-}
-
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use crate::data::GenericRow;
     use crate::Operator;
     use crate::types::DataType;
@@ -72,16 +91,16 @@ mod tests {
     #[test]
     fn test_add_int() {
         let expr1 = BinaryArithmetic {
-            left: Arc::new(BoundReference::new(0, DataType::Int)),
+            left: Box::new(BoundReference::new(0, DataType::Int)),
             op: Operator::Plus,
-            right: Arc::new(BoundReference::new(1, DataType::Int)),
-            f: Arc::new(add_int)
+            right: Box::new(BoundReference::new(1, DataType::Int)),
+            f: Box::new(add_int)
         };
         let expr = BinaryArithmetic {
-            left: Arc::new(expr1),
+            left: Box::new(expr1),
             op: Operator::Plus,
-            right: Arc::new(Literal::new(Value::Int(10), DataType::Int)),
-            f: Arc::new(add_int)
+            right: Box::new(Literal::new(Value::Int(10), DataType::Int)),
+            f: Box::new(add_int)
         };
         println!("{:?}", expr);
         let mut row1 = GenericRow::new(vec![
@@ -106,8 +125,8 @@ mod tests {
     #[test]
     fn test_like() {
         let expr = Like::new(
-            Arc::new(BoundReference::new(0, DataType::String)),
-            Arc::new(Literal::new(Value::string("%ab%"), DataType::String))
+            Box::new(BoundReference::new(0, DataType::String)),
+            Box::new(Literal::new(Value::string("%ab%"), DataType::String))
         );
         println!("{:?}", expr);
         let mut row = GenericRow::new(vec![Value::string("acb")]);

@@ -65,16 +65,15 @@ impl TypedAggFunction for CollectList {
     }
 }
 
-#[derive(Clone)]
 pub struct PhysicalCollectList {
-    child: Arc<dyn PhysicalExpr>,
+    child: Box<dyn PhysicalExpr>,
     mutable_agg_buffer_offset: usize,
     input_agg_buffer_offset: usize,
     data_type: DataType
 }
 
 impl PhysicalCollectList {
-    pub fn new(child: Arc<dyn PhysicalExpr>, mutable_agg_buffer_offset: usize, input_agg_buffer_offset: usize, data_type: DataType) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>, mutable_agg_buffer_offset: usize, input_agg_buffer_offset: usize, data_type: DataType) -> Self {
         PhysicalCollectList { child, mutable_agg_buffer_offset, input_agg_buffer_offset, data_type }
     }
 }

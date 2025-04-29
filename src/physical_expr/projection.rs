@@ -1,17 +1,16 @@
-use std::sync::Arc;
 use crate::Result;
 use crate::data::{Row, GenericRow, JoinedRow};
 use crate::expr::{AttributeReference, BoundReference, Expr};
 use crate::physical_expr::{create_physical_expr, PhysicalExpr};
 
-# [derive(Debug, Clone)]
+# [derive(Debug)]
 pub struct Projection {
-    exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+    exprs: Vec<(usize, Box<dyn PhysicalExpr>)>,
 }
 
 impl Projection {
     pub fn new(expressions: Vec<Expr>) -> Result<Self> {
-        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+        let exprs: Result<Vec<(usize, Box<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
             .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
             .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
         let exprs = exprs?;
@@ -38,16 +37,16 @@ impl Projection {
     }
 }
 
-# [derive(Debug, Clone)]
+# [derive(Debug)]
 pub struct MutableProjection {
-    exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+    exprs: Vec<(usize, Box<dyn PhysicalExpr>)>,
     row: GenericRow,
 }
 
 impl MutableProjection {
     pub fn new(expressions: Vec<Expr>) -> Result<Self> {
         let row = GenericRow::new_with_size(expressions.len());
-        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+        let exprs: Result<Vec<(usize, Box<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
             .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
             .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
         let exprs = exprs?;
@@ -76,16 +75,16 @@ impl MutableProjection {
     }
 }
 
-# [derive(Debug, Clone)]
+# [derive(Debug)]
 pub struct MutableProjectionForAgg {
-    exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+    exprs: Vec<(usize, Box<dyn PhysicalExpr>)>,
     row: GenericRow,
 }
 
 impl MutableProjectionForAgg {
     pub fn new(expressions: Vec<Expr>) -> Result<Self> {
         let row = GenericRow::new_with_size(expressions.len());
-        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+        let exprs: Result<Vec<(usize, Box<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
             .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
             .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
         let exprs = exprs?;

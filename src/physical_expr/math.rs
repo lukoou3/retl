@@ -2,34 +2,34 @@ use std::any::Any;
 use std::hash::Hash;
 use std::sync::Arc;
 use crate::data::{Row, Value};
-use crate::physical_expr::{PhysicalExpr};
+use crate::physical_expr::{BinaryExpr, PhysicalExpr};
 use crate::types::DataType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Pow {
-    left: Arc<dyn PhysicalExpr>,
-    right: Arc<dyn PhysicalExpr>,
+    left: Box<dyn PhysicalExpr>,
+    right: Box<dyn PhysicalExpr>,
 }
 
 impl Pow {
-    pub fn new(left: Arc<dyn PhysicalExpr>, right: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(left: Box<dyn PhysicalExpr>, right: Box<dyn PhysicalExpr>) -> Self {
         Self {left, right}
     }
 }
 
-impl PartialEq for Pow {
-    fn eq(&self, other: &Self) -> bool {
-        self.left.eq(&other.left)
-            && self.right.eq(&other.right)
+impl BinaryExpr for Pow {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.left.as_ref()
     }
-}
 
-impl Eq for Pow{}
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.right.as_ref()
+    }
 
-impl Hash for Pow{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.left.hash(state);
-        self.right.hash(state);
+    fn null_safe_eval(&self, left: Value, right: Value) -> Value {
+        let left = left.get_double();
+        let right = right.get_double();
+        Value::Double(left.powf(right))
     }
 }
 
@@ -42,45 +42,36 @@ impl PhysicalExpr for Pow {
     }
 
     fn eval(&self, input: &dyn Row) -> Value {
-        let left = self.left.eval(input);
-        if left.is_null() {
-            return Value::Null;
-        }
-        let right = self.right.eval(input);
-        if right.is_null() {
-            return Value::Null;
-        }
-        let left = left.get_double();
-        let right = right.get_double();
-        Value::Double(left.powf(right))
+        BinaryExpr::eval(self, input)
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Round {
-    child: Arc<dyn PhysicalExpr>,
-    scale: Arc<dyn PhysicalExpr>,
+    child: Box<dyn PhysicalExpr>,
+    scale: Box<dyn PhysicalExpr>,
 }
 
 impl Round {
-    pub fn new(child: Arc<dyn PhysicalExpr>, scale: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>, scale: Box<dyn PhysicalExpr>) -> Self {
         Self {child, scale}
     }
 }
 
-impl PartialEq for Round {
-    fn eq(&self, other: &Self) -> bool {
-        self.child.eq(&other.child)
-            && self.scale.eq(&other.scale)
+impl BinaryExpr for Round {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.child.as_ref()
     }
-}
 
-impl Eq for Round{}
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.scale.as_ref()
+    }
 
-impl Hash for Round{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.child.hash(state);
-        self.scale.hash(state);
+    fn null_safe_eval(&self, child: Value, scale: Value) -> Value {
+        let number = child.get_double();
+        let decimals = scale.get_int();
+        let factor = 10.0_f64.powi(decimals);
+        Value::Double((number * factor).round() / factor)
     }
 }
 
@@ -93,46 +84,19 @@ impl PhysicalExpr for Round {
     }
 
     fn eval(&self, input: &dyn Row) -> Value {
-        let child = self.child.eval(input);
-        if child.is_null() {
-            return Value::Null;
-        }
-        let scale = self.scale.eval(input);
-        if scale.is_null() {
-            return Value::Null;
-        }
-        let number = child.get_double();
-        let decimals = scale.get_int();
-        let factor = 10.0_f64.powi(decimals);
-        Value::Double((number * factor).round() / factor)
+        BinaryExpr::eval(self, input)
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Bin {
-    child: Arc<dyn PhysicalExpr>,
+    child: Box<dyn PhysicalExpr>,
     padding: bool,
 }
 
 impl Bin {
-    pub fn new(child: Arc<dyn PhysicalExpr>, padding: bool) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>, padding: bool) -> Self {
         Self {child, padding}
-    }
-}
-
-impl PartialEq for Bin {
-    fn eq(&self, other: &Self) -> bool {
-        self.child.eq(&other.child)
-            && self.padding.eq(&other.padding)
-    }
-}
-
-impl Eq for Bin{}
-
-impl Hash for Bin{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.child.hash(state);
-        self.padding.hash(state);
     }
 }
 

@@ -6,7 +6,7 @@ use crate::Result;
 
 pub fn create_physical_expr(
     e: &Expr,
-) -> Result<Arc<dyn PhysicalExpr>> {
+) -> Result<Box<dyn PhysicalExpr>> {
     expr::create_physical_expr(e)
 }
 

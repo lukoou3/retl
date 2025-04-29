@@ -1,32 +1,17 @@
 use std::any::Any;
 use std::hash::Hash;
-use std::sync::Arc;
 use crate::data::{Row, Value};
 use crate::physical_expr::PhysicalExpr;
 use crate::types::DataType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Concat {
-    children: Vec<Arc<dyn PhysicalExpr>>,
+    children: Vec<Box<dyn PhysicalExpr>>,
 }
 
 impl Concat {
-    pub fn new(children: Vec<Arc<dyn PhysicalExpr>>) -> Concat {
+    pub fn new(children: Vec<Box<dyn PhysicalExpr>>) -> Concat {
         Concat { children }
-    }
-}
-
-impl PartialEq for Concat{
-    fn eq(&self, other: &Concat) -> bool {
-        self.children.eq(&other.children)
-    }
-}
-
-impl Eq for Concat{}
-
-impl Hash for Concat{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.children.hash(state);
     }
 }
 

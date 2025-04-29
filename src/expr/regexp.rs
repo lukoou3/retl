@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
 use crate::physical_expr::{self as phy, PhysicalExpr};
@@ -47,9 +46,9 @@ impl ScalarFunction for RegExpExtract {
         Some(vec![AbstractDataType::string_type(), AbstractDataType::string_type(), AbstractDataType::int_type()])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{subject, regexp, idx} = self;
-        Ok(Arc::new(phy::RegExpExtract::new(create_physical_expr(subject)?, create_physical_expr(regexp)?, create_physical_expr(idx)?)))
+        Ok(Box::new(phy::RegExpExtract::new(create_physical_expr(subject)?, create_physical_expr(regexp)?, create_physical_expr(idx)?)))
     }
 }
 
@@ -97,9 +96,9 @@ impl ScalarFunction for RegExpReplace {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{subject, regexp, rep} = self;
-        Ok(Arc::new(phy::RegExpReplace::new(create_physical_expr(subject)?, create_physical_expr(regexp)?, create_physical_expr(rep)?)))
+        Ok(Box::new(phy::RegExpReplace::new(create_physical_expr(subject)?, create_physical_expr(regexp)?, create_physical_expr(rep)?)))
     }
 }
 

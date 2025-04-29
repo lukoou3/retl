@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::io::Write;
-use std::sync::Arc;
 use prettytable::{Table, Row as TRow, Cell};
 use crate::data::{BaseRow, GenericRow, Row};
 use crate::datetime_utils::current_timestamp_millis;
@@ -95,11 +94,11 @@ pub trait MapFunction {
 }
 
 pub struct ProjectMapFunction {
-    exprs: Vec<Arc<dyn PhysicalExpr>>,
+    exprs: Vec<Box<dyn PhysicalExpr>>,
 }
 
 impl ProjectMapFunction {
-    pub fn new(exprs: Vec<Arc<dyn PhysicalExpr>>) -> Self {
+    pub fn new(exprs: Vec<Box<dyn PhysicalExpr>>) -> Self {
         ProjectMapFunction { exprs }
     }
 }
@@ -167,8 +166,8 @@ mod tests {
             Field::new("id", DataType::Int),
         ]);
         let mut map_df = MapDataFrame::new(schema, Box::new(df), Box::new(ProjectMapFunction::new(vec![
-            Arc::new(phy::BoundReference::new(1, DataType::String)),
-            Arc::new(phy::BoundReference::new(0, DataType::Int)),
+            Box::new(phy::BoundReference::new(1, DataType::String)),
+            Box::new(phy::BoundReference::new(0, DataType::Int)),
         ])));
         for row in map_df.compute() {
             println!("row:{:?}", row);

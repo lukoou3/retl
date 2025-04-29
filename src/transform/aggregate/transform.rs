@@ -79,7 +79,7 @@ impl TaskAggregateTransform {
         }
 
         let agg_func = RowAggregateFunction::new(agg_exprs, agg_attrs, input_attrs.clone())?;
-        let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = BoundReference::bind_references(group_exprs, input_attrs)?.iter().map(|expr| create_physical_expr(expr)).collect();
+        let exprs: Result<Vec<Box<dyn PhysicalExpr>>, String> = BoundReference::bind_references(group_exprs, input_attrs)?.iter().map(|expr| create_physical_expr(expr)).collect();
         let key_selector = RowKeySelector::new(exprs?);
         let rst_func = RowResultFunction::new(result_exprs, group_attrs.into_iter().chain(final_agg_attrs.into_iter()).collect())?;
 
@@ -268,7 +268,7 @@ impl RowAggregateFunction {
 }
 
 struct ProcessRow {
-    exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+    exprs: Vec<(usize, Box<dyn PhysicalExpr>)>,
     functions: Vec<Box<dyn PhysicalTypedAggFunction>>
 }
 
@@ -292,7 +292,7 @@ impl ProcessRow {
         }
         let input = agg_attributes.into_iter().chain(input_attrs.into_iter()).collect();
         let expressions = BoundReference::bind_references(update_exprs, input)?;
-        let exprs: Result<Vec<(usize, Arc<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
+        let exprs: Result<Vec<(usize, Box<dyn PhysicalExpr>)>, String> = expressions.iter().enumerate()
             .filter(|(_, expr)| !matches!(expr, Expr::NoOp))
             .map(|(i, expr)| create_physical_expr(expr).map(|expr| (i, expr))).collect();
         let exprs = exprs?;
@@ -311,12 +311,12 @@ impl ProcessRow {
 }
 
 struct RowKeySelector {
-    group_exprs: Vec<(usize, Arc<dyn PhysicalExpr>)>,
+    group_exprs: Vec<(usize, Box<dyn PhysicalExpr>)>,
 }
 
 impl RowKeySelector {
-    fn new(group_exprs: Vec<Arc<dyn PhysicalExpr>>) -> Self {
-        let group_exprs: Vec<(usize, Arc<dyn PhysicalExpr>)> = group_exprs.into_iter().enumerate().map(|(index, expr)| (index, expr)).collect();
+    fn new(group_exprs: Vec<Box<dyn PhysicalExpr>>) -> Self {
+        let group_exprs: Vec<(usize, Box<dyn PhysicalExpr>)> = group_exprs.into_iter().enumerate().map(|(index, expr)| (index, expr)).collect();
         Self {group_exprs}
     }
 

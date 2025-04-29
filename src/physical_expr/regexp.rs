@@ -9,19 +9,19 @@ use memchr::memchr3;
 use regex::{Error, Regex, RegexBuilder};
 use crate::Result;
 use crate::data::{empty_row, Row, Value};
-use crate::physical_expr::{Literal, PhysicalExpr};
+use crate::physical_expr::{Literal, PhysicalExpr, TernaryExpr};
 use crate::types::DataType;
 
 #[derive(Debug)]
 pub struct RegExpExtract {
-    subject: Arc<dyn PhysicalExpr>,
-    regexp: Arc<dyn PhysicalExpr>,
-    idx: Arc<dyn PhysicalExpr>,
+    subject: Box<dyn PhysicalExpr>,
+    regexp: Box<dyn PhysicalExpr>,
+    idx: Box<dyn PhysicalExpr>,
     regexp_static: Option<Regex>,
 }
 
 impl RegExpExtract {
-    pub fn new(subject: Arc<dyn PhysicalExpr>, regexp: Arc<dyn PhysicalExpr>, idx: Arc<dyn PhysicalExpr>) -> RegExpExtract {
+    pub fn new(subject: Box<dyn PhysicalExpr>, regexp: Box<dyn PhysicalExpr>, idx: Box<dyn PhysicalExpr>) -> RegExpExtract {
         let regexp_static = if let Some(literal) = regexp.as_any().downcast_ref::<Literal>() {
             let value = literal.eval(empty_row());
             if value.is_null() {
@@ -42,46 +42,20 @@ impl RegExpExtract {
     }
 }
 
-impl PartialEq for RegExpExtract {
-    fn eq(&self, other: &Self) -> bool {
-        self.subject.eq(&other.subject)
-            && self.regexp.eq(&other.regexp)
-            && self.idx.eq(&other.idx)
-    }
-}
-
-impl Eq for RegExpExtract{}
-
-impl Hash for RegExpExtract{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.subject.hash(state);
-        self.regexp.hash(state);
-        self.idx.hash(state);
-    }
-}
-
-impl PhysicalExpr for RegExpExtract {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl TernaryExpr for RegExpExtract {
+    fn child1(&self) -> &dyn PhysicalExpr {
+        self.subject.as_ref()
     }
 
-    fn data_type(&self) -> DataType {
-        DataType::String
+    fn child2(&self) -> &dyn PhysicalExpr {
+        self.regexp.as_ref()
     }
 
-    fn eval(&self, input: &dyn Row) -> Value {
-        let subject = self.subject.eval(input);
-        if subject.is_null() {
-            return Value::Null;
-        }
-        let regexp = self.regexp.eval(input);
-        if regexp.is_null() {
-            return Value::Null;
-        }
-        let idx = self.idx.eval(input);
-        if idx.is_null() {
-            return Value::Null;
-        }
+    fn child3(&self) -> &dyn PhysicalExpr {
+        self.idx.as_ref()
+    }
+
+    fn null_safe_eval(&self, subject: Value, regexp: Value, idx: Value) -> Value {
         let source = subject.get_string();
         let idx = idx.get_int();
         if idx < 0 {
@@ -119,16 +93,31 @@ impl PhysicalExpr for RegExpExtract {
 }
 
 
+impl PhysicalExpr for RegExpExtract {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        TernaryExpr::eval(self, input)
+    }
+}
+
+
 #[derive(Debug)]
 pub struct RegExpReplace {
-    subject: Arc<dyn PhysicalExpr>,
-    regexp: Arc<dyn PhysicalExpr>,
-    rep: Arc<dyn PhysicalExpr>,
+    subject: Box<dyn PhysicalExpr>,
+    regexp: Box<dyn PhysicalExpr>,
+    rep: Box<dyn PhysicalExpr>,
     regexp_static: Option<Regex>,
 }
 
 impl RegExpReplace {
-    pub fn new(subject: Arc<dyn PhysicalExpr>, regexp: Arc<dyn PhysicalExpr>, rep: Arc<dyn PhysicalExpr>) -> RegExpReplace {
+    pub fn new(subject: Box<dyn PhysicalExpr>, regexp: Box<dyn PhysicalExpr>, rep: Box<dyn PhysicalExpr>) -> RegExpReplace {
         let regexp_static = if let Some(literal) = regexp.as_any().downcast_ref::<Literal>() {
             let value = literal.eval(empty_row());
             if value.is_null() {
@@ -149,46 +138,20 @@ impl RegExpReplace {
     }
 }
 
-impl PartialEq for RegExpReplace {
-    fn eq(&self, other: &Self) -> bool {
-        self.subject.eq(&other.subject)
-            && self.regexp.eq(&other.regexp)
-            && self.rep.eq(&other.rep)
-    }
-}
-
-impl Eq for RegExpReplace{}
-
-impl Hash for RegExpReplace{
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.subject.hash(state);
-        self.regexp.hash(state);
-        self.rep.hash(state);
-    }
-}
-
-impl PhysicalExpr for RegExpReplace {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl TernaryExpr for RegExpReplace {
+    fn child1(&self) -> &dyn PhysicalExpr {
+        self.subject.as_ref()
     }
 
-    fn data_type(&self) -> DataType {
-        DataType::String
+    fn child2(&self) -> &dyn PhysicalExpr {
+        self.regexp.as_ref()
     }
 
-    fn eval(&self, input: &dyn Row) -> Value {
-        let subject = self.subject.eval(input);
-        if subject.is_null() {
-            return Value::Null;
-        }
-        let regexp = self.regexp.eval(input);
-        if regexp.is_null() {
-            return Value::Null;
-        }
-        let rep = self.rep.eval(input);
-        if rep.is_null() {
-            return Value::Null;
-        }
+    fn child3(&self) -> &dyn PhysicalExpr {
+        self.rep.as_ref()
+    }
+
+    fn null_safe_eval(&self, subject: Value, regexp: Value, rep: Value) -> Value {
         let source = subject.get_string();
         let replacement = rep.get_string();
         if let Some(regexp) = &self.regexp_static {
@@ -211,16 +174,31 @@ impl PhysicalExpr for RegExpReplace {
     }
 }
 
+
+impl PhysicalExpr for RegExpReplace {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        TernaryExpr::eval(self, input)
+    }
+}
+
 // Like expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Like {
-    expr: Arc<dyn PhysicalExpr>,
-    pattern: Arc<dyn PhysicalExpr>,
+    expr: Box<dyn PhysicalExpr>,
+    pattern: Box<dyn PhysicalExpr>,
     predicate: Option<Predicate>,
 }
 
 impl Like {
-    pub fn new(expr: Arc<dyn PhysicalExpr>, pattern: Arc<dyn PhysicalExpr>) -> Like {
+    pub fn new(expr: Box<dyn PhysicalExpr>, pattern: Box<dyn PhysicalExpr>) -> Like {
         if let Some(literal) = pattern.as_any().downcast_ref::<Literal>() {
             if let Ok(predicate) = Predicate::like(literal.eval(empty_row()).get_string()){
                 Like { expr, pattern, predicate: Some(predicate) }
@@ -230,23 +208,6 @@ impl Like {
         } else {
             Like { expr, pattern, predicate: None }
         }
-    }
-}
-
-// Manually derive PartialEq and Hash to work around https://github.com/rust-lang/rust/issues/78808
-impl PartialEq for Like {
-    fn eq(&self, other: &Self) -> bool {
-        self.expr.eq(&other.expr)
-            && self.pattern.eq(&other.pattern)
-    }
-}
-
-impl Eq for Like {}
-
-impl Hash for Like {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.expr.hash(state);
-        self.pattern.hash(state);
     }
 }
 
@@ -280,40 +241,24 @@ impl PhysicalExpr for Like {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RLike {
-    expr: Arc<dyn PhysicalExpr>,
-    pattern: Arc<dyn PhysicalExpr>,
+    expr: Box<dyn PhysicalExpr>,
+    pattern: Box<dyn PhysicalExpr>,
     regex: Option<Regex>,
 }
 
 impl RLike {
-    pub fn new(expr: Arc<dyn PhysicalExpr>, pattern: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(expr: Box<dyn PhysicalExpr>, pattern: Box<dyn PhysicalExpr>) -> Self {
         if let Some(literal) = pattern.as_any().downcast_ref::<Literal>() {
             if let Ok(regex) = Regex::new(literal.eval(empty_row()).get_string()) {
                 Self { expr, pattern, regex: Some(regex) }
             } else {
-                Self { expr, pattern: Arc::new(Literal::new(Value::Null, DataType::String)), regex: None }
+                Self { expr, pattern: Box::new(Literal::new(Value::Null, DataType::String)), regex: None }
             }
         } else {
             Self { expr, pattern, regex: None }
         }
-    }
-}
-
-impl PartialEq for RLike {
-    fn eq(&self, other: &Self) -> bool {
-        self.expr.eq(&other.expr)
-            && self.pattern.eq(&other.pattern)
-    }
-}
-
-impl Eq for RLike {}
-
-impl Hash for RLike {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.expr.hash(state);
-        self.pattern.hash(state);
     }
 }
 
@@ -349,19 +294,19 @@ impl PhysicalExpr for RLike {
 }
 
 /// A string based predicate
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) enum Predicate {
-    Eq(Arc<str>),
-    Contains(Arc<str>),
-    StartsWith(Arc<str>),
-    EndsWith(Arc<str>),
+    Eq(Box<str>),
+    Contains(Box<str>),
+    StartsWith(Box<str>),
+    EndsWith(Box<str>),
 
     /// Equality ignoring ASCII case
-    IEqAscii(Arc<str>),
+    IEqAscii(Box<str>),
     /// Starts with ignoring ASCII case
-    IStartsWithAscii(Arc<str>),
+    IStartsWithAscii(Box<str>),
     /// Ends with ignoring ASCII case
-    IEndsWithAscii(Arc<str>),
+    IEndsWithAscii(Box<str>),
 
     Regex(Regex)
 }
@@ -385,11 +330,11 @@ impl Predicate {
     /// Create a predicate for the given like pattern
     pub(crate) fn like(pattern: &str) -> Result<Self> {
         if !contains_like_pattern(pattern) {
-            Ok(Self::Eq(Arc::from(pattern)))
+            Ok(Self::Eq(Box::from(pattern)))
         } else if pattern.ends_with('%') && !contains_like_pattern(&pattern[..pattern.len() - 1]) {
-            Ok(Self::StartsWith(Arc::from(&pattern[..pattern.len() - 1])))
+            Ok(Self::StartsWith(Box::from(&pattern[..pattern.len() - 1])))
         } else if pattern.starts_with('%') && !contains_like_pattern(&pattern[1..]) {
-            Ok(Self::EndsWith(Arc::from(&pattern[1..])))
+            Ok(Self::EndsWith(Box::from(&pattern[1..])))
         } else if pattern.starts_with('%')
             && pattern.ends_with('%')
             && !contains_like_pattern(&pattern[1..pattern.len() - 1])
@@ -401,21 +346,21 @@ impl Predicate {
     }
 
     pub(crate) fn contains(needle: &str) -> Self {
-        Self::Contains(Arc::from(needle))
+        Self::Contains(Box::from(needle))
     }
 
     /// Create a predicate for the given ilike pattern
     pub(crate) fn ilike(pattern: &str, is_ascii: bool) -> Result<Self> {
         if is_ascii && pattern.is_ascii() {
             if !contains_like_pattern(pattern) {
-                return Ok(Self::IEqAscii(Arc::from(pattern)));
+                return Ok(Self::IEqAscii(Box::from(pattern)));
             } else if pattern.ends_with('%')
                 && !pattern.ends_with("\\%")
                 && !contains_like_pattern(&pattern[..pattern.len() - 1])
             {
-                return Ok(Self::IStartsWithAscii(Arc::from(&pattern[..pattern.len() - 1])));
+                return Ok(Self::IStartsWithAscii(Box::from(&pattern[..pattern.len() - 1])));
             } else if pattern.starts_with('%') && !contains_like_pattern(&pattern[1..]) {
-                return Ok(Self::IEndsWithAscii(Arc::from(&pattern[1..])));
+                return Ok(Self::IEndsWithAscii(Box::from(&pattern[1..])));
             }
         }
         Ok(Self::Regex(regex_like(pattern, true)?))
@@ -592,79 +537,79 @@ mod tests {
 
     #[test]
     fn test_starts_with() {
-        assert!(Predicate::StartsWith(Arc::from("hay")).eval("haystack"));
-        assert!(Predicate::StartsWith(Arc::from("h£ay")).eval("h£aystack"));
-        assert!(Predicate::StartsWith(Arc::from("haystack")).eval("haystack"));
-        assert!(Predicate::StartsWith(Arc::from("ha")).eval("haystack"));
-        assert!(Predicate::StartsWith(Arc::from("h")).eval("haystack"));
-        assert!(Predicate::StartsWith(Arc::from("")).eval("haystack"));
+        assert!(Predicate::StartsWith(Box::from("hay")).eval("haystack"));
+        assert!(Predicate::StartsWith(Box::from("h£ay")).eval("h£aystack"));
+        assert!(Predicate::StartsWith(Box::from("haystack")).eval("haystack"));
+        assert!(Predicate::StartsWith(Box::from("ha")).eval("haystack"));
+        assert!(Predicate::StartsWith(Box::from("h")).eval("haystack"));
+        assert!(Predicate::StartsWith(Box::from("")).eval("haystack"));
 
-        assert!(!Predicate::StartsWith(Arc::from("stack")).eval("haystack"));
-        assert!(!Predicate::StartsWith(Arc::from("haystacks")).eval("haystack"));
-        assert!(!Predicate::StartsWith(Arc::from("HAY")).eval("haystack"));
-        assert!(!Predicate::StartsWith(Arc::from("h£ay")).eval("haystack"));
-        assert!(!Predicate::StartsWith(Arc::from("hay")).eval("h£aystack"));
+        assert!(!Predicate::StartsWith(Box::from("stack")).eval("haystack"));
+        assert!(!Predicate::StartsWith(Box::from("haystacks")).eval("haystack"));
+        assert!(!Predicate::StartsWith(Box::from("HAY")).eval("haystack"));
+        assert!(!Predicate::StartsWith(Box::from("h£ay")).eval("haystack"));
+        assert!(!Predicate::StartsWith(Box::from("hay")).eval("h£aystack"));
     }
 
     #[test]
     fn test_ends_with() {
-        assert!(Predicate::EndsWith(Arc::from("stack")).eval("haystack"));
-        assert!(Predicate::EndsWith(Arc::from("st£ack")).eval("hayst£ack"));
-        assert!(Predicate::EndsWith(Arc::from("haystack")).eval("haystack"));
-        assert!(Predicate::EndsWith(Arc::from("ck")).eval("haystack"));
-        assert!(Predicate::EndsWith(Arc::from("k")).eval("haystack"));
-        assert!(Predicate::EndsWith(Arc::from("")).eval("haystack"));
+        assert!(Predicate::EndsWith(Box::from("stack")).eval("haystack"));
+        assert!(Predicate::EndsWith(Box::from("st£ack")).eval("hayst£ack"));
+        assert!(Predicate::EndsWith(Box::from("haystack")).eval("haystack"));
+        assert!(Predicate::EndsWith(Box::from("ck")).eval("haystack"));
+        assert!(Predicate::EndsWith(Box::from("k")).eval("haystack"));
+        assert!(Predicate::EndsWith(Box::from("")).eval("haystack"));
 
-        assert!(!Predicate::EndsWith(Arc::from("hay")).eval("haystack"));
-        assert!(!Predicate::EndsWith(Arc::from("STACK")).eval("haystack"));
-        assert!(!Predicate::EndsWith(Arc::from("haystacks")).eval("haystack"));
-        assert!(!Predicate::EndsWith(Arc::from("xhaystack")).eval("haystack"));
-        assert!(!Predicate::EndsWith(Arc::from("st£ack")).eval("haystack"));
-        assert!(!Predicate::EndsWith(Arc::from("stack")).eval("hayst£ack"));
+        assert!(!Predicate::EndsWith(Box::from("hay")).eval("haystack"));
+        assert!(!Predicate::EndsWith(Box::from("STACK")).eval("haystack"));
+        assert!(!Predicate::EndsWith(Box::from("haystacks")).eval("haystack"));
+        assert!(!Predicate::EndsWith(Box::from("xhaystack")).eval("haystack"));
+        assert!(!Predicate::EndsWith(Box::from("st£ack")).eval("haystack"));
+        assert!(!Predicate::EndsWith(Box::from("stack")).eval("hayst£ack"));
     }
 
     #[test]
     fn test_istarts_with() {
-        assert!(Predicate::IStartsWithAscii(Arc::from("hay")).eval("haystack"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("hay")).eval("HAYSTACK"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("HAY")).eval("haystack"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("HaY")).eval("haystack"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("hay")).eval("HaYsTaCk"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("HAY")).eval("HaYsTaCk"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("haystack")).eval("HaYsTaCk"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("HaYsTaCk")).eval("HaYsTaCk"));
-        assert!(Predicate::IStartsWithAscii(Arc::from("")).eval("HaYsTaCk"));
+        assert!(Predicate::IStartsWithAscii(Box::from("hay")).eval("haystack"));
+        assert!(Predicate::IStartsWithAscii(Box::from("hay")).eval("HAYSTACK"));
+        assert!(Predicate::IStartsWithAscii(Box::from("HAY")).eval("haystack"));
+        assert!(Predicate::IStartsWithAscii(Box::from("HaY")).eval("haystack"));
+        assert!(Predicate::IStartsWithAscii(Box::from("hay")).eval("HaYsTaCk"));
+        assert!(Predicate::IStartsWithAscii(Box::from("HAY")).eval("HaYsTaCk"));
+        assert!(Predicate::IStartsWithAscii(Box::from("haystack")).eval("HaYsTaCk"));
+        assert!(Predicate::IStartsWithAscii(Box::from("HaYsTaCk")).eval("HaYsTaCk"));
+        assert!(Predicate::IStartsWithAscii(Box::from("")).eval("HaYsTaCk"));
 
-        assert!(!Predicate::IStartsWithAscii(Arc::from("stack")).eval("haystack"));
-        assert!(!Predicate::IStartsWithAscii(Arc::from("haystacks")).eval("haystack"));
-        assert!(!Predicate::IStartsWithAscii(Arc::from("h.ay")).eval("haystack"));
-        assert!(!Predicate::IStartsWithAscii(Arc::from("hay")).eval("h£aystack"));
+        assert!(!Predicate::IStartsWithAscii(Box::from("stack")).eval("haystack"));
+        assert!(!Predicate::IStartsWithAscii(Box::from("haystacks")).eval("haystack"));
+        assert!(!Predicate::IStartsWithAscii(Box::from("h.ay")).eval("haystack"));
+        assert!(!Predicate::IStartsWithAscii(Box::from("hay")).eval("h£aystack"));
     }
 
     #[test]
     fn test_iends_with() {
-        assert!(Predicate::IEndsWithAscii(Arc::from("stack")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("STACK")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("StAcK")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("stack")).eval("HAYSTACK"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("STACK")).eval("HAYSTACK"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("StAcK")).eval("HAYSTACK"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("stack")).eval("HAYsTaCk"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("STACK")).eval("HAYsTaCk"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("StAcK")).eval("HAYsTaCk"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("haystack")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("HAYSTACK")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("haystack")).eval("HAYSTACK"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("ck")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("cK")).eval("haystack"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("ck")).eval("haystacK"));
-        assert!(Predicate::IEndsWithAscii(Arc::from("")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("stack")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("STACK")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("StAcK")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("stack")).eval("HAYSTACK"));
+        assert!(Predicate::IEndsWithAscii(Box::from("STACK")).eval("HAYSTACK"));
+        assert!(Predicate::IEndsWithAscii(Box::from("StAcK")).eval("HAYSTACK"));
+        assert!(Predicate::IEndsWithAscii(Box::from("stack")).eval("HAYsTaCk"));
+        assert!(Predicate::IEndsWithAscii(Box::from("STACK")).eval("HAYsTaCk"));
+        assert!(Predicate::IEndsWithAscii(Box::from("StAcK")).eval("HAYsTaCk"));
+        assert!(Predicate::IEndsWithAscii(Box::from("haystack")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("HAYSTACK")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("haystack")).eval("HAYSTACK"));
+        assert!(Predicate::IEndsWithAscii(Box::from("ck")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("cK")).eval("haystack"));
+        assert!(Predicate::IEndsWithAscii(Box::from("ck")).eval("haystacK"));
+        assert!(Predicate::IEndsWithAscii(Box::from("")).eval("haystack"));
 
-        assert!(!Predicate::IEndsWithAscii(Arc::from("hay")).eval("haystack"));
-        assert!(!Predicate::IEndsWithAscii(Arc::from("stac")).eval("HAYSTACK"));
-        assert!(!Predicate::IEndsWithAscii(Arc::from("haystacks")).eval("haystack"));
-        assert!(!Predicate::IEndsWithAscii(Arc::from("stack")).eval("haystac£k"));
-        assert!(!Predicate::IEndsWithAscii(Arc::from("xhaystack")).eval("haystack"));
+        assert!(!Predicate::IEndsWithAscii(Box::from("hay")).eval("haystack"));
+        assert!(!Predicate::IEndsWithAscii(Box::from("stac")).eval("HAYSTACK"));
+        assert!(!Predicate::IEndsWithAscii(Box::from("haystacks")).eval("haystack"));
+        assert!(!Predicate::IEndsWithAscii(Box::from("stack")).eval("haystac£k"));
+        assert!(!Predicate::IEndsWithAscii(Box::from("xhaystack")).eval("haystack"));
     }
 
     #[test]

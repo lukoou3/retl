@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use regex::Regex;
 use crate::datetime_utils::NORM_DATETIME_FMT;
 use crate::Result;
@@ -40,8 +39,8 @@ impl ScalarFunction for CurrentTimestamp {
         Ok(())
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::CurrentTimestamp))
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::CurrentTimestamp))
     }
 }
 
@@ -86,9 +85,9 @@ impl ScalarFunction for FromUnixTime {
         Some(vec![AbstractDataType::long_type(), AbstractDataType::string_type()])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{sec, format} = self;
-        Ok(Arc::new(phy::FromUnixTime::new(create_physical_expr(sec)?, create_physical_expr(format)?)))
+        Ok(Box::new(phy::FromUnixTime::new(create_physical_expr(sec)?, create_physical_expr(format)?)))
     }
 }
 
@@ -153,9 +152,9 @@ impl ScalarFunction for ToUnixTimestamp {
         }
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{time_expr, format} = self;
-        Ok(Arc::new(phy::ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
+        Ok(Box::new(phy::ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
     }
 }
 
@@ -200,9 +199,9 @@ impl ScalarFunction for TruncTimestamp {
         Some(vec![AbstractDataType::string_type(), AbstractDataType::timestamp_type()])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{format, timestamp} = self;
-        Ok(Arc::new(phy::TruncTimestamp::new(create_physical_expr(format)?, create_physical_expr(timestamp)?)))
+        Ok(Box::new(phy::TruncTimestamp::new(create_physical_expr(format)?, create_physical_expr(timestamp)?)))
     }
 }
 
@@ -264,12 +263,12 @@ impl ScalarFunction for TimestampFloor {
         Some(vec![AbstractDataType::timestamp_type(), AbstractDataType::string_type()])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{timestamp, interval} = self;
         match interval.as_ref() {
             Expr::Literal(Literal{value, data_type}) if data_type == DataType::string_type() => {
                 let interval = TimestampFloor::parse_interval(value.get_string())?;
-                Ok(Arc::new(phy::TimestampFloor::new(create_physical_expr(timestamp)?, interval)))
+                Ok(Box::new(phy::TimestampFloor::new(create_physical_expr(timestamp)?, interval)))
             },
             _ => Err("interval argument should be a string literal.".to_string())
         }

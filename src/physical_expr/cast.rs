@@ -10,16 +10,15 @@ use crate::types::DataType;
 
 pub type CastFunc = dyn Fn(Value) -> Value + Send + Sync;
 
-#[derive(Clone)]
 pub struct Cast {
-    pub child: Arc<dyn PhysicalExpr>,
+    pub child: Box<dyn PhysicalExpr>,
     pub data_type: DataType,
-    pub cast: Arc<CastFunc>,
+    pub cast: Box<CastFunc>,
 }
 
 impl Cast {
-    pub fn new(child: Arc<dyn PhysicalExpr>, data_type: DataType) -> Self {
-        let cast = Arc::from(get_cast_func(child.data_type(), data_type.clone()));
+    pub fn new(child: Box<dyn PhysicalExpr>, data_type: DataType) -> Self {
+        let cast = Box::from(get_cast_func(child.data_type(), data_type.clone()));
         Cast { child, data_type,  cast}
     }
 }
@@ -30,21 +29,6 @@ impl Debug for Cast {
             .field("child", &self.child)
             .field("data_type", &self.data_type)
             .finish()
-    }
-}
-
-impl PartialEq for Cast {
-    fn eq(&self, other: &Cast) -> bool {
-        self.child.eq(&other.child) && self.data_type == other.data_type
-    }
-}
-
-impl Eq for Cast{}
-
-impl Hash for Cast {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.child.hash(state);
-        self.data_type.hash(state);
     }
 }
 

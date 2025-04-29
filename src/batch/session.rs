@@ -26,7 +26,7 @@ impl BatchSession {
                 let prev= self.plan_to_df(child.as_ref().clone())?;
                 let input = child.output();
                 let exprs = BoundReference::bind_references(project_list, input)?;
-                let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = exprs.iter().map(|expr| create_physical_expr(expr)).collect();
+                let exprs: Result<Vec<Box<dyn PhysicalExpr>>, String> = exprs.iter().map(|expr| create_physical_expr(expr)).collect();
                 Ok(Box::new(MapDataFrame::new(schema, prev, Box::new(ProjectMapFunction::new(exprs?)))))
             },
             LogicalPlan::OneRowRelation => {

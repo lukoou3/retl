@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::sync::Arc;
 use crate::Result;
 use crate::data::{GenericRow, JoinedRow, Row};
 use crate::execution::Collector;
@@ -23,12 +22,12 @@ impl ProcessOperator for OutOperator {
 
 #[derive(Debug)]
 pub struct FilterOperator {
-    predicate: Arc<dyn PhysicalExpr>,
+    predicate: Box<dyn PhysicalExpr>,
     next: Box<dyn ProcessOperator>,
 }
 
 impl FilterOperator {
-    pub fn new(predicate: Arc<dyn PhysicalExpr>, next: Box<dyn ProcessOperator>) -> Self {
+    pub fn new(predicate: Box<dyn PhysicalExpr>, next: Box<dyn ProcessOperator>) -> Self {
         Self {predicate, next}
     }
 }
@@ -46,13 +45,13 @@ impl ProcessOperator for FilterOperator {
 
 #[derive(Debug)]
 pub struct ProjectOperator {
-    exprs: Vec<Arc<dyn PhysicalExpr>>,
+    exprs: Vec<Box<dyn PhysicalExpr>>,
     row: GenericRow,
     next: Box<dyn ProcessOperator>,
 }
 
 impl ProjectOperator {
-    pub fn new(exprs: Vec<Arc<dyn PhysicalExpr>>, next: Box<dyn ProcessOperator>) -> Self {
+    pub fn new(exprs: Vec<Box<dyn PhysicalExpr>>, next: Box<dyn ProcessOperator>) -> Self {
         let row = GenericRow::new_with_size(exprs.len());
         Self {exprs, row, next}
     }
@@ -118,7 +117,7 @@ fn get_process_operator_chain_inner(plan: LogicalPlan, out_operator: Box<dyn Pro
             LogicalPlan::Project(Project{project_list, child}) => {
                 let input = child.output();
                 let exprs = BoundReference::bind_references(project_list, input)?;
-                let exprs: Result<Vec<Arc<dyn PhysicalExpr>>, String> = exprs.iter().map(|expr| create_physical_expr(expr)).collect();
+                let exprs: Result<Vec<Box<dyn PhysicalExpr>>, String> = exprs.iter().map(|expr| create_physical_expr(expr)).collect();
                 operator = Box::new(ProjectOperator::new(exprs?, operator));
                 child_plan = child.as_ref().clone();
             },

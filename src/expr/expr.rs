@@ -660,7 +660,7 @@ pub trait ScalarFunction: Debug + Send + Sync + CreateScalarFunction + ExtendSca
 
     }
     
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>>;
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>>;
 
     fn sql(&self) -> String {
         format!("{}({})", self.name(), self.args().into_iter().map(|arg| arg.sql()).join(", "))
@@ -750,49 +750,49 @@ impl Hash for Box<dyn ScalarFunction> {
 
 pub fn create_physical_expr(
     e: &Expr,
-) -> Result<Arc<dyn PhysicalExpr>> {
+) -> Result<Box<dyn PhysicalExpr>> {
     match e {
         Expr::BoundReference(BoundReference{ordinal, data_type}) =>
-            Ok(Arc::new(phy::BoundReference::new(*ordinal, data_type.clone()))),
+            Ok(Box::new(phy::BoundReference::new(*ordinal, data_type.clone()))),
         Expr::Alias(Alias{child, ..}) =>
             create_physical_expr(child),
         Expr::Literal(Literal{value, data_type}) =>
-            Ok(Arc::new(phy::Literal::new(value.clone(), data_type.clone()))),
+            Ok(Box::new(phy::Literal::new(value.clone(), data_type.clone()))),
         Expr::Cast(Cast{child, data_type}) =>
-            Ok(Arc::new(phy::Cast::new(create_physical_expr(child)?, data_type.clone()))),
+            Ok(Box::new(phy::Cast::new(create_physical_expr(child)?, data_type.clone()))),
         Expr::Not(child) =>
-            Ok(Arc::new(phy::Not::new(create_physical_expr(child)?))),
+            Ok(Box::new(phy::Not::new(create_physical_expr(child)?))),
         Expr::IsNull(child) =>
-            Ok(Arc::new(phy::IsNull::new(create_physical_expr(child)?))),
+            Ok(Box::new(phy::IsNull::new(create_physical_expr(child)?))),
         Expr::IsNotNull(child) =>
-            Ok(Arc::new(phy::IsNotNull::new(create_physical_expr(child)?))),
+            Ok(Box::new(phy::IsNotNull::new(create_physical_expr(child)?))),
         Expr::BinaryOperator(BinaryOperator{left, op, right}) => match op {
             Operator::Plus | Operator::Minus | Operator::Multiply | Operator::Divide | Operator::Modulo 
               | Operator::BitAnd | Operator::BitOr | Operator::BitXor => {
                 let l = create_physical_expr(left)?;
                 let r = create_physical_expr(right)?;
-                Ok(Arc::new(phy::BinaryArithmetic::new(l, op.clone(), r)))
+                Ok(Box::new(phy::BinaryArithmetic::new(l, op.clone(), r)))
             },
             Operator::BitShiftLeft | Operator::BitShiftRight | Operator::BitShiftRightUnsigned => {
                 let l = create_physical_expr(left)?;
                 let r = create_physical_expr(right)?;
-                Ok(Arc::new(phy::BinaryShift::new(l, op.clone(), r)))
+                Ok(Box::new(phy::BinaryShift::new(l, op.clone(), r)))
             },
             Operator::Eq | Operator::NotEq | Operator::Lt |Operator::LtEq | Operator::Gt | Operator::GtEq =>
-                Ok(Arc::new(phy::BinaryComparison::new(create_physical_expr(left)?, op.clone(), create_physical_expr(right)?))),
+                Ok(Box::new(phy::BinaryComparison::new(create_physical_expr(left)?, op.clone(), create_physical_expr(right)?))),
             Operator::And =>
-                Ok(Arc::new(phy::And::new(create_physical_expr(left)?, create_physical_expr(right)?))),
+                Ok(Box::new(phy::And::new(create_physical_expr(left)?, create_physical_expr(right)?))),
             Operator::Or =>
-                Ok(Arc::new(phy::Or::new(create_physical_expr(left)?, create_physical_expr(right)?))),
+                Ok(Box::new(phy::Or::new(create_physical_expr(left)?, create_physical_expr(right)?))),
         },
         Expr::Like(Like{expr, pattern}) =>
-            Ok(Arc::new(phy::Like::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
+            Ok(Box::new(phy::Like::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
         Expr::RLike(Like{expr, pattern}) =>
-            Ok(Arc::new(phy::RLike::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
+            Ok(Box::new(phy::RLike::new(create_physical_expr(expr)?, create_physical_expr(pattern)?))),
         Expr::In(In{value, list}) => {
             let value = create_physical_expr(value)?;
             let list = list.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
-            Ok(Arc::new(phy::In::new(value, list)))
+            Ok(Box::new(phy::In::new(value, list)))
         },
         Expr::ScalarFunction(func) => func.create_physical_expr(),
         _ => Err(format!("Not implemented:{:?}", e)),

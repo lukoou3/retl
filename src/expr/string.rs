@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
 use crate::physical_expr::{self as phy, PhysicalExpr};
@@ -48,8 +47,8 @@ impl ScalarFunction for Length {
         }
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::Length::new(create_physical_expr(&self.child)?)))
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::Length::new(create_physical_expr(&self.child)?)))
     }
 }
 
@@ -98,9 +97,9 @@ impl ScalarFunction for ConcatWs {
         Some(types)
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{sep, str_args} = self;
-        Ok(Arc::new(phy::ConcatWs::new(create_physical_expr(sep)?, str_args.iter().map(|arg| create_physical_expr(arg)).collect::<Result<Vec<_>>>()?)))
+        Ok(Box::new(phy::ConcatWs::new(create_physical_expr(sep)?, str_args.iter().map(|arg| create_physical_expr(arg)).collect::<Result<Vec<_>>>()?)))
     }
 }
 
@@ -148,9 +147,9 @@ impl ScalarFunction for Substring {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int), AbstractDataType::Type(DataType::Int)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{str, pos, len} = self;
-        Ok(Arc::new(phy::Substring::new(create_physical_expr(str)?, create_physical_expr(pos)?, create_physical_expr(len)?)))
+        Ok(Box::new(phy::Substring::new(create_physical_expr(str)?, create_physical_expr(pos)?, create_physical_expr(len)?)))
     }
 }
 
@@ -196,9 +195,9 @@ impl ScalarFunction for StringSplit {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{str, delimiter} = self;
-        Ok(Arc::new(phy::StringSplit::new(create_physical_expr(str)?, create_physical_expr(delimiter)?)))
+        Ok(Box::new(phy::StringSplit::new(create_physical_expr(str)?, create_physical_expr(delimiter)?)))
     }
 }
 
@@ -246,9 +245,9 @@ impl ScalarFunction for SplitPart {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::Int)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{str, delimiter, part} = self;
-        Ok(Arc::new(phy::SplitPart::new(create_physical_expr(str)?, create_physical_expr(delimiter)?, create_physical_expr(part)?)))
+        Ok(Box::new(phy::SplitPart::new(create_physical_expr(str)?, create_physical_expr(delimiter)?, create_physical_expr(part)?)))
     }
 }
 
@@ -295,9 +294,9 @@ impl ScalarFunction for StringReplace {
         Some(vec![AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String), AbstractDataType::Type(DataType::String)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{str, search, replace} = self;
-        Ok(Arc::new(phy::StringReplace::new(create_physical_expr(str)?, create_physical_expr(search)?, create_physical_expr(replace)?)))
+        Ok(Box::new(phy::StringReplace::new(create_physical_expr(str)?, create_physical_expr(search)?, create_physical_expr(replace)?)))
     }
 }
 
@@ -342,9 +341,9 @@ impl ScalarFunction for StringTrim {
         Some(vec![AbstractDataType::Type(DataType::String),AbstractDataType::Type(DataType::String)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{src_str, trim_str} = self;
-        Ok(Arc::new(phy::StringTrim::new(create_physical_expr(src_str)?, create_physical_expr(trim_str)?)))
+        Ok(Box::new(phy::StringTrim::new(create_physical_expr(src_str)?, create_physical_expr(trim_str)?)))
     }
 }
 
@@ -387,9 +386,9 @@ impl ScalarFunction for Lower {
         Some(vec![AbstractDataType::Type(DataType::String)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{child} = self;
-        Ok(Arc::new(phy::Lower::new(create_physical_expr(child)?)))
+        Ok(Box::new(phy::Lower::new(create_physical_expr(child)?)))
     }
 }
 
@@ -432,9 +431,9 @@ impl ScalarFunction for Upper {
         Some(vec![AbstractDataType::Type(DataType::String)])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{child} = self;
-        Ok(Arc::new(phy::Upper::new(create_physical_expr(child)?)))
+        Ok(Box::new(phy::Upper::new(create_physical_expr(child)?)))
     }
 }
 

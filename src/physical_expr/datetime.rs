@@ -4,10 +4,10 @@ use std::sync::Arc;
 use chrono::Utc;
 use crate::data::{empty_row, Row, Value};
 use crate::datetime_utils::from_timestamp_micros_utc;
-use crate::physical_expr::{Literal, PhysicalExpr};
+use crate::physical_expr::{BinaryExpr, Literal, PhysicalExpr};
 use crate::types::DataType;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct CurrentTimestamp;
 
 impl PhysicalExpr for CurrentTimestamp {
@@ -24,30 +24,29 @@ impl PhysicalExpr for CurrentTimestamp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FromUnixTime {
-    sec: Arc<dyn PhysicalExpr>,
-    format: Arc<dyn PhysicalExpr>,
+    sec: Box<dyn PhysicalExpr>,
+    format: Box<dyn PhysicalExpr>,
 }
 
 impl FromUnixTime {
-    pub fn new(sec: Arc<dyn PhysicalExpr>, format: Arc<dyn PhysicalExpr>) -> FromUnixTime {
+    pub fn new(sec: Box<dyn PhysicalExpr>, format: Box<dyn PhysicalExpr>) -> FromUnixTime {
         FromUnixTime { sec, format }
     }
 }
 
-impl PartialEq for FromUnixTime {
-    fn eq(&self, other: &FromUnixTime) -> bool {
-        self.sec.eq(&other.sec) && self.format.eq(&other.format)
+impl BinaryExpr for FromUnixTime {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.sec.as_ref()
     }
-}
 
-impl Eq for FromUnixTime {}
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.format.as_ref()
+    }
 
-impl Hash for FromUnixTime {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.sec.hash(state);
-        self.format.hash(state);
+    fn null_safe_eval(&self, sec: Value, format: Value) -> Value {
+        Value::String(Arc::new(from_timestamp_micros_utc(sec.get_long() * 1000_000).format(format.get_string()).to_string()))
     }
 }
 
@@ -61,63 +60,32 @@ impl PhysicalExpr for FromUnixTime {
     }
 
     fn eval(&self, input: &dyn Row) -> Value {
-        let sec = self.sec.eval(input);
-        if sec.is_null() {
-            return Value::Null;
-        }
-        let format = self.format.eval(input);
-        if format.is_null() {
-            return Value::Null;
-        }
-        Value::String(Arc::new(from_timestamp_micros_utc(sec.get_long() * 1000_000).format(format.get_string()).to_string()))
+        BinaryExpr::eval(self, input)
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ToUnixTimestamp {
-    time_expr: Arc<dyn PhysicalExpr>,
-    format: Arc<dyn PhysicalExpr>,
+    time_expr: Box<dyn PhysicalExpr>,
+    format: Box<dyn PhysicalExpr>,
 }
 
 impl ToUnixTimestamp {
-    pub fn new(time_expr: Arc<dyn PhysicalExpr>, format: Arc<dyn PhysicalExpr>) -> ToUnixTimestamp {
+    pub fn new(time_expr: Box<dyn PhysicalExpr>, format: Box<dyn PhysicalExpr>) -> ToUnixTimestamp {
         ToUnixTimestamp { time_expr, format }
     }
 }
 
-impl PartialEq for ToUnixTimestamp {
-    fn eq(&self, other: &ToUnixTimestamp) -> bool {
-        self.time_expr.eq(&other.time_expr) && self.format.eq(&other.format)
-    }
-}
-
-impl Eq for ToUnixTimestamp {}
-
-impl Hash for ToUnixTimestamp {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.time_expr.hash(state);
-        self.format.hash(state);
-    }
-}
-
-impl PhysicalExpr for ToUnixTimestamp {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl BinaryExpr for ToUnixTimestamp {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.time_expr.as_ref()
     }
 
-    fn data_type(&self) -> DataType {
-        DataType::Long
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.format.as_ref()
     }
 
-    fn eval(&self, input: &dyn Row) -> Value {
-        let time_expr = self.time_expr.eval(input);
-        if time_expr.is_null() {
-            return Value::Null;
-        }
-        let format = self.format.eval(input);
-        if format.is_null() {
-            return Value::Null;
-        }
+    fn null_safe_eval(&self, time_expr: Value, format: Value) -> Value {
         match self.time_expr.data_type() {
             DataType::Timestamp => {
                 Value::Long(time_expr.get_long() / 1000_1000)
@@ -133,6 +101,20 @@ impl PhysicalExpr for ToUnixTimestamp {
     }
 }
 
+impl PhysicalExpr for ToUnixTimestamp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::Long
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        BinaryExpr::eval(self, input)
+    }
+}
+
 const TRUNC_INVALID: i8 = -1;
 const TRUNC_TO_MICROSECOND: i8 = 0;
 const TRUNC_TO_MILLISECOND: i8 = 1;
@@ -141,15 +123,15 @@ const TRUNC_TO_MINUTE: i8 = 3;
 const TRUNC_TO_HOUR: i8 = 4;
 const TRUNC_TO_DAY: i8 = 5;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TruncTimestamp {
-    format: Arc<dyn PhysicalExpr>,
-    timestamp: Arc<dyn PhysicalExpr>,
+    format: Box<dyn PhysicalExpr>,
+    timestamp: Box<dyn PhysicalExpr>,
     level_static: Option<i8>,
 }
 
 impl TruncTimestamp {
-    pub fn new(format: Arc<dyn PhysicalExpr>, timestamp: Arc<dyn PhysicalExpr>) -> TruncTimestamp {
+    pub fn new(format: Box<dyn PhysicalExpr>, timestamp: Box<dyn PhysicalExpr>) -> TruncTimestamp {
         let level_static = if let Some(literal) = format.as_any().downcast_ref::<Literal>() {
             let value = literal.eval(empty_row());
             if value.is_null() {
@@ -173,21 +155,6 @@ impl TruncTimestamp {
             "day" => TRUNC_TO_DAY,
             _ => TRUNC_INVALID,
         }
-    }
-}
-
-impl PartialEq for TruncTimestamp {
-    fn eq(&self, other: &TruncTimestamp) -> bool {
-        self.format.eq(&other.format) && self.timestamp.eq(&other.timestamp)
-    }
-}
-
-impl Eq for TruncTimestamp {}
-
-impl Hash for TruncTimestamp {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.format.hash(state);
-        self.timestamp.hash(state);
     }
 }
 
@@ -228,30 +195,15 @@ impl PhysicalExpr for TruncTimestamp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TimestampFloor {
-    timestamp: Arc<dyn PhysicalExpr>,
+    timestamp: Box<dyn PhysicalExpr>,
     interval: i64,
 }
 
 impl TimestampFloor {
-    pub fn new(timestamp: Arc<dyn PhysicalExpr>, interval: i64) -> TimestampFloor {
+    pub fn new(timestamp: Box<dyn PhysicalExpr>, interval: i64) -> TimestampFloor {
         TimestampFloor { timestamp, interval }
-    }
-}
-
-impl PartialEq for TimestampFloor {
-    fn eq(&self, other: &TimestampFloor) -> bool {
-        self.timestamp.eq(&other.timestamp) && self.interval.eq(&other.interval)
-    }
-}
-
-impl Eq for TimestampFloor {}
-
-impl Hash for TimestampFloor {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.timestamp.hash(state);
-        self.interval.hash(state);
     }
 }
 

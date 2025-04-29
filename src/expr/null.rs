@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
 use crate::physical_expr::{self as phy, PhysicalExpr};
@@ -7,7 +6,7 @@ use crate::types::DataType;
 pub struct Nvl;
 
 impl CreateScalarFunction for Nvl {
-    fn from_args(args: Vec<Expr>) -> crate::Result<Box<dyn ScalarFunction>> {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
         if args.len() != 2 {
             return Err(format!("requires 2 argument, found:{}", args.len()));
         }
@@ -59,10 +58,10 @@ impl ScalarFunction for Coalesce {
         }
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{children} = self;
         let args = children.into_iter().map(|child| create_physical_expr(child)).collect::<Result<Vec<_>>>()?;
-        Ok(Arc::new(phy::Coalesce::new(args)))
+        Ok(Box::new(phy::Coalesce::new(args)))
     }
 }
 

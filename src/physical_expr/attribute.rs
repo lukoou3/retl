@@ -3,7 +3,7 @@ use crate::data::{Row, Value};
 use crate::physical_expr::PhysicalExpr;
 use crate::types::DataType;
 
-#[derive(Clone, PartialEq, Eq,  Hash, Debug)]
+#[derive(Clone, Debug)]
 pub struct BoundReference {
     pub ordinal: usize,
     pub data_type: DataType,

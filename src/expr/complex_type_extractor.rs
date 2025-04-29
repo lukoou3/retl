@@ -2,7 +2,6 @@ use crate::Result;
 use crate::expr::{CreateScalarFunction, Expr, ScalarFunction, create_physical_expr};
 use crate::physical_expr::{self as phy, PhysicalExpr};
 use crate::types::{AbstractDataType, DataType};
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct GetArrayItem {
@@ -56,8 +55,8 @@ impl ScalarFunction for GetArrayItem {
         ])
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::new(phy::GetArrayItem::new(
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        Ok(Box::new(phy::GetArrayItem::new(
             create_physical_expr(&self.child)?,
             create_physical_expr(&self.ordinal)?,
             self.data_type().clone(),

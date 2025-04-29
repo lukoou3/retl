@@ -10,11 +10,11 @@ use crate::types::Schema;
 pub struct FilterTransform {
     task_context: TaskContext,
     schema: Schema,
-    predicate: Arc<dyn PhysicalExpr>,
+    predicate: Box<dyn PhysicalExpr>,
 }
 
 impl FilterTransform {
-    pub fn new(task_context: TaskContext, schema: Schema, predicate: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(task_context: TaskContext, schema: Schema, predicate: Box<dyn PhysicalExpr>) -> Self {
         Self {task_context, schema, predicate}
     }
 }

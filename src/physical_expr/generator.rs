@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::sync::Arc;
 use crate::data::{GenericRow, Row, Value};
 use crate::physical_expr::PhysicalExpr;
 
@@ -7,14 +6,14 @@ pub trait PhysicalGenerator: Debug {
     fn generate(&mut self, input: &dyn Row) -> &[GenericRow];
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Explode {
-    pub child: Arc<dyn PhysicalExpr>,
+    pub child: Box<dyn PhysicalExpr>,
     pub rows: Vec<GenericRow>,
 }
 
 impl Explode {
-    pub fn new(child: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
         let rows = Vec::new();
         Explode { child, rows}
     }
@@ -45,16 +44,16 @@ impl PhysicalGenerator for Explode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PathFileUnroll {
-    pub path: Arc<dyn PhysicalExpr>,
-    pub file: Arc<dyn PhysicalExpr>,
+    pub path: Box<dyn PhysicalExpr>,
+    pub file: Box<dyn PhysicalExpr>,
     pub sep: char,
     pub rows: Vec<GenericRow>,
 }
 
 impl PathFileUnroll {
-    pub fn new(path: Arc<dyn PhysicalExpr>, file: Arc<dyn PhysicalExpr>, sep: char,) -> Self {
+    pub fn new(path: Box<dyn PhysicalExpr>, file: Box<dyn PhysicalExpr>, sep: char,) -> Self {
         let rows = Vec::new();
         Self { path, file, sep, rows}
     }

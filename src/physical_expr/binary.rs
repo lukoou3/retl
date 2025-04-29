@@ -1,28 +1,26 @@
 use std::any::Any;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::sync::Arc;
 use crate::data::{Row, Value};
 use crate::Operator;
-use crate::physical_expr::{PhysicalExpr};
+use crate::physical_expr::{BinaryExpr, PhysicalExpr};
 use crate::types::DataType;
 
 pub type BinaryFunc = dyn Fn(Value, Value) -> Value + Send + Sync;
 
 /// Binary expression
-#[derive(Clone)]
 pub struct BinaryArithmetic {
-    pub left: Arc<dyn PhysicalExpr>,
+    pub left: Box<dyn PhysicalExpr>,
     pub op: Operator,
-    pub right: Arc<dyn PhysicalExpr>,
-    pub f: Arc<BinaryFunc>
+    pub right: Box<dyn PhysicalExpr>,
+    pub f: Box<BinaryFunc>
 }
 // f: impl Fn(Value, Value) -> Result<Value>
 // f: impl Fn(Value, Value) -> Value
 // f: Box<dyn Fn(Value, Value) -> Value>
 
 impl BinaryArithmetic {
-    pub fn new(left: Arc<dyn PhysicalExpr>, op: Operator, right: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(left: Box<dyn PhysicalExpr>, op: Operator, right: Box<dyn PhysicalExpr>) -> Self {
         let data_type = left.data_type();
         let f = get_binary_arithmetic_func(op, data_type);
         Self {left, op, right, f}
@@ -39,25 +37,18 @@ impl Debug for BinaryArithmetic {
     }
 }
 
-// Manually derive PartialEq and Hash to work around https://github.com/rust-lang/rust/issues/78808
-impl PartialEq for BinaryArithmetic {
-    fn eq(&self, other: &Self) -> bool {
-        self.left.eq(&other.left)
-            && self.op.eq(&other.op)
-            && self.right.eq(&other.right)
+impl BinaryExpr for BinaryArithmetic {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.left.as_ref()
     }
-}
 
-impl Hash for BinaryArithmetic {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.left.hash(state);
-        self.op.hash(state);
-        self.right.hash(state);
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.right.as_ref()
     }
-}
 
-impl Eq for BinaryArithmetic {
-
+    fn null_safe_eval(&self, left_value: Value, right_value: Value) -> Value {
+        (self.f)(left_value, right_value)
+    }
 }
 
 impl PhysicalExpr for BinaryArithmetic {
@@ -71,66 +62,58 @@ impl PhysicalExpr for BinaryArithmetic {
     }
 
     fn eval(&self, input: &dyn Row) -> Value {
-        let left_value = self.left.eval(input);
-        if left_value.is_null()  {
-            return Value::Null;
-        }
-        let right_value = self.right.eval(input);
-        if right_value.is_null() {
-            return Value::Null;
-        }
-        (self.f)(left_value, right_value)
+        BinaryExpr::eval(self, input)
     }
 }
 
-fn get_binary_arithmetic_func(op: Operator, data_type: DataType) -> Arc<BinaryFunc> {
+fn get_binary_arithmetic_func(op: Operator, data_type: DataType) -> Box<BinaryFunc> {
     match op {
         Operator::Plus => match data_type {
-            DataType::Int => Arc::new(binary_int_add),
-            DataType::Long => Arc::new(binary_long_add),
-            DataType::Float => Arc::new(binary_float_add),
-            DataType::Double => Arc::new(binary_double_add),
+            DataType::Int => Box::new(binary_int_add),
+            DataType::Long => Box::new(binary_long_add),
+            DataType::Float => Box::new(binary_float_add),
+            DataType::Double => Box::new(binary_double_add),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::Minus => match data_type {
-            DataType::Int => Arc::new(binary_int_subtract),
-            DataType::Long => Arc::new(binary_long_subtract),
-            DataType::Float => Arc::new(binary_float_subtract),
-            DataType::Double => Arc::new(binary_double_subtract),
+            DataType::Int => Box::new(binary_int_subtract),
+            DataType::Long => Box::new(binary_long_subtract),
+            DataType::Float => Box::new(binary_float_subtract),
+            DataType::Double => Box::new(binary_double_subtract),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::Multiply => match data_type {
-            DataType::Int => Arc::new(binary_int_multiply),
-            DataType::Long => Arc::new(binary_long_multiply),
-            DataType::Float => Arc::new(binary_float_multiply),
-            DataType::Double => Arc::new(binary_double_multiply),
+            DataType::Int => Box::new(binary_int_multiply),
+            DataType::Long => Box::new(binary_long_multiply),
+            DataType::Float => Box::new(binary_float_multiply),
+            DataType::Double => Box::new(binary_double_multiply),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::Divide => match data_type {
-            DataType::Long => Arc::new(binary_long_divide),
-            DataType::Double => Arc::new(binary_double_divide),
+            DataType::Long => Box::new(binary_long_divide),
+            DataType::Double => Box::new(binary_double_divide),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::Modulo => match data_type {
-            DataType::Int => Arc::new(binary_int_modulo),
-            DataType::Long => Arc::new(binary_long_modulo),
-            DataType::Float => Arc::new(binary_float_modulo),
-            DataType::Double => Arc::new(binary_double_modulo),
+            DataType::Int => Box::new(binary_int_modulo),
+            DataType::Long => Box::new(binary_long_modulo),
+            DataType::Float => Box::new(binary_float_modulo),
+            DataType::Double => Box::new(binary_double_modulo),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::BitAnd => match data_type {
-            DataType::Int => Arc::new(int_bitwise_and),
-            DataType::Long => Arc::new(long_bitwise_and),
+            DataType::Int => Box::new(int_bitwise_and),
+            DataType::Long => Box::new(long_bitwise_and),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::BitOr => match data_type {
-            DataType::Int => Arc::new(int_bitwise_or),
-            DataType::Long => Arc::new(long_bitwise_or),
+            DataType::Int => Box::new(int_bitwise_or),
+            DataType::Long => Box::new(long_bitwise_or),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         Operator::BitXor => match data_type {
-            DataType::Int => Arc::new(int_bitwise_x_or),
-            DataType::Long => Arc::new(long_bitwise_x_or),
+            DataType::Int => Box::new(int_bitwise_x_or),
+            DataType::Long => Box::new(long_bitwise_x_or),
             _ => panic!("{:?} not support data type {:?}", op, data_type),
         }
         _ => panic!("{:?} not support data type {:?}", op, data_type),
@@ -307,14 +290,14 @@ fn binary_double_modulo(left: Value, right: Value) -> Value {
 
 //Binary Comparison
 
-fn get_binary_comparison_func(op: Operator) -> Arc<BinaryFunc> {
+fn get_binary_comparison_func(op: Operator) -> Box<BinaryFunc> {
     match op {
-        Operator::Eq => Arc::new(binary_eq),
-        Operator::NotEq => Arc::new(binary_ne),
-        Operator::Lt => Arc::new(binary_lt),
-        Operator::LtEq => Arc::new(binary_lte),
-        Operator::Gt => Arc::new(binary_gt),
-        Operator::GtEq => Arc::new(binary_gte),
+        Operator::Eq => Box::new(binary_eq),
+        Operator::NotEq => Box::new(binary_ne),
+        Operator::Lt => Box::new(binary_lt),
+        Operator::LtEq => Box::new(binary_lte),
+        Operator::Gt => Box::new(binary_gt),
+        Operator::GtEq => Box::new(binary_gte),
         _ => panic!("unsupported operator {:?}", op),
     }
 }
@@ -343,16 +326,15 @@ fn binary_gte(left: Value, right: Value) -> Value {
     Value::Boolean(left >= right)
 }
 
-#[derive(Clone)]
 pub struct BinaryComparison {
-    pub left: Arc<dyn PhysicalExpr>,
+    pub left: Box<dyn PhysicalExpr>,
     pub op: Operator,
-    pub right: Arc<dyn PhysicalExpr>,
-    pub f: Arc<BinaryFunc>
+    pub right: Box<dyn PhysicalExpr>,
+    pub f: Box<BinaryFunc>
 }
 
 impl BinaryComparison {
-    pub fn new(left: Arc<dyn PhysicalExpr>, op: Operator, right: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(left: Box<dyn PhysicalExpr>, op: Operator, right: Box<dyn PhysicalExpr>) -> Self {
         let f = get_binary_comparison_func(op);
         Self {left, op, right, f}
     }
@@ -368,23 +350,19 @@ impl Debug for BinaryComparison {
     }
 }
 
-impl PartialEq for BinaryComparison {
-    fn eq(&self, other: &Self) -> bool {
-        self.left.eq(&other.left)
-            && self.op.eq(&other.op)
-            && self.right.eq(&other.right)
+impl BinaryExpr for BinaryComparison {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.left.as_ref()
+    }
+
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.right.as_ref()
+    }
+
+    fn null_safe_eval(&self, left_value: Value, right_value: Value) -> Value {
+        (self.f)(left_value, right_value)
     }
 }
-
-impl Hash for BinaryComparison {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.left.hash(state);
-        self.op.hash(state);
-        self.right.hash(state);
-    }
-}
-
-impl Eq for BinaryComparison {}
 
 impl PhysicalExpr for BinaryComparison {
     /// Return a reference to Any that can be used for downcasting
@@ -397,30 +375,21 @@ impl PhysicalExpr for BinaryComparison {
     }
 
     fn eval(&self, input: &dyn Row) -> Value {
-        let left_value = self.left.eval(input);
-        if left_value.is_null() {
-            return Value::Null;
-        }
-        let right_value = self.right.eval(input);
-        if right_value.is_null() {
-            return Value::Null;
-        }
-        (self.f)(left_value, right_value)
+        BinaryExpr::eval(self, input)
     }
 }
 
 /// Binary Shift expression
-#[derive(Clone)]
 pub struct BinaryShift {
-    pub left: Arc<dyn PhysicalExpr>,
+    pub left: Box<dyn PhysicalExpr>,
     pub op: Operator,
-    pub right: Arc<dyn PhysicalExpr>,
-    pub f: Arc<BinaryFunc>
+    pub right: Box<dyn PhysicalExpr>,
+    pub f: Box<BinaryFunc>
 }
 
 
 impl BinaryShift {
-    pub fn new(left: Arc<dyn PhysicalExpr>, op: Operator, right: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(left: Box<dyn PhysicalExpr>, op: Operator, right: Box<dyn PhysicalExpr>) -> Self {
         let f = get_binary_shift_func(op);
         Self {left, op, right, f}
     }
@@ -436,23 +405,19 @@ impl Debug for BinaryShift {
     }
 }
 
-impl PartialEq for BinaryShift {
-    fn eq(&self, other: &Self) -> bool {
-        self.left.eq(&other.left)
-            && self.op.eq(&other.op)
-            && self.right.eq(&other.right)
+impl BinaryExpr for BinaryShift {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.left.as_ref()
+    }
+
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.right.as_ref()
+    }
+
+    fn null_safe_eval(&self, left_value: Value, right_value: Value) -> Value {
+        (self.f)(left_value, right_value)
     }
 }
-
-impl Hash for BinaryShift {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.left.hash(state);
-        self.op.hash(state);
-        self.right.hash(state);
-    }
-}
-
-impl Eq for BinaryShift {}
 
 impl PhysicalExpr for BinaryShift {
     fn as_any(&self) -> &dyn Any {
@@ -464,23 +429,15 @@ impl PhysicalExpr for BinaryShift {
     }
 
     fn eval(&self, input: &dyn Row) -> Value {
-        let left_value = self.left.eval(input);
-        if left_value.is_null()  {
-            return Value::Null;
-        }
-        let right_value = self.right.eval(input);
-        if right_value.is_null() {
-            return Value::Null;
-        }
-        (self.f)(left_value, right_value)
+        BinaryExpr::eval(self, input)
     }
 }
 
-fn get_binary_shift_func(op: Operator) -> Arc<BinaryFunc> {
+fn get_binary_shift_func(op: Operator) -> Box<BinaryFunc> {
     match op {
-        Operator::BitShiftLeft => Arc::new(binary_shift_left),
-        Operator::BitShiftRight => Arc::new(binary_shift_right),
-        Operator::BitShiftRightUnsigned => Arc::new(binary_shift_righ_unsigned),
+        Operator::BitShiftLeft => Box::new(binary_shift_left),
+        Operator::BitShiftRight => Box::new(binary_shift_right),
+        Operator::BitShiftRightUnsigned => Box::new(binary_shift_righ_unsigned),
         _ => panic!("unsupported operator {:?}", op),
     }
 }
@@ -521,30 +478,15 @@ fn binary_shift_righ_unsigned(left: Value, right: Value) -> Value {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct And {
-    pub left: Arc<dyn PhysicalExpr>,
-    pub right: Arc<dyn PhysicalExpr>,
+    pub left: Box<dyn PhysicalExpr>,
+    pub right: Box<dyn PhysicalExpr>,
 }
 
 impl And {
-    pub fn new(left: Arc<dyn PhysicalExpr>, right: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(left: Box<dyn PhysicalExpr>, right: Box<dyn PhysicalExpr>) -> Self {
         Self { left, right }
-    }
-}
-
-impl PartialEq for And {
-    fn eq(&self, other: &Self) -> bool {
-        self.left.eq(&other.left) && self.right.eq(&other.right)
-    }
-}
-
-impl Eq for And {}
-
-impl Hash for And {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.left.hash(state);
-        self.right.hash(state);
     }
 }
 
@@ -578,32 +520,18 @@ impl PhysicalExpr for And {
 
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Or {
-    pub left: Arc<dyn PhysicalExpr>,
-    pub right: Arc<dyn PhysicalExpr>,
+    pub left: Box<dyn PhysicalExpr>,
+    pub right: Box<dyn PhysicalExpr>,
 }
 
 impl Or {
-    pub fn new(left: Arc<dyn PhysicalExpr>, right: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(left: Box<dyn PhysicalExpr>, right: Box<dyn PhysicalExpr>) -> Self {
         Self { left, right }
     }
 }
 
-impl PartialEq for Or {
-    fn eq(&self, other: &Self) -> bool {
-        self.left.eq(&other.left) && self.right.eq(&other.right)
-    }
-}
-
-impl Eq for Or {}
-
-impl Hash for Or {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.left.hash(state);
-        self.right.hash(state);
-    }
-}
 
 impl PhysicalExpr for Or {
     fn as_any(&self) -> &dyn Any {

@@ -89,11 +89,11 @@ impl Faker for NullAbleFaker {
 
 #[derive(Debug)]
 pub struct EvalFaker {
-    expr: Arc<dyn PhysicalExpr>,
+    expr: Box<dyn PhysicalExpr>,
 }
 
 impl EvalFaker {
-    pub fn new(expr: Arc<dyn PhysicalExpr>) -> Self {
+    pub fn new(expr: Box<dyn PhysicalExpr>) -> Self {
         EvalFaker { expr, }
     }
 }

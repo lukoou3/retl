@@ -3,7 +3,7 @@ use crate::data::{Row, Value};
 use crate::physical_expr::PhysicalExpr;
 use crate::types::DataType;
 
-#[derive(Clone, PartialEq, Eq,  Hash, Debug)]
+#[derive(Clone, Debug)]
 pub struct Literal {
     pub value: Value,
     pub data_type: DataType,

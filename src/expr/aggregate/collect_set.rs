@@ -68,16 +68,15 @@ impl TypedAggFunction for CollectSet {
     }
 }
 
-#[derive(Clone)]
 pub struct PhysicalCollectSet {
-    child: Arc<dyn PhysicalExpr>,
+    child: Box<dyn PhysicalExpr>,
     mutable_agg_buffer_offset: usize,
     input_agg_buffer_offset: usize,
     data_type: DataType
 }
 
 impl PhysicalCollectSet {
-    pub fn new(child: Arc<dyn PhysicalExpr>, mutable_agg_buffer_offset: usize, input_agg_buffer_offset: usize, data_type: DataType) -> Self {
+    pub fn new(child: Box<dyn PhysicalExpr>, mutable_agg_buffer_offset: usize, input_agg_buffer_offset: usize, data_type: DataType) -> Self {
         PhysicalCollectSet { child, mutable_agg_buffer_offset, input_agg_buffer_offset, data_type }
     }
 }

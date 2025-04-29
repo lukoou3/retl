@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use itertools::Itertools;
 use crate::Result;
 use crate::expr::{create_physical_expr, CreateScalarFunction, Expr, ScalarFunction};
@@ -55,9 +54,9 @@ impl ScalarFunction for If {
         }
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{predicate, true_value, false_value} = self;
-        Ok(Arc::new(phy::If::new(create_physical_expr(predicate)?, create_physical_expr(true_value)?, create_physical_expr(false_value)?)))
+        Ok(Box::new(phy::If::new(create_physical_expr(predicate)?, create_physical_expr(true_value)?, create_physical_expr(false_value)?)))
     }
 }
 
@@ -123,13 +122,13 @@ impl ScalarFunction for CaseWhen {
         Ok(())
     }
 
-    fn create_physical_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{branches, else_value} = self;
         let mut physical_branches = Vec::new();
         for (condition, value) in branches {
             physical_branches.push((create_physical_expr(condition)?, create_physical_expr(value)?));
         }
-        Ok(Arc::new(phy::CaseWhen::new(physical_branches, create_physical_expr(else_value)?)))
+        Ok(Box::new(phy::CaseWhen::new(physical_branches, create_physical_expr(else_value)?)))
     }
 
     fn sql(&self) -> String {
