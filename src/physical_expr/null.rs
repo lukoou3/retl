@@ -87,51 +87,6 @@ impl PhysicalExpr for Coalesce {
    }
 }
 
-#[derive(Debug)]
-pub struct In {
-    pub value: Box<dyn PhysicalExpr>,
-    pub list: Vec<Box<dyn PhysicalExpr>>,
-}
-
-impl In {
-    pub fn new(value: Box<dyn PhysicalExpr>, list: Vec<Box<dyn PhysicalExpr>>) -> Self {
-        In { value, list }
-    }
-}
-
-impl PhysicalExpr for In {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn data_type(&self) -> DataType {
-        DataType::Boolean
-    }
-
-    fn eval(&self, input: &dyn Row) -> Value {
-        let value = self.value.eval(input);
-        if value.is_null() {
-            return Value::Null;
-        }
-
-        let mut  has_null = false;
-        for e in &self.list {
-            let v = e.eval(input);
-            if v.is_null() {
-                has_null = true;
-            } else if v == value {
-                return Value::Boolean(true);
-            }
-        }
-
-        if has_null {
-            Value::Null
-        } else {
-            Value::Boolean(false)
-        }
-    }
-}
-
 
 
 

@@ -11,8 +11,11 @@ mod null;
 mod complex_type_extractor;
 mod arithmetic;
 mod regexp;
+mod json;
+mod misc;
 pub mod aggregate;
 mod generator;
+mod predicate;
 
 pub use expr::*;
 pub use expr_fn::*;
@@ -26,5 +29,8 @@ pub use null::*;
 pub use complex_type_extractor::*;
 pub use arithmetic::*;
 pub use regexp::*;
+pub use json::*;
+pub use misc::*;
+pub use predicate::*;
 pub use generator::*;
 

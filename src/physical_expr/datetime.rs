@@ -65,6 +65,46 @@ impl PhysicalExpr for FromUnixTime {
 }
 
 #[derive(Debug)]
+pub struct FromUnixTimeMillis {
+    sec: Box<dyn PhysicalExpr>,
+    format: Box<dyn PhysicalExpr>,
+}
+
+impl FromUnixTimeMillis {
+    pub fn new(sec: Box<dyn PhysicalExpr>, format: Box<dyn PhysicalExpr>) -> FromUnixTimeMillis {
+        FromUnixTimeMillis { sec, format }
+    }
+}
+
+impl BinaryExpr for FromUnixTimeMillis {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.sec.as_ref()
+    }
+
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.format.as_ref()
+    }
+
+    fn null_safe_eval(&self, sec: Value, format: Value) -> Value {
+        Value::String(Arc::new(from_timestamp_micros_utc(sec.get_long() * 1000).format(format.get_string()).to_string()))
+    }
+}
+
+impl PhysicalExpr for FromUnixTimeMillis {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        BinaryExpr::eval(self, input)
+    }
+}
+
+#[derive(Debug)]
 pub struct ToUnixTimestamp {
     time_expr: Box<dyn PhysicalExpr>,
     format: Box<dyn PhysicalExpr>,
@@ -102,6 +142,57 @@ impl BinaryExpr for ToUnixTimestamp {
 }
 
 impl PhysicalExpr for ToUnixTimestamp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::Long
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        BinaryExpr::eval(self, input)
+    }
+}
+
+#[derive(Debug)]
+pub struct ToUnixTimestampMillis {
+    time_expr: Box<dyn PhysicalExpr>,
+    format: Box<dyn PhysicalExpr>,
+}
+
+impl ToUnixTimestampMillis {
+    pub fn new(time_expr: Box<dyn PhysicalExpr>, format: Box<dyn PhysicalExpr>) -> ToUnixTimestampMillis {
+        ToUnixTimestampMillis { time_expr, format }
+    }
+}
+
+impl BinaryExpr for ToUnixTimestampMillis {
+    fn left(&self) -> &dyn PhysicalExpr {
+        self.time_expr.as_ref()
+    }
+
+    fn right(&self) -> &dyn PhysicalExpr {
+        self.format.as_ref()
+    }
+
+    fn null_safe_eval(&self, time_expr: Value, format: Value) -> Value {
+        match self.time_expr.data_type() {
+            DataType::Timestamp => {
+                Value::Long(time_expr.get_long() / 1000)
+            },
+            DataType::String => {
+                match chrono::NaiveDateTime::parse_from_str(time_expr.get_string(), format.get_string()) {
+                    Ok(dt) => Value::Long(dt.and_utc().timestamp_millis()),
+                    Err(_) => Value::Null,
+                }
+            },
+            _ => panic!("ToUnixTimestampMillis: time_expr must be Timestamp or String"),
+        }
+    }
+}
+
+impl PhysicalExpr for ToUnixTimestampMillis {
     fn as_any(&self) -> &dyn Any {
         self
     }

@@ -214,7 +214,10 @@ impl ResolveAliases {
                         let name = name.clone();
                         u.alias(name)
                     },
-                    _ => *u,
+                    _ => {
+                        let sql = u.sql();
+                        u.alias(sql)
+                    },
                 },
                 _ => {
                     let sql = u.sql();

@@ -578,13 +578,37 @@ fn parse_constant(pair: Pair<Rule>) -> Result<Expr> {
                 _ => Err(format!("Unexpected parse_constant {:?}", p))
             }
         },
-        Rule::STRING => {
-            let s = pair.as_str();
-            let s = &s[1.. s.len() - 1];
-            Ok(Expr::Literal(Literal::new(Value::string(s), DataType::String)))
-        },
+        Rule::STRING => parse_string_constant(pair),
         _ => Err(format!("Unexpected parse_constant {:?}", p))
     }
+}
+
+fn parse_string_constant(pair: Pair<Rule>) -> Result<Expr> {
+    let s = pair.as_str();
+    let s = &s[1.. s.len() - 1];
+
+    let mut result = String::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(escaped) = chars.next() {
+                match escaped {
+                    '\\' => result.push('\\'),
+                    '\'' => result.push('\''),
+                    '"' => result.push('"'),
+                    'n' => result.push('\n'),
+                    't' => result.push('\t'),
+                    'r' => result.push('\r'),
+                    _ => result.push(escaped), // 其他转义字符原样保留
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    Ok(Expr::Literal(Literal::new(Value::string(result), DataType::String)))
 }
 
 fn parse_column_reference(pair: Pair<Rule>) -> Result<Expr> {

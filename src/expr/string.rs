@@ -437,9 +437,182 @@ impl ScalarFunction for Upper {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ToBase64 {
+    pub child: Box<Expr>,
+}
 
+impl ToBase64 {
+    pub fn new(child: Box<Expr>) -> ToBase64 {
+        ToBase64{child}
+    }
+}
 
+impl CreateScalarFunction for ToBase64 {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
 
+impl ScalarFunction for ToBase64 {
+    fn name(&self) -> &str {
+        "to_base64"
+    }
 
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
 
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
 
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Collection(vec![AbstractDataType::Type(DataType::Binary), AbstractDataType::Type(DataType::String)])])
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{child} = self;
+        Ok(Box::new(phy::ToBase64::new(create_physical_expr(child)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FromBase64 {
+    pub child: Box<Expr>,
+}
+
+impl FromBase64 {
+    pub fn new(child: Box<Expr>) -> FromBase64 {
+        FromBase64{child}
+    }
+}
+
+impl CreateScalarFunction for FromBase64 {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for FromBase64 {
+    fn name(&self) -> &str {
+        "from_base64"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::binary_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Collection(vec![AbstractDataType::Type(DataType::Binary), AbstractDataType::Type(DataType::String)])])
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{child} = self;
+        Ok(Box::new(phy::FromBase64::new(create_physical_expr(child)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Hex {
+    pub child: Box<Expr>,
+}
+
+impl Hex {
+    pub fn new(child: Box<Expr>) -> Hex {
+        Hex{child}
+    }
+}
+
+impl CreateScalarFunction for Hex {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for Hex {
+    fn name(&self) -> &str {
+        "hex"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Collection(vec![AbstractDataType::Type(DataType::Binary), AbstractDataType::Type(DataType::String)])])
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{child} = self;
+        Ok(Box::new(phy::Hex::new(create_physical_expr(child)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Unhex {
+    pub child: Box<Expr>,
+}
+
+impl Unhex {
+    pub fn new(child: Box<Expr>) -> Unhex {
+        Unhex{child}
+    }
+}
+
+impl CreateScalarFunction for Unhex {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for Unhex {
+    fn name(&self) -> &str {
+        "unhex"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::binary_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Collection(vec![AbstractDataType::Type(DataType::Binary), AbstractDataType::Type(DataType::String)])])
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{child} = self;
+        Ok(Box::new(phy::Unhex::new(create_physical_expr(child)?)))
+    }
+}

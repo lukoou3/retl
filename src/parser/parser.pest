@@ -140,8 +140,8 @@ DOUBLE_LITERAL = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* ~ ^"D" }
 
 booleanValue = { ^"true" | ^"false" }
 STRING = ${
-    "'" ~ (!"'" ~ ANY)*  ~ "'"
-    | "\"" ~ (!"\"" ~ ANY)*  ~ "\""
+    "'" ~ ( !("'" | "\\") ~ ANY | "\\" ~ ANY )* ~ "'"
+    | "\"" ~ ( !("\"" | "\\") ~ ANY | "\\" ~ ANY )* ~ "\""
 }
 
 NOT = { ^"not" | "!"}

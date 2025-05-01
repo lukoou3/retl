@@ -3,7 +3,6 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::Arc;
 use itertools::Itertools;
 use crate::{Operator, Result};
 use crate::data::Value;
@@ -257,7 +256,7 @@ impl Expr {
             Expr::Literal(Literal{value, data_type}) => match (value, data_type) {
                 (_, DataType::Null) => "null".to_string(),
                 (v, _) if v.is_null() => format!("cast(null as {})", data_type),
-                (v, DataType::String)  => format!("'{}'", v.get_string()),
+                (v, DataType::String)  => format!("'{}'", v.get_string().replace("\\", "\\\\").replace("'", "\\'")),
                 (v, DataType::Long)  => format!("{}L", v.get_long()),
                 (v, DataType::Date | DataType::Timestamp)  => format!("'{}'", v.to_sql_string(data_type)),
                 (v, _)  => v.to_string(),
@@ -281,6 +280,20 @@ impl Expr {
             Expr::DeclarativeAggFunction(f) => f.sql(),
             Expr::TypedAggFunction(f) => f.sql(),
             Expr::Generator(f) => f.sql(),
+        }
+    }
+
+    pub fn is_literal(&self) -> bool {
+        match self {
+            Expr::Literal(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn literal_value(self) -> Value {
+        match self {
+            Expr::Literal(v) => v.value,
+            _ => Value::Null,
         }
     }
     

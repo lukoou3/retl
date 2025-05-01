@@ -13,6 +13,7 @@ impl Optimizer {
         let rules: Vec<Box<dyn OptimizerRule>> = vec![
             Box::new(ConstantFolding),
             Box::new(SimplifyCasts),
+            Box::new(OptimizeIn),
         ];
         Self { rules }
     }

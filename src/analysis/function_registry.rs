@@ -3,6 +3,7 @@ use std::sync::{LazyLock, Mutex};
 use crate::Result;
 use crate::expr::*;
 use crate::expr::aggregate::*;
+use crate::types::DataType;
 
 type FunctionBuilder = dyn Fn(Vec<Expr>) -> Result<Expr> + Send + Sync;
 struct FunctionRegistry {
@@ -78,16 +79,30 @@ fn builtin_function_registry() -> FunctionRegistry {
         "trim" => StringTrim,
         "lower" | "lcase" => Lower,
         "upper" | "ucase" => Upper,
+        "get_json_object" | "get_json_string" => GetJsonObject,
+        "to_base64" => ToBase64,
+        "from_base64" => FromBase64,
+        "hex" => Hex,
+        "unhex" => Unhex,
+        // datetime functions
         "current_timestamp" | "now" => CurrentTimestamp,
         "from_unixtime" => FromUnixTime,
+        "from_unixtime_millis" => FromUnixTimeMillis,
         "unix_timestamp" => UnixTimestamp,
+        "unix_timestamp_millis" => UnixTimestampMillis,
         "to_unix_timestamp" => ToUnixTimestamp,
+        "to_unix_timestamp_millis" => ToUnixTimestampMillis,
         "date_trunc" => TruncTimestamp,
         "date_floor" | "time_floor" => TimestampFloor,
         // math functions
         "pow" | "power" => Pow,
         "round" => Round,
+        "floor" => Floor,
+        "ceil" => Ceil,
         "bin" => Bin,
+        // misc functions
+        "aes_encrypt" => AesEncrypt,
+        "aes_decrypt" => AesDecrypt,
         // aggregate functions
         "sum" => Sum,
         "count" => Count,
@@ -101,9 +116,43 @@ fn builtin_function_registry() -> FunctionRegistry {
         // generator
         "explode" => Explode,
         "path_file_unroll" => PathFileUnroll,
+        // cast aliases
+        "int" => CastInt,
+        "long" => CastLong,
+        "float" => CastFloat,
+        "double" => CastDouble,
+        "string" => CastString,
+        "boolean" => CastBoolean,
+        "timestamp" => CastTimestamp,
     );
     FunctionRegistry { expressions }
 }
+
+
+macro_rules! impl_cast_expr {
+    ($name:ident, $target_type:expr) => {
+        struct $name;
+
+        impl $name {
+            fn create_function_expr(args: Vec<Expr>) -> Result<Expr> {
+                if args.len() != 1 {
+                    return Err(format!("requires 1 argument, found:{}", args.len()));
+                }
+                let child = args.into_iter().next().unwrap();
+                Ok(child.cast($target_type))
+            }
+        }
+    };
+}
+
+impl_cast_expr!(CastInt, DataType::Int);
+impl_cast_expr!(CastLong, DataType::Long);
+impl_cast_expr!(CastFloat, DataType::Float);
+impl_cast_expr!(CastDouble, DataType::Double);
+impl_cast_expr!(CastString, DataType::String);
+impl_cast_expr!(CastBoolean, DataType::Boolean);
+impl_cast_expr!(CastTimestamp, DataType::Timestamp);
+
 
 #[cfg(test)]
 mod tests {

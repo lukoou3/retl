@@ -91,6 +91,53 @@ impl ScalarFunction for FromUnixTime {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FromUnixTimeMillis {
+    pub sec: Box<Expr>,
+    pub format: Box<Expr>,
+}
+
+impl FromUnixTimeMillis {
+    pub fn new(sec: Box<Expr>, format: Box<Expr>) -> FromUnixTimeMillis {
+        FromUnixTimeMillis { sec, format }
+    }
+}
+
+impl CreateScalarFunction for FromUnixTimeMillis {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 1 || args.len() > 2 {
+            return Err(format!("requires 1 or 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let sec = iter.next().unwrap();
+        let format = iter.next().unwrap_or(Expr::string_lit(NORM_DATETIME_FMT));
+        Ok(Box::new(Self::new(Box::new(sec), Box::new(format))))
+    }
+}
+
+impl ScalarFunction for FromUnixTimeMillis {
+    fn name(&self) -> &str {
+        "from_unixtime__millis"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::string_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.sec, &self.format]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::long_type(), AbstractDataType::string_type()])
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{sec, format} = self;
+        Ok(Box::new(phy::FromUnixTimeMillis::new(create_physical_expr(sec)?, create_physical_expr(format)?)))
+    }
+}
+
 pub struct UnixTimestamp;
 
 impl CreateScalarFunction for UnixTimestamp {
@@ -155,6 +202,73 @@ impl ScalarFunction for ToUnixTimestamp {
     fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
         let Self{time_expr, format} = self;
         Ok(Box::new(phy::ToUnixTimestamp::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
+    }
+}
+
+pub struct UnixTimestampMillis;
+
+impl CreateScalarFunction for UnixTimestampMillis {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() > 2 {
+            return Err(format!("requires 0-2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let time_expr = iter.next().unwrap_or(Expr::ScalarFunction(Box::new(CurrentTimestamp)));
+        let format = iter.next().unwrap_or(Expr::string_lit(NORM_DATETIME_FMT));
+        Ok(Box::new(ToUnixTimestampMillis::new(Box::new(time_expr), Box::new(format))))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToUnixTimestampMillis {
+    pub time_expr: Box<Expr>,
+    pub format: Box<Expr>,
+}
+
+impl ToUnixTimestampMillis {
+    pub fn new(time_expr: Box<Expr>, format: Box<Expr>) -> ToUnixTimestampMillis {
+        ToUnixTimestampMillis { time_expr, format }
+    }
+}
+
+impl CreateScalarFunction for ToUnixTimestampMillis {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() < 1 || args.len() > 2 {
+            return Err(format!("requires 1 or 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let time_expr = iter.next().unwrap();
+        let format = iter.next().unwrap_or(Expr::string_lit(NORM_DATETIME_FMT));
+        Ok(Box::new(Self::new(Box::new(time_expr), Box::new(format))))
+    }
+}
+
+impl ScalarFunction for ToUnixTimestampMillis {
+    fn name(&self) -> &str {
+        "to_unix_timestamp_millis"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::long_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.time_expr, &self.format]
+    }
+
+    fn check_input_data_types(&self) -> Result<()> {
+        if !matches!(self.time_expr.data_type(), DataType::String | DataType::Timestamp) {
+            Err(format!("{:?} requires string/timestamp type, not {}", self.time_expr, self.time_expr.data_type()))
+        } else if self.format.data_type() != DataType::string_type() {
+            Err(format!("{:?} requires string type, not {}", self.format, self.format.data_type()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{time_expr, format} = self;
+        Ok(Box::new(phy::ToUnixTimestampMillis::new(create_physical_expr(time_expr)?, create_physical_expr(format)?)))
     }
 }
 

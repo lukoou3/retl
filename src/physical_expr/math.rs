@@ -89,6 +89,64 @@ impl PhysicalExpr for Round {
 }
 
 #[derive(Debug)]
+pub struct Floor {
+    child: Box<dyn PhysicalExpr>,
+}
+
+impl Floor {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PhysicalExpr for Floor {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn data_type(&self) -> DataType {
+        DataType::Long
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let child = self.child.eval(input);
+        match child {
+            Value::Long(v) => Value::Long(v),
+            Value::Double(v) => Value::Long(v as i64),
+            _ => Value::Null
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Ceil {
+    child: Box<dyn PhysicalExpr>,
+}
+
+impl Ceil {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PhysicalExpr for Ceil {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn data_type(&self) -> DataType {
+        DataType::Long
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let child = self.child.eval(input);
+        match child {
+            Value::Long(v) => Value::Long(v),
+            Value::Double(v) => Value::Long(v.ceil() as i64),
+            _ => Value::Null
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Bin {
     child: Box<dyn PhysicalExpr>,
     padding: bool,

@@ -33,7 +33,7 @@ fn main() {
         }
 
         println!("{} Sent message in : {}",  chrono::Local::now(), value);
-        std::thread::sleep(Duration::from_millis(10));
+        std::thread::sleep(Duration::from_millis(100));
     }
 
     // 刷新生产者，确保所有消息都已发送

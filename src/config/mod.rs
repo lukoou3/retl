@@ -10,6 +10,8 @@ pub use execution::*;
 
 use std::fs;
 use std::error::Error;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use serde::{Deserialize, Serialize};
 use config::{Config, Value as ConfigValue};
 use regex::Regex;
@@ -102,7 +104,7 @@ pub fn parse_config(config_path: &str) -> Result<AppConfig, Box<dyn Error>> {
     Ok(config)
 }
 
-fn decrypt_config_content(content: &str, key: &[u8; 16], iv: &[u8; 16]) -> Result<String, String> {
+fn decrypt_config_content(content: &str, key: &[u8], iv: &[u8]) -> Result<String, String> {
     let re = Regex::new(r"enc@\(([^)]+)\)").map_err(|e| format!("Regex error: {}", e))?;
     let mut result = String::new();
 
@@ -111,7 +113,9 @@ fn decrypt_config_content(content: &str, key: &[u8; 16], iv: &[u8; 16]) -> Resul
         for cap in re.captures_iter(line) {
             let full_match = cap.get(0).unwrap().as_str();
             let ciphertext = cap.get(1).unwrap().as_str();
-            let plaintext = aes_decrypt(ciphertext, key, iv)?;
+            let ciphertext_bytes = STANDARD.decode(ciphertext).map_err(|e| format!("Base64 decode error: {}", e))?;
+            let bytes = aes_decrypt(ciphertext_bytes.as_slice(), key, iv)?;
+            let plaintext = String::from_utf8(bytes).map_err(|e| format!("UTF-8 decode error: {}", e))?;
             new_line = new_line.replace(full_match, &plaintext);
         }
         result.push_str(&new_line);

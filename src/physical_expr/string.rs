@@ -1,6 +1,8 @@
 use std::any::Any;
 use std::hash::Hash;
 use std::sync::Arc;
+use base64::{DecodeError, Engine};
+use base64::engine::general_purpose::STANDARD;
 use crate::data::{Row, Value};
 use crate::physical_expr::{BinaryExpr, PhysicalExpr, TernaryExpr, UnaryExpr};
 use crate::types::DataType;
@@ -421,7 +423,157 @@ impl PhysicalExpr for Upper {
     }
 }
 
+#[derive(Debug)]
+pub struct ToBase64 {
+    child: Box<dyn PhysicalExpr>,
+}
 
+impl ToBase64 {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PhysicalExpr for ToBase64 {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child.eval(input);
+        match value {
+            Value::Binary(b) => {
+                let encoded = STANDARD.encode(b.as_slice());
+                Value::String(Arc::new(encoded))
+            },
+            Value::String(s) => {
+                let decoded = STANDARD.decode(s.as_bytes()).unwrap();
+                Value::Binary(Arc::new(decoded))
+            },
+            _ => Value::Null,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FromBase64 {
+    child: Box<dyn PhysicalExpr>,
+}
+
+impl FromBase64 {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PhysicalExpr for FromBase64 {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::Binary
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child.eval(input);
+        match value {
+            Value::Binary(b) => {
+                match STANDARD.decode(b.as_slice()) {
+                    Ok(b) => Value::Binary(Arc::new(b)),
+                    Err(_) => Value::Null,
+                }
+            },
+            Value::String(s) => {
+                match STANDARD.decode(s.as_bytes()) {
+                    Ok(b) => Value::Binary(Arc::new(b)),
+                    Err(_) => Value::Null,
+                }
+            },
+            _ => Value::Null,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Hex {
+    child: Box<dyn PhysicalExpr>,
+}
+
+impl Hex {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PhysicalExpr for Hex {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::String
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child.eval(input);
+        match value {
+            Value::Binary(b) => {
+                let encoded = hex::encode(b.as_slice());
+                Value::String(Arc::new(encoded))
+            },
+            Value::String(s) => {
+                let encoded = hex::encode(s.as_bytes());
+                Value::String(Arc::new(encoded))
+            },
+            _ => Value::Null,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Unhex {
+    child: Box<dyn PhysicalExpr>,
+}
+
+impl Unhex {
+    pub fn new(child: Box<dyn PhysicalExpr>) -> Self {
+        Self {child}
+    }
+}
+
+impl PhysicalExpr for Unhex {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        DataType::Binary
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child.eval(input);
+        match value {
+            Value::Binary(b) => {
+                match hex::decode(b.as_slice()) {
+                    Ok(b) => Value::Binary(Arc::new(b)),
+                    Err(_) => Value::Null,
+                }
+            },
+            Value::String(s) => {
+                match hex::decode(s.as_bytes()) {
+                    Ok(b) => Value::Binary(Arc::new(b)),
+                    Err(_) => Value::Null,
+                }
+            },
+            _ => Value::Null,
+        }
+    }
+}
 
 // Convert the given `start` and `count` to valid byte indices within `input` string
 //

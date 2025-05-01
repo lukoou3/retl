@@ -99,6 +99,99 @@ impl ScalarFunction for Round {
 }
 
 #[derive(Debug, Clone)]
+pub struct Floor {
+    pub child: Box<Expr>,
+}
+
+impl Floor {
+    pub fn new(child: Box<Expr>) -> Floor {
+        Floor{ child }
+    }
+}
+
+impl CreateScalarFunction for Floor {
+    fn from_args(args: Vec<Expr>) -> crate::Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 ent, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for Floor {
+
+    fn name(&self) -> &str {
+        "floor"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::long_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Collection(vec![AbstractDataType::double_type(), AbstractDataType::long_type()])])
+    }
+
+    fn create_physical_expr(&self) -> crate::Result<Box<dyn PhysicalExpr>> {
+        let Self{ child } = self;
+        Ok(Box::new(phy::Floor::new(create_physical_expr(child)?)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Ceil {
+    pub child: Box<Expr>,
+}
+
+impl Ceil {
+    pub fn new(child: Box<Expr>) -> Ceil {
+        Ceil{ child }
+    }
+}
+
+impl CreateScalarFunction for Ceil {
+    fn from_args(args: Vec<Expr>) -> crate::Result<Box<dyn ScalarFunction>> {
+        if args.len() != 1 {
+            return Err(format!("requires 1 ent, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let child = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(child))))
+    }
+}
+
+impl ScalarFunction for Ceil {
+
+    fn name(&self) -> &str {
+        "ceil"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::long_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.child]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::Collection(vec![AbstractDataType::double_type(), AbstractDataType::long_type()])])
+    }
+
+    fn create_physical_expr(&self) -> crate::Result<Box<dyn PhysicalExpr>> {
+        let Self{ child } = self;
+        Ok(Box::new(phy::Ceil::new(create_physical_expr(child)?)))
+    }
+}
+
+
+#[derive(Debug, Clone)]
 pub struct Bin {
     pub child: Box<Expr>,
     pub padding: Box<Expr>,

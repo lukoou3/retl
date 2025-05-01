@@ -1,16 +1,14 @@
 use crypto::aes::{cbc_encryptor, cbc_decryptor, KeySize};
 use crypto::blockmodes::PkcsPadding;
 use crypto::buffer::{BufferResult, ReadBuffer, WriteBuffer};
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 
 use crate::Result;
 
-pub fn aes_encrypt(plaintext: &str, key: &[u8; 16], iv: &[u8; 16]) -> Result<String> {
+pub fn aes_encrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
     let mut encryptor = cbc_encryptor(KeySize::KeySize128, key, iv, PkcsPadding);
 
     let mut final_result = Vec::<u8>::new();
-    let mut read_buffer = crypto::buffer::RefReadBuffer::new(plaintext.as_bytes());
+    let mut read_buffer = crypto::buffer::RefReadBuffer::new(input);
     let mut buffer = [0; 4096];
     let mut write_buffer = crypto::buffer::RefWriteBuffer::new(&mut buffer);
 
@@ -26,18 +24,15 @@ pub fn aes_encrypt(plaintext: &str, key: &[u8; 16], iv: &[u8; 16]) -> Result<Str
         }
     }
 
-    Ok(STANDARD.encode(&final_result))
+    //Ok(STANDARD.encode(&final_result))
+    Ok(final_result)
 }
 
-pub fn aes_decrypt(ciphertext: &str, key: &[u8; 16], iv: &[u8; 16]) -> Result<String> {
-    let ciphertext_bytes = STANDARD
-        .decode(ciphertext)
-        .map_err(|e| format!("Base64 decode error: {}", e))?;
-
+pub fn aes_decrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
     let mut decryptor = cbc_decryptor(KeySize::KeySize128, key, iv, PkcsPadding);
 
     let mut final_result = Vec::<u8>::new();
-    let mut read_buffer = crypto::buffer::RefReadBuffer::new(&ciphertext_bytes);
+    let mut read_buffer = crypto::buffer::RefReadBuffer::new(input);
     let mut buffer = [0; 4096];
     let mut write_buffer = crypto::buffer::RefWriteBuffer::new(&mut buffer);
 
@@ -53,6 +48,5 @@ pub fn aes_decrypt(ciphertext: &str, key: &[u8; 16], iv: &[u8; 16]) -> Result<St
         }
     }
 
-    Ok(String::from_utf8(final_result)
-        .map_err(|e| format!("UTF-8 decode error: {}", e))?)
+    Ok(final_result)
 }
