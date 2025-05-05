@@ -38,6 +38,14 @@ enum KafkaCommands {
         #[arg(long = "topic")]
         topic: String,
     },
+    DescGroup {
+        #[command(flatten)]
+        common: KafkaCommonArgs,
+        #[arg(long = "group")]
+        group_id: String,
+        #[arg(long = "topic")]
+        topic: String,
+    },
     ResetGroupOffsetLatest {
         #[command(flatten)]
         common: KafkaCommonArgs,
@@ -107,15 +115,24 @@ fn run_kafka_command(kafka_command: KafkaCommands) {
                 println!("show topic {}, brokers:{}, props:{:?}", topic, common.brokers, props);
                 retl::connector::kafka::show_topic(&common.brokers, &topic, &props).unwrap();
             },
+            KafkaCommands::DescGroup { common, group_id, topic } => {
+                let props = common.props_map();
+                println!("desc group, brokers:{}, props:{:?}, group:{}, topic:{}", common.brokers, props, group_id, topic);
+                retl::connector::kafka::desc_group(&common.brokers, &topic, &group_id, &props).unwrap();
+            },
             KafkaCommands::ResetGroupOffsetLatest { common, group_id, topic } => {
                 let props = common.props_map();
                 println!("reset group offset latest, brokers:{}, props:{:?}, group:{}, topic:{}", common.brokers, props, group_id, topic);
                 retl::connector::kafka::reset_group_offset_latest(&common.brokers, &topic, &group_id, &props).unwrap();
+                println!("reset group offset end");
+                retl::connector::kafka::desc_group(&common.brokers, &topic, &group_id, &props).unwrap();
             },
             KafkaCommands::ResetGroupOffsetForTs { common, group_id, topic, ts } => {
                 let props = common.props_map();
                 println!("reset group offset for ts, brokers:{}, props:{:?}, group:{}, topic:{}, ts:{}", common.brokers, props, group_id, topic, ts);
                 retl::connector::kafka::reset_group_offset_for_ts(ts, &common.brokers, &topic, &group_id, &props).unwrap();
+                println!("reset group offset end");
+                retl::connector::kafka::desc_group(&common.brokers, &topic, &group_id, &props).unwrap();
             },
         }
     }

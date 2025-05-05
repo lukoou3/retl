@@ -19,6 +19,34 @@ pub fn show_topic(brokers: &str, topic: &str, props: &HashMap<String, String>) -
     Ok(())
 }
 
+pub fn desc_group(brokers: &str, topic: &str, group_id: &str, props: &HashMap<String, String>) -> anyhow::Result<()> {
+    let consumer = create_consumer(brokers, Some(group_id), props)?;
+    let metadata = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+    if let Some(t) = metadata.topics().iter().find(|t| t.name() == topic) {
+        let mut tpl = TopicPartitionList::new();
+        let mut partition_offsets = HashMap::new();
+        for partition in t.partitions() {
+            let (_, high) = consumer.fetch_watermarks(topic, partition.id(), Duration::from_secs(5))?;
+            partition_offsets.insert(partition.id(), high);
+            tpl.add_partition(topic, partition.id());
+        }
+        // 查询已提交 offset
+        let committed_offsets = consumer.committed_offsets(tpl, Duration::from_secs(10))?;
+        for elem in committed_offsets.elements() {
+            let offset = match elem.offset() {
+                rdkafka::Offset::Offset(offset) => offset,
+                _ => 0,
+            };
+            let partition_offset = partition_offsets.get(&elem.partition()).unwrap();
+            println!("Topic: {}, Partition: {}, Committed Offset: {}, Partition Offset: {}, Lag: {}", elem.topic(), elem.partition(), offset, partition_offset, partition_offset - offset);
+        }
+    } else {
+        println!("not find topic:{}", topic)
+    }
+
+    Ok(())
+}
+
 pub fn reset_group_offset_latest(brokers: &str, topic: &str, group_id: &str, props: &HashMap<String, String>) -> anyhow::Result<()> {
     let consumer = create_consumer(brokers, Some(group_id), props)?;
     let metadata = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
