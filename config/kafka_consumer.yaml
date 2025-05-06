@@ -1,0 +1,46 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: kafka
+    outputs: [ kafka_source ]
+    schema: "struct<id:bigint, cate:string, text:string, in_bytes:bigint, out_bytes:bigint>"
+    topics: ["logs"]
+    properties:
+      bootstrap.servers: "192.168.216.86:9092"
+      group.id: "my_group"
+    decoding:
+      codec: json
+
+transforms:
+  - type: query
+    inputs: [ faker_source ]
+    outputs: [ query ]
+    sql: "select id, cate, text, concat(cate, '_', text) text2, in_bytes, out_bytes, (in_bytes + out_bytes) bytes, (10 + out_bytes) bytes2 from tbl"
+  - type: query
+    inputs: [ query ]
+    outputs: [ query2 ]
+    sql: "select id, cate, text, in_bytes, out_bytes, bytes, bytes2 from tbl"
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ kafka_source ]
+    print_mode: log_warn
+    encoding:
+      codec: json
+  - type: kafka
+    name: kafka_sink
+    inputs: [ query ]
+    topic: logs
+    properties:
+      bootstrap.servers: "192.168.216.86:9092"
+      batch.size: "10000"
+      linger.ms: "100"
+      compression.type: "lz4"
+    encoding:
+      codec: json
+
+active_sinks: [print_sink]

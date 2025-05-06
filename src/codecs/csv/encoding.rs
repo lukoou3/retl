@@ -17,7 +17,7 @@ impl CsvSerializer {
 }
 
 impl Serializer for CsvSerializer {
-    fn serialize(&mut self, row: &dyn Row) -> Result<&[u8]> {
+    fn serialize<'a>(&'a mut self, row: &'a dyn Row) -> Result<&'a [u8]> {
         self.bytes.clear();
         self.bytes.write("a,b,3".as_bytes());
         Ok(&self.bytes)

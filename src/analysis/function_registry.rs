@@ -80,6 +80,7 @@ fn builtin_function_registry() -> FunctionRegistry {
         "lower" | "lcase" => Lower,
         "upper" | "ucase" => Upper,
         "get_json_object" | "get_json_string" => GetJsonObject,
+        "get_json_int" => GetJsonInt,
         "to_base64" => ToBase64,
         "from_base64" => FromBase64,
         "hex" => Hex,

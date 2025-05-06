@@ -50,3 +50,49 @@ impl ScalarFunction for GetJsonObject {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct GetJsonInt {
+    pub json: Box<Expr>,
+    pub path: Box<Expr>,
+}
+
+impl GetJsonInt {
+    pub fn new(json: Box<Expr>, path: Box<Expr>) -> Self {
+        Self{json, path}
+    }
+}
+
+impl CreateScalarFunction for GetJsonInt {
+    fn from_args(args: Vec<Expr>) -> Result<Box<dyn ScalarFunction>> {
+        if args.len() != 2 {
+            return Err(format!("requires 2 argument, found:{}", args.len()));
+        }
+        let mut iter = args.into_iter();
+        let json = iter.next().unwrap();
+        let path = iter.next().unwrap();
+        Ok(Box::new(Self::new(Box::new(json), Box::new(path))))
+    }
+}
+
+impl ScalarFunction for GetJsonInt {
+    fn name(&self) -> &str {
+        "get_json_int"
+    }
+
+    fn data_type(&self) -> &DataType {
+        DataType::long_type()
+    }
+
+    fn args(&self) -> Vec<&Expr> {
+        vec![&self.json, &self.path]
+    }
+
+    fn expects_input_types(&self) -> Option<Vec<AbstractDataType>> {
+        Some(vec![AbstractDataType::string_type(), AbstractDataType::string_type()])
+    }
+
+    fn create_physical_expr(&self) -> Result<Box<dyn PhysicalExpr>> {
+        let Self{json, path} = self;
+        Ok(Box::new(phy::GetJsonInt::new(create_physical_expr(json)?, create_physical_expr(path)?)))
+    }
+}

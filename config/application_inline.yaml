@@ -21,11 +21,37 @@ sources:
     data: '{"id": 1, "name": "Alice", "score": 100, "money": 10000}'
     decoding:
       codec: json
+  - type: inline
+    outputs: [ inline_source3 ]
+    schema: "text string"
+    data: |
+      [
+        {"id": 1, "name": "Alice", "score": 100, "money": 1000},
+        {"id": 2, "name": "Bob", "score": 200, "money": 2000},
+        {"id": 3, "name": "Charlie", "score": 300, "money": 3000}
+      ]
+    decoding:
+      codec: raw
+
+transforms:
+  - type: query
+    inputs: [ inline_source3 ]
+    outputs: [ query ]
+    sql: |
+      select 
+          text,
+          get_json_object(text, '$.id') id,
+          get_json_object(text, '$.name') name,
+          get_json_object(text, '$.score') score,
+          get_json_int(text, '$.score') score2,
+          get_json_object(text, '$.money') money
+      from tbl
+      where get_json_int(text, '$.score') = 200
 
 sinks:
   - type: print
     name: print_sink
-    inputs: [ inline_source2 ]
+    inputs: [ query ]
     print_mode: stdout
     encoding:
       codec: json

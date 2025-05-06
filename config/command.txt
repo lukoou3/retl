@@ -1,0 +1,28 @@
+
+conda deactivate
+
+cargo run
+cargo run --release
+
+cargo build --release
+cp target/release/retl ./
+
+./retl sql
+
+./retl kafka show-topic --brokers 192.168.216.86:9092 --topic logs
+./retl kafka desc-group --brokers 192.168.216.86:9092 --topic logs --group my_group
+./retl kafka reset-group-offset-latest --brokers 192.168.216.86:9092 --topic logs --group my_group
+./retl  reset-group-offset-for-ts  --brokers 192.168.216.86:9092 --topic logs --group my_group --ts 1746410443000
+
+
+zkServer.sh start
+zkServer.sh status
+
+bin/kafka-server-start.sh -daemon config/server.properties
+kafka-topics.sh --bootstrap-server 192.168.216.86:9092 --list
+kafka-console-producer.sh  --bootstrap-server 192.168.216.86:9092 --topic logs
+kafka-consumer-groups.sh --bootstrap-server 192.168.216.86:9092  --describe --group test-group
+
+
+
+

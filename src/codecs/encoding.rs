@@ -13,5 +13,5 @@ dyn_clone::clone_trait_object!(SerializerConfig);
 
 
 pub trait Serializer: Debug {
-    fn serialize(&mut self, row: &dyn Row) -> Result<&[u8]>;
+    fn serialize<'a>(&'a mut self, row: &'a dyn Row) -> Result<&'a [u8]>;
 }

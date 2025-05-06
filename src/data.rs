@@ -379,8 +379,10 @@ pub trait Row: Debug + Display {
     fn get_float(&self, i: usize) -> f32;
     fn get_double(&self, i: usize) -> f64;
     fn get_string(&self, i: usize) -> &str;
+    fn get_string_bytes(&self, i: usize) -> &[u8];
     fn get_boolean(&self, i: usize) -> bool;
     fn get_binary(&self, i: usize) -> Arc<Vec<u8>>;
+    fn get_binary_bytes(&self, i: usize) -> &[u8];
     fn get_struct(&self, i: usize) -> Arc<dyn BaseRow>;
     fn get_array(&self, i: usize) -> Arc<Vec<Value>>;
 
@@ -617,6 +619,15 @@ impl Row for GenericRow {
         }
     }
 
+    fn get_string_bytes(&self, i: usize) -> &[u8] {
+        let value = &self.values[i];
+        if let Value::String(v) = value {
+            v.as_bytes()
+        } else {
+            b""
+        }
+    }
+
     fn get_boolean(&self, i: usize) -> bool {
         let value = &self.values[i];
         if let Value::Boolean(v) = value {
@@ -632,6 +643,15 @@ impl Row for GenericRow {
             v.clone()
         } else {
             EMPTY_BINARY.clone()
+        }
+    }
+
+    fn get_binary_bytes(&self, i: usize) -> &[u8] {
+        let value = &self.values[i];
+        if let Value::Binary(v) = value {
+            v.as_slice()
+        } else {
+            b""
         }
     }
 
@@ -771,6 +791,14 @@ impl<'a> Row for JoinedRow<'a> {
         }
     }
 
+    fn get_string_bytes(&self, i: usize) -> &[u8] {
+        if i < self.row1.len() {
+            self.row1.get_string_bytes(i)
+        } else {
+            self.row2.get_string_bytes(i - self.row1.len())
+        }
+    }
+
     fn get_boolean(&self, i: usize) -> bool {
         if i < self.row1.len() {
             self.row1.get_boolean(i)
@@ -784,6 +812,14 @@ impl<'a> Row for JoinedRow<'a> {
             self.row1.get_binary(i)
         } else {
             self.row2.get_binary(i - self.row1.len())
+        }
+    }
+
+    fn get_binary_bytes(&self, i: usize) -> &[u8] {
+        if i < self.row1.len() {
+            self.row1.get_binary_bytes(i)
+        } else {
+            self.row2.get_binary_bytes(i - self.row1.len())
         }
     }
 
@@ -903,6 +939,14 @@ impl<'a> Row for MutJoinedRow<'a> {
         }
     }
 
+    fn get_string_bytes(&self, i: usize) -> &[u8] {
+        if i < self.row1.len() {
+            self.row1.get_string_bytes(i)
+        } else {
+            self.row2.get_string_bytes(i - self.row1.len())
+        }
+    }
+
     fn get_boolean(&self, i: usize) -> bool {
         if i < self.row1.len() {
             self.row1.get_boolean(i)
@@ -916,6 +960,14 @@ impl<'a> Row for MutJoinedRow<'a> {
             self.row1.get_binary(i)
         } else {
             self.row2.get_binary(i - self.row1.len())
+        }
+    }
+
+    fn get_binary_bytes(&self, i: usize) -> &[u8] {
+        if i < self.row1.len() {
+            self.row1.get_binary_bytes(i)
+        } else {
+            self.row2.get_binary_bytes(i - self.row1.len())
         }
     }
 

@@ -24,7 +24,7 @@ impl JsonSerializer {
 }
 
 impl Serializer for JsonSerializer {
-    fn serialize(&mut self, row: &dyn Row) -> Result<&[u8]> {
+    fn serialize<'a>(&'a mut self, row: &'a dyn Row) -> Result<&'a [u8]> {
         self.bytes.clear();
         let rst = if self.pretty {
             serde_json::to_writer_pretty(&mut self.bytes, &RowWriter::new(row, &self.schema.fields))
