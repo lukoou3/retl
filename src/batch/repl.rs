@@ -16,17 +16,31 @@ pub fn run_sql_command(sql: Option<String>, filename: Option<String>) -> Result<
         (Some(_), Some(_)) => {
             Err("sql and filename can not be set at the same time".into())
         },
-        (Some(sql), _) => {
+        (Some(text), _) => {
             let mut session = BatchSession::new();
-            let mut df = session.sql(&sql)?;
-            df.show();
+            let (complete_statements, sql) = split_semi_colon(&text);
+            for stmt in complete_statements {
+                let mut df = session.sql(&stmt)?;
+                df.show();
+            }
+            if !sql.trim().is_empty() {
+                let mut df = session.sql(&sql)?;
+                df.show();
+            }
             Ok(())
         },
         (_, Some(f)) => {
             let mut session = BatchSession::new();
-            let sql = fs::read_to_string(&f).map_err(|e| format!("Failed to read : {}", f))?;
-            let mut df = session.sql(&sql)?;
-            df.show();
+            let text = fs::read_to_string(&f).map_err(|e| format!("Failed to read : {}", f))?;
+            let (complete_statements, sql) = split_semi_colon(&text);
+            for stmt in complete_statements {
+                let mut df = session.sql(&stmt)?;
+                df.show();
+            }
+            if !sql.trim().is_empty() {
+                let mut df = session.sql(&sql)?;
+                df.show();
+            }
             Ok(())
         },
         _ => run_sql_repl()
