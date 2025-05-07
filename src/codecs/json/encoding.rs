@@ -10,16 +10,22 @@ use crate::types::{DataType, Field, Schema};
 pub struct JsonSerializer {
     pub schema: Schema,
     pub pretty: bool,
+    pub write_null: bool,
     pub bytes: Vec<u8>,
 }
 
 impl JsonSerializer {
     pub fn new(schema: Schema) -> Self {
-        Self { schema, pretty: false, bytes: Vec::new() }
+        Self { schema, pretty: false, write_null: false, bytes: Vec::new() }
     }
 
     pub fn new_with_pretty(schema: Schema) -> Self {
-        Self { schema, pretty: true, bytes: Vec::new() }
+        Self { schema, pretty: true, write_null: false, bytes: Vec::new() }
+    }
+    
+    pub fn write_null(mut self, write_null: bool) -> Self {
+        self.write_null = write_null;
+        self
     }
 }
 
@@ -27,9 +33,9 @@ impl Serializer for JsonSerializer {
     fn serialize<'a>(&'a mut self, row: &'a dyn Row) -> Result<&'a [u8]> {
         self.bytes.clear();
         let rst = if self.pretty {
-            serde_json::to_writer_pretty(&mut self.bytes, &RowWriter::new(row, &self.schema.fields))
+            serde_json::to_writer_pretty(&mut self.bytes, &RowWriter::new(row, &self.schema.fields, self.write_null))
         } else {
-            serde_json::to_writer(&mut self.bytes, &RowWriter::new(row, &self.schema.fields))
+            serde_json::to_writer(&mut self.bytes, &RowWriter::new(row, &self.schema.fields, self.write_null))
         };
         match rst {
             Ok(_) => Ok(&self.bytes),

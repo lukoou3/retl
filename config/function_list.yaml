@@ -1,0 +1,83 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: inline
+    outputs: [ inline_source ]
+    schema: |
+      os_type int,
+      os_plant string,
+      page_id string,
+      page_name string,
+      page_param string,
+      visit_time string
+    data: |
+      [
+        {"os_type": 4, "os_plant": "IOS-M", "page_id": "Product_Main", "page_name": "pp.com/118065875", "page_param": "searchText=男表&lng=112.935037&lat=23.031227", "visit_time": "2025-05-01 08:12:45"}
+      ]
+    rows_per_second: 10
+    number_of_rows: 1
+    decoding:
+      codec: json
+
+transforms:
+  - type: query
+    inputs: [ inline_source ]
+    outputs: [ query ]
+    sql: |
+      select 
+          os_type,
+          if(os_type=4, 'IOS', 'ANDROID'),
+          if(os_type in (3, 4), 'IOS', 'ANDROID'),
+          case os_type
+            when 1 then 'ANDROID'
+            when 2 then 'ANDROID-M'
+            when 3 then 'IOS'
+            when 4 then 'IOS-M'
+            else 'OTHER'
+          end,
+          nvl(os_type, 0),
+          coalesce(null, 1, 0),
+          greatest(1, 2, 3, 1),
+          least(1, 2, 3, 1),
+          concat(os_plant, '|', page_id),
+          concat_ws('|', os_plant, page_id),
+          split(page_param, '&'),
+          split_part(page_param, '&', 1),
+          split_part(page_param, '&', 0),
+          page_name,
+          page_name like '%pp.com%',
+          regexp_extract(page_name, 'pp.com/([0-9]+)', 1),
+          page_param,
+          regexp_extract(page_param, 'searchText=([^&]+)', 1),
+          visit_time,
+          substr(visit_time, 1, 10),
+          timestamp(visit_time),
+          date_trunc('minute', visit_time),
+          date_trunc('hour', visit_time),
+          date_floor(visit_time, '5 second'),
+          date_floor(visit_time, '1 minute'),
+          date_floor(visit_time, '1 hour'),
+          now(),
+          from_unixtime(1000L),
+          from_unixtime_millis(1000L),
+          to_base64(aes_encrypt('abc', 'fd6b639dbcff0c2a', '77b07a672d57d64c')),
+          string(aes_decrypt(from_base64('y+49jBd/xd6Kz4pfoQIBbA=='), 'fd6b639dbcff0c2a', '77b07a672d57d64c')),
+          hex(aes_encrypt('abc', 'fd6b639dbcff0c2a', '77b07a672d57d64c')),
+          string(aes_decrypt(unhex('cbee3d8c177fc5de8acf8a5fa102016c'), 'fd6b639dbcff0c2a', '77b07a672d57d64c')),
+          0 nop
+      from tbl
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ query ]
+    print_mode: stdout
+    encoding:
+      codec: json
+      pretty: true
+      write_null: true
+
+active_sinks: [print_sink]

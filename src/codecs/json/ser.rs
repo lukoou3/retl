@@ -15,12 +15,13 @@ macro_rules! tri {
 
 pub struct RowWriter<'a>{
     row: &'a dyn Row,
-    fields: &'a Vec<Field>
+    fields: &'a Vec<Field>,
+    write_null: bool,
 }
 
 impl RowWriter<'_>{
-    pub fn new<'a>(row: &'a dyn Row, fields: &'a Vec<Field>) -> RowWriter<'a> {
-        RowWriter{row, fields}
+    pub fn new<'a>(row: &'a dyn Row, fields: &'a Vec<Field>, write_null: bool) -> RowWriter<'a> {
+        RowWriter{row, fields, write_null}
     }
 }
 
@@ -34,6 +35,10 @@ impl serde::ser::Serialize for RowWriter<'_> {
         let mut compound = serializer.serialize_map(None)?;
         for (i, field) in self.fields.iter().enumerate() {
             if row.is_null(i) {
+                if self.write_null {
+                    compound.serialize_key(& field.name)?;
+                    compound.serialize_value(&Option::<()>::None)?;
+                }
                 continue;
             }
             compound.serialize_key(& field.name)?;
@@ -52,9 +57,9 @@ impl serde::ser::Serialize for RowWriter<'_> {
                     let date = datetime_utils::from_timestamp_micros_utc(row.get_long(i)).format(datetime_utils::NORM_DATETIME_FMT).to_string();
                     compound.serialize_value(&date)?
                 },
-                DataType::Struct(fs) => compound.serialize_value(&RowWriter::new(row.get_struct(i).as_row(), &fs.0))?,
+                DataType::Struct(fs) => compound.serialize_value(&RowWriter::new(row.get_struct(i).as_row(), &fs.0, self.write_null))?,
                 DataType::Array(dt) => {
-                    compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref()))?;
+                    compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref(), self.write_null))?;
                 },
                 _ => return Err(serde::ser::Error::custom(format!("does not support {} type", field.data_type))),
             }
@@ -66,12 +71,13 @@ impl serde::ser::Serialize for RowWriter<'_> {
 
 struct ArrayWriter<'a>{
     array: &'a Vec<Value>,
-    data_type: &'a DataType
+    data_type: &'a DataType,
+    write_null: bool,
 }
 
 impl <'a> ArrayWriter<'a>{
-    fn new(array: &'a Vec<Value>, data_type: &'a DataType) -> ArrayWriter<'a> {
-        ArrayWriter{array, data_type}
+    fn new(array: &'a Vec<Value>, data_type: &'a DataType, write_null: bool) -> ArrayWriter<'a> {
+        ArrayWriter{array, data_type, write_null}
     }
 }
 
@@ -116,12 +122,12 @@ impl serde::ser::Serialize for ArrayWriter<'_> {
             },
             DataType::Struct(fs) => {
                 for v in array {
-                    compound.serialize_element(&RowWriter::new(v.get_struct().as_row(), &fs.0))?;
+                    compound.serialize_element(&RowWriter::new(v.get_struct().as_row(), &fs.0, self.write_null))?;
                 }
             }
             DataType::Array(dt) => {
                 for v in array {
-                    compound.serialize_element(&ArrayWriter::new(v.get_array().as_ref(), dt.as_ref()))?;
+                    compound.serialize_element(&ArrayWriter::new(v.get_array().as_ref(), dt.as_ref(), self.write_null))?;
                 }
             },
             _ => return Err(serde::ser::Error::custom(format!("does not support {} type", self.data_type))),
@@ -151,11 +157,11 @@ fn write_struct<T: Write>(serializer: &mut serde_json::Serializer<T>, row: &dyn 
             DataType::String => tri!(compound.serialize_value(row.get_string(i))),
             DataType::Boolean => tri!(compound.serialize_value(&row.get_boolean(i))),
             DataType::Struct(fs) => {
-                tri!(compound.serialize_value(&RowWriter::new(row.get_struct(i).as_row(), &fs.0)));
+                tri!(compound.serialize_value(&RowWriter::new(row.get_struct(i).as_row(), &fs.0, false)));
                 //write_struct(serializer, row.get_struct(i).as_ref(), &fs.0)?;
             },
             DataType::Array(dt) => {
-                tri!(compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref())));
+                tri!(compound.serialize_value(&ArrayWriter::new(row.get_array(i).as_ref(), dt.as_ref(), false)));
                 //write_array(serializer, row.get_array(i).as_ref(), dt)?;
             },
             _ => return Err(format!("does not support {} type", field.data_type)),
@@ -202,12 +208,12 @@ fn write_array<T: Write>(serializer: &mut serde_json::Serializer<T>, array: &Vec
         },
         DataType::Struct(fs) => {
             for v in array {
-                tri!(compound.serialize_element(&RowWriter::new(v.get_struct().as_row(), &fs.0)));
+                tri!(compound.serialize_element(&RowWriter::new(v.get_struct().as_row(), &fs.0, false)));
             }
         }
         DataType::Array(dt) => {
             for v in array {
-                tri!(compound.serialize_element(&ArrayWriter::new(v.get_array().as_ref(), dt.as_ref())));
+                tri!(compound.serialize_element(&ArrayWriter::new(v.get_array().as_ref(), dt.as_ref(), false)));
             }
         },
         _ => return Err(format!("does not support {} type", data_type)),

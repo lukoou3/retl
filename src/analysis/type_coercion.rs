@@ -448,6 +448,7 @@ fn implicit_cast(in_type:  &DataType, expected_type: AbstractDataType) -> Option
         // Implicit cast from/to string
         (DataType::String, expected_type) if expected_type.is_numeric_type() => Some(expected_type.default_concrete_type()),
         (DataType::String, AbstractDataType::Type(DataType::Timestamp)) => Some(DataType::Timestamp),
+        (DataType::String, AbstractDataType::Type(DataType::Binary)) => Some(DataType::Binary),
         // Cast any atomic type to string.
         (in_type, AbstractDataType::Type(DataType::String)) if in_type.is_atomic_type() => Some(DataType::String),
         (in_type, AbstractDataType::Collection(dts)) =>

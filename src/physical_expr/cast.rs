@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -74,6 +75,17 @@ fn boolean_to_string(v: Value) -> Value {
     Value::String(Arc::new(v.get_boolean().to_string()))
 }
 
+fn binary_to_string(value: Value) -> Value {
+    if let Value::Binary(b) = value {
+        match String::from_utf8_lossy(b.as_slice()) {
+            Cow::Borrowed(v) => Value::String(Arc::new(v.to_string())),
+            Cow::Owned(v) => Value::String(Arc::new(v)),
+        }
+    } else {
+        panic!("{:?} is not a binary", value)
+    }
+}
+
 fn timestamp_to_string(v: Value) -> Value {
     let dt = format_datetime_fafault(from_timestamp_micros_utc(v.get_long()));
     Value::String(Arc::new(dt))
@@ -81,6 +93,14 @@ fn timestamp_to_string(v: Value) -> Value {
 
 fn value_to_string(v: Value) -> Value {
     Value::String(Arc::new(format!("{v}")))
+}
+
+fn string_to_binary(value: Value) -> Value {
+    if let Value::String(v) = value {
+        Value::Binary(Arc::new(v.as_bytes().to_vec()))
+    } else {
+        panic!("{:?} is not a string", value)
+    }
 }
 
 fn long_to_int(v: Value) -> Value {
@@ -228,6 +248,7 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
             DataType::Float => Box::new(float_to_string),
             DataType::Double => Box::new(double_to_string),
             DataType::Boolean => Box::new(boolean_to_string),
+            DataType::Binary => Box::new(binary_to_string),
             DataType::Timestamp => Box::new(timestamp_to_string),
             _ =>  Box::new(value_to_string),
         },
@@ -272,6 +293,10 @@ pub fn get_cast_func(from: DataType, to: DataType) -> Box<CastFunc> {
             DataType::String => Box::new(string_to_timestamp),
             _ =>  panic!("Cannot cast {from} to {to}.")
         },
+        DataType::Binary => match from {
+            DataType::String => Box::new(string_to_binary),
+            _ =>  panic!("Cannot cast {from} to {to}.")
+        },
         _ =>  panic!("Cannot cast {from} to {to}.")
     }
 }
@@ -281,6 +306,7 @@ pub fn can_cast(from: &DataType, to: &DataType) -> bool {
         (from_type, to_type) if from_type == to_type => true,
         (DataType::Null, _) => true,
         (_, DataType::String) => true,
+        (DataType::String, DataType::Binary) => true,
         (DataType::String | DataType::Boolean, to_type) if to_type.is_numeric_type() => true,
         (from_type, to_type) if from_type.is_numeric_type() && to_type.is_numeric_type() => true,
         (from_type, DataType::Timestamp) if from_type.is_numeric_type() || matches!(from_type, DataType::String) => true,
