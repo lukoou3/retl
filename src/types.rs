@@ -101,6 +101,10 @@ impl AbstractDataType {
         AbstractDataType::Type(DataType::Timestamp)
     }
 
+    pub fn binary_type() -> AbstractDataType {
+        AbstractDataType::Type(DataType::Binary)
+    }
+
     pub fn string_array_type() -> AbstractDataType {
         AbstractDataType::Type(DataType::string_array_type().clone())
     }

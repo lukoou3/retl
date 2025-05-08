@@ -1,13 +1,17 @@
 use std::any::Any;
+use std::cell::RefCell;
+use std::ops::DerefMut;
 use std::sync::Arc;
 use jsonpath_rust::JsonPath;
 use jsonpath_rust::parser::model::JpQuery;
 use jsonpath_rust::parser::parse_json_path;
 use jsonpath_rust::query::js_path_process;
+use serde::Deserializer;
 use serde_json::Value as JValue;
+use crate::codecs::json::RowVisitor;
 use crate::data::{empty_row, Row, Value};
 use crate::physical_expr::{Literal, PhysicalExpr};
-use crate::types::DataType;
+use crate::types::{DataType, Schema};
 
 #[derive(Debug)]
 pub struct GetJsonObject {
@@ -196,6 +200,56 @@ impl PhysicalExpr for GetJsonInt {
     }
 }
 
+#[derive(Debug)]
+pub struct JsonToStructs {
+    json: Box<dyn PhysicalExpr>,
+    schema: Schema,
+    row_visitor: RefCell<RowVisitor>,
+}
+
+impl JsonToStructs {
+    pub fn new(json: Box<dyn PhysicalExpr>, schema: Schema) -> Self {
+        let row_visitor = RefCell::new(RowVisitor::new(schema.fields.clone()));
+        Self {json, schema, row_visitor}
+    }
+}
+
+impl PhysicalExpr for JsonToStructs {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.schema.to_struct_type()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let json = self.json.eval(input);
+        match json {
+            Value::String(s) => {
+                let mut row_visitor_ref = self.row_visitor.borrow_mut();
+                let row_visitor = row_visitor_ref.deref_mut();
+                row_visitor.row.fill_null();
+                let mut de = serde_json::Deserializer::from_str(s.as_str());
+                match de.deserialize_map(&mut *row_visitor) {
+                    Ok(_) => Value::Struct(Arc::new(row_visitor.row.clone())),
+                    Err(_) => Value::Null,
+                }
+            },
+            Value::Binary(b) => {
+                let mut row_visitor_ref = self.row_visitor.borrow_mut();
+                let row_visitor = row_visitor_ref.deref_mut();
+                row_visitor.row.fill_null();
+                let mut de = serde_json::Deserializer::from_slice(b.as_slice());
+                match de.deserialize_map(&mut *row_visitor) {
+                    Ok(_) => Value::Struct(Arc::new(row_visitor.row.clone())),
+                    Err(_) => Value::Null,
+                }
+            },
+            _ => Value::Null,
+        }
+    }
+}
 
 /*#[derive(Debug, Clone)]
 enum PathComponent {

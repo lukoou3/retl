@@ -104,6 +104,8 @@ fn builtin_function_registry() -> FunctionRegistry {
         // misc functions
         "aes_encrypt" => AesEncrypt,
         "aes_decrypt" => AesDecrypt,
+        // json
+        "from_json" => JsonToStructs,
         // aggregate functions
         "sum" => Sum,
         "count" => Count,
