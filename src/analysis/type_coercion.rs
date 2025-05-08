@@ -84,6 +84,25 @@ impl AnalyzerRule for ImplicitTypeCasts {
                     None => Ok(Transformed::no(Expr::BinaryOperator(BinaryOperator{left, op, right})))
                 }
             },
+            // /除法只支持bigint和double类型
+            Expr::BinaryOperator(BinaryOperator{left, op, right}) if op == Operator::Divide && left.data_type() == right.data_type() && (left.data_type() != DataType::long_type() && left.data_type() != DataType::double_type() ) => {
+                let common_type = if left.data_type() == DataType::float_type() {
+                    DataType::Double
+                } else {
+                    DataType::Long
+                };
+                let new_left = if left.data_type() == &common_type {
+                    left
+                } else {
+                    Box::new(left.cast(common_type.clone()))
+                };
+                let new_right = if right.data_type() == &common_type {
+                    right
+                } else {
+                    Box::new(right.cast(common_type.clone()))
+                };
+                Ok(Transformed::yes(Expr::BinaryOperator(BinaryOperator{left: new_left, op: op.clone(), right: new_right})))
+            },
             Expr::ScalarFunction(func) => {
                 if let Some(input_types) = func.expects_input_types()  {
                     if func.args().into_iter().zip(input_types.clone().into_iter()).any(|(arg, input_type)| !input_type.accepts_type(arg.data_type())  ) {
