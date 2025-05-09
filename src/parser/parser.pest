@@ -44,7 +44,7 @@ predicate = {
 }
 
 predicateBetween = { NOT? ~ ^"between" ~ valueExpression ~ ^"and" ~ valueExpression }
-predicateRlike = { NOT? ~ ^"rlike" ~ valueExpression}
+predicateRlike = { NOT? ~ (^"rlike" | ^"regexp") ~ valueExpression}
 predicateLike = { NOT? ~ ^"like" ~ valueExpression}
 predicateIn = { NOT? ~ ^"in" ~ "(" ~ expression ~ ("," ~ expression)* ~ ")"}
 predicateNull = {^"is" ~ NOT? ~ ^"null"}

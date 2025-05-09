@@ -117,7 +117,7 @@ impl CreateScalarFunction for FromUnixTimeMillis {
 
 impl ScalarFunction for FromUnixTimeMillis {
     fn name(&self) -> &str {
-        "from_unixtime__millis"
+        "from_unixtime_millis"
     }
 
     fn data_type(&self) -> &DataType {

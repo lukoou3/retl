@@ -128,7 +128,7 @@ impl BinaryExpr for ToUnixTimestamp {
     fn null_safe_eval(&self, time_expr: Value, format: Value) -> Value {
         match self.time_expr.data_type() {
             DataType::Timestamp => {
-                Value::Long(time_expr.get_long() / 1000_1000)
+                Value::Long(time_expr.get_long() / 1000_000)
             },
             DataType::String => {
                 match chrono::NaiveDateTime::parse_from_str(time_expr.get_string(), format.get_string()) {
