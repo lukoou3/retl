@@ -39,7 +39,7 @@ impl TreeNode for Expr {
                 expr_id,
             }) => f(*child)?
                 .update_data(|child| Expr::Alias(Alias::new_with_expr_id(child, name, expr_id))),
-            Expr::Cast(Cast { child, data_type }) => f(*child)?.update_data(|e| e.cast(data_type)),
+            Expr::Cast(Cast { child, data_type }) => f(*child)?.update_data(|e| Expr::Cast(Cast::new(e, data_type))),
             Expr::Not(child) => f(*child)?.update_data(|e| e.not()),
             Expr::IsNull(child) => f(*child)?.update_data(|e| e.is_null()),
             Expr::IsNotNull(child) => f(*child)?.update_data(|e| e.is_not_null()),

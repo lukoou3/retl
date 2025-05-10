@@ -63,6 +63,21 @@ impl ResolveReferences {
                 Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) if child.resolved() => {
                     match child.data_type() {
                         DataType::Array(_) => Ok(Transformed::yes(Expr::ScalarFunction(Box::new(GetArrayItem::new(child.clone(), extraction.clone()))))),
+                        DataType::Struct(fields) => match extraction.as_ref() {
+                            Expr::Literal(Literal{value, data_type}) if data_type == DataType::string_type() && !value.is_null() => {
+                                let name = value.get_string();
+                                let idx = fields.0.iter().position(|f| f.name == name);
+                                if let Some(ordinal) = idx {
+                                    let f = GetStructField::new(child.clone(), Box::new(Expr::int_lit(ordinal as i32)))?;
+                                    Ok(Transformed::yes(Expr::ScalarFunction(Box::new(f))))
+                                } else {
+                                    Err(format!("Can't find field {} in {}", name, child.data_type()))
+                                }
+                            },
+                            _ => {
+                                Err(format!("Field name should be String Literal, but it's {:?}", extraction))
+                            }
+                        },
                         _ => {
                             Err(format!("Can't extract value from {:?}, {:?}", child, extraction))
                         }
@@ -201,31 +216,46 @@ impl ResolveAliases {
     }
 
     fn assign_aliases(exprs: Vec<Expr>) -> Vec<Expr> {
-        exprs.into_iter().map(|expr| match expr {
-            Expr::UnresolvedAlias(u) => match u.as_ref() {
-                Expr::Alias(_) | Expr::UnresolvedAlias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => *u,
-                e if !e.resolved() => Expr::UnresolvedAlias(u),
-                Expr::Cast(Cast{child, ..}) => match child.as_ref() {
-                    Expr::Alias(Alias{name, ..}) => {
-                        let name = name.clone();
+        exprs.into_iter().map(|e|  e.transform_up(|expr| {
+            let e= match expr {
+                Expr::UnresolvedAlias(u) => match u.as_ref() {
+                    Expr::Alias(_) | Expr::UnresolvedAlias(_) | Expr::AttributeReference(_) | Expr::UnresolvedAttribute(_) => *u,
+                    e if !e.resolved() => Expr::UnresolvedAlias(u),
+                    Expr::ScalarFunction(func) if func.as_any().downcast_ref::<GetStructField>().is_some() => {
+                        let any = func.as_any();
+                        let f = any.downcast_ref::<GetStructField>().unwrap();
+                        let name = f.field_name().to_string();
                         u.alias(name)
                     },
-                    Expr::AttributeReference(AttributeReference{name, ..}) => {
-                        let name = name.clone();
-                        u.alias(name)
+                    Expr::Cast(Cast{child, ..}) => match child.as_ref() {
+                        Expr::Alias(Alias{name, ..}) => {
+                            let name = name.clone();
+                            u.alias(name)
+                        },
+                        Expr::AttributeReference(AttributeReference{name, ..}) => {
+                            let name = name.clone();
+                            u.alias(name)
+                        },
+                        Expr::ScalarFunction(func) if func.as_any().downcast_ref::<GetStructField>().is_some() => {
+                            let any = func.as_any();
+                            let f = any.downcast_ref::<GetStructField>().unwrap();
+                            let name = f.field_name().to_string();
+                            u.alias(name)
+                        },
+                        _ => {
+                            let sql = u.sql();
+                            u.alias(sql)
+                        },
                     },
                     _ => {
                         let sql = u.sql();
                         u.alias(sql)
                     },
                 },
-                _ => {
-                    let sql = u.sql();
-                    u.alias(sql)
-                },
-            },
-            e => e,
-        }).collect()
+                e => e,
+            };
+            Ok(Transformed::yes(e))
+        }).unwrap().data).collect()
     }
  }
 

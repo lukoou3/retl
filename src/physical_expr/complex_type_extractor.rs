@@ -5,6 +5,36 @@ use crate::physical_expr::{BinaryExpr, PhysicalExpr};
 use crate::types::DataType;
 
 #[derive(Debug)]
+pub struct GetStructField {
+    child: Box<dyn PhysicalExpr>,
+    ordinal: usize,
+    field_type: DataType,
+}
+
+impl GetStructField {
+    pub fn new(child: Box<dyn PhysicalExpr>, ordinal: usize, field_type: DataType) -> GetStructField {
+        GetStructField { child, ordinal, field_type }
+    }
+}
+impl PhysicalExpr for GetStructField {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn data_type(&self) -> DataType {
+        self.field_type.clone()
+    }
+
+    fn eval(&self, input: &dyn Row) -> Value {
+        let value = self.child.eval(input);
+        match value {
+            Value::Struct(s) => s.get(self.ordinal).clone(),
+            _ => Value::Null
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct GetArrayItem {
     child: Box<dyn PhysicalExpr>,
     ordinal: Box<dyn PhysicalExpr>,

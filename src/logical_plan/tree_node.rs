@@ -1,6 +1,6 @@
 use crate::expr::Expr;
 use crate::Result;
-use crate::logical_plan::{Aggregate, Expression, Filter, Generate, LogicalPlan, Project};
+use crate::logical_plan::{Aggregate, Expression, Filter, Generate, LogicalPlan, Project, SubqueryAlias};
 use crate::tree_node::{Transformed, TreeNode, TreeNodeContainer, TreeNodeRecursion};
 
 impl TreeNode for LogicalPlan {
@@ -35,6 +35,11 @@ impl TreeNode for LogicalPlan {
                 .update_data(|child| {
                     LogicalPlan::Filter(Filter { condition, child })
                 }),
+            LogicalPlan::SubqueryAlias(SubqueryAlias { identifier, child }) =>
+                child.map_elements(f)?
+                .update_data(|child| {
+                    LogicalPlan::SubqueryAlias(SubqueryAlias {identifier, child})
+                }),
             LogicalPlan::Expression(Expression { expr, child }) =>
                 child.map_elements(f)?
                 .update_data(|child| {
@@ -68,7 +73,8 @@ impl LogicalPlan {
         mut f: F,
     ) -> Result<Transformed<Self>> {
         match self {
-            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::OneRowRelation | LogicalPlan::RelationPlaceholder(_) =>
+            LogicalPlan::UnresolvedRelation(_) | LogicalPlan::OneRowRelation | LogicalPlan::RelationPlaceholder(_)
+             | LogicalPlan::SubqueryAlias(_) =>
                 Ok(Transformed::no(self)),
             LogicalPlan::Project(Project { project_list, child, }) =>
                 Ok(project_list.map_elements(f)?

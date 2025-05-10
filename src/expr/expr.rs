@@ -302,8 +302,10 @@ impl Expr {
     }
 
     pub fn cast(self, data_type: DataType) -> Expr {
-        if self.data_type() == &data_type {
-            return self;
+        if self.resolved() {
+            if self.data_type() == &data_type {
+                return self;
+            }
         }
         Expr::Cast(Cast::new(self, data_type))
     }

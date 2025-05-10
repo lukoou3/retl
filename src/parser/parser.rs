@@ -10,7 +10,7 @@ use serde_json::Value as JValue;
 use crate::{Operator, Result};
 use crate::data::Value;
 use crate::expr::{BinaryOperator, CaseWhen, Cast, Expr, In, Like, Literal, UnaryMinus, BitwiseNot,UnresolvedExtractValue, UnresolvedFunction, UnresolvedGenerator};
-use crate::logical_plan::{Aggregate, Filter, Generate, LogicalPlan, Project};
+use crate::logical_plan::{Aggregate, Filter, Generate, LogicalPlan, Project, SubqueryAlias};
 use crate::types::*;
 
 #[derive(Parser)]
@@ -69,6 +69,8 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
                 pair = pair.into_inner().next().unwrap(),
             Rule::singleTableSchema => return parse_single_table_schema(pair),
             Rule::queryPrimary => return parse_query_primary_ast(pair),
+            Rule::tableNameRelation => return parse_table_name_relation_ast(pair),
+            Rule::subqueryAliasRelation => return parse_subquery_alias_relation_ast(pair),
             Rule::namedExpressionSeq => return parse_named_expression_seq(pair).map(|x| Ast::Projects(x)),
             Rule::functionCall => return parse_function_call(pair).map(|x| Ast::Expression(x)),
             Rule::constant => return parse_constant(pair).map(|x| Ast::Expression(x)),
@@ -140,7 +142,12 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
                 }
             },
             Rule::fromClause => {
-                from = Some(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string()));
+                let ast = parse_ast(pair.into_inner().next().unwrap())?;
+                if let Ast::Plan(plan) = ast {
+                    from = Some(plan);
+                } else {
+                    return Err(format!("Expected a logical plan but found {:?}", ast));
+                }
             },
             Rule::whereClause => {
                 filter = Some(parse_expression(pair)?);
@@ -180,6 +187,26 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
         Ok(Ast::Plan(LogicalPlan::Aggregate(Aggregate::new(group_exprs, project_list, child))))
     } else {
         Ok(Ast::Plan(LogicalPlan::Project(Project::new(project_list, child))))
+    }
+}
+
+fn parse_table_name_relation_ast(pair: Pair<Rule>) -> Result<Ast> {
+    Ok(Ast::Plan(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string())))
+}
+
+fn parse_subquery_alias_relation_ast(pair: Pair<Rule>) -> Result<Ast> {
+    let mut pairs = pair.into_inner();
+    let ast = parse_query_primary_ast(pairs.next().unwrap())?;
+    if let Ast::Plan(plan) = ast {
+        let pair_option = pairs.next();
+        if let Some(pair) = pair_option {
+            let name = parse_identifier(pair)?.to_string();
+            Ok(Ast::Plan(LogicalPlan::SubqueryAlias(SubqueryAlias::new(name, Arc::new(plan)))))
+        } else {
+            Ok(Ast::Plan(plan))
+        }
+    } else {
+        Err(format!("Expected a plan but found {:?}", ast))
     }
 }
 
@@ -245,6 +272,10 @@ fn parse_primary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
             Rule::subscriptOp => {
                 let index = parse_expression(pair)?;
                 expr = Expr::UnresolvedExtractValue(UnresolvedExtractValue::new(Box::new(expr), Box::new(index)));
+            },
+            Rule::dereferenceOp => {
+                let attr = parse_identifier(pair.into_inner().next().unwrap())?.to_string();
+                expr = Expr::UnresolvedExtractValue(UnresolvedExtractValue::new(Box::new(expr), Box::new(Expr::string_lit(attr))));
             },
             _ => return Err(format!("Expected a subscriptOp expression but found {:?}", pair))
         }

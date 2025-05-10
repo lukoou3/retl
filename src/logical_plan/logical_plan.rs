@@ -13,6 +13,7 @@ pub enum LogicalPlan {
     RelationPlaceholder(RelationPlaceholder),
     Project(Project),
     Filter(Filter),
+    SubqueryAlias(SubqueryAlias),
     Expression(Expression),
     Aggregate(Aggregate),
     Generate(Generate),
@@ -26,6 +27,7 @@ impl LogicalPlan {
              | LogicalPlan::RelationPlaceholder(_) => vec![],
             LogicalPlan::Project(Project{child, ..})
              | LogicalPlan::Filter(Filter{child, ..})
+             | LogicalPlan::SubqueryAlias(SubqueryAlias{child, ..})
              | LogicalPlan::Expression(Expression{child, ..})
              | LogicalPlan::Aggregate(Aggregate{child, ..})
              | LogicalPlan::Generate(Generate{child, ..}) => vec![child.as_ref()],
@@ -36,7 +38,8 @@ impl LogicalPlan {
         match self {
             LogicalPlan::UnresolvedRelation(_)
              | LogicalPlan::OneRowRelation
-             | LogicalPlan::RelationPlaceholder(_) => vec![],
+             | LogicalPlan::RelationPlaceholder(_)
+             | LogicalPlan::SubqueryAlias(_)=> vec![],
             LogicalPlan::Project(Project{project_list, ..}) => project_list.iter().collect(),
             LogicalPlan::Filter(Filter{condition, ..}) => vec![condition],
             LogicalPlan::Expression(Expression{expr, ..}) => vec![expr],
@@ -82,6 +85,7 @@ impl LogicalPlan {
                 }).collect()
             },
             LogicalPlan::Filter(Filter{child, ..}) => child.output(),
+            LogicalPlan::SubqueryAlias(SubqueryAlias{child, ..}) => child.output(),
             LogicalPlan::Expression(Expression{expr, ..}) => match expr {
                 Expr::Alias(Alias {child, name, expr_id}) =>
                     vec![AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id)],
@@ -164,6 +168,18 @@ pub struct Filter {
 impl Filter {
     pub fn new(condition: Expr, child: Arc<LogicalPlan>) -> Self {
         Self { condition, child }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
+pub struct SubqueryAlias {
+    pub identifier: String,
+    pub child: Arc<LogicalPlan>,
+}
+
+impl SubqueryAlias {
+    pub fn new(identifier: String, child: Arc<LogicalPlan>) -> Self {
+        Self { identifier, child }
     }
 }
 

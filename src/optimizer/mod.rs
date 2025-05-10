@@ -14,6 +14,7 @@ impl Optimizer {
             Box::new(ConstantFolding),
             Box::new(SimplifyCasts),
             Box::new(OptimizeIn),
+            Box::new(EliminateSubqueryAliases),
         ];
         Self { rules }
     }

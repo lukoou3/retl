@@ -12,13 +12,16 @@ queryPrimary = {
 }
 
 selectClause = { ^"select" ~ namedExpressionSeq}
-fromClause = { ^"from" ~ identifier }
+fromClause = { ^"from" ~ relation }
 whereClause = { ^"where" ~ booleanExpression }
 lateralView = { ^"lateral"~ ^"view" ~ OUTER? ~ identifier ~ functionArgs ~ identifier ~ (^"as"? ~ lateralViewcolName ~ ("," ~ lateralViewcolName)* )? }
 lateralViewcolName = { !mainKeyword ~ identifier }
 aggregationClause = { ^"group"~ ^"by" ~ expression ~ ("," ~ expression)* }
 
-relationPrimary = { identifier ~ (^"as"? ~ !mainKeyword ~ identifier)? }
+relation = { relationPrimary }
+relationPrimary = { tableNameRelation | subqueryAliasRelation }
+tableNameRelation = { identifier ~ (^"as"? ~ !mainKeyword ~ identifier)? }
+subqueryAliasRelation = { "(" ~ queryPrimary ~ ")"  ~ (^"as"? ~ !mainKeyword ~ identifier)? }
 
 namedExpressionSeq = { namedExpression ~ ("," ~ namedExpression)*}
 namedExpression = {
@@ -173,7 +176,7 @@ LTE = { "<=" | "!>"}
 GT = { ">" }
 GTE = { ">=" | "!<"}
 
-mainKeyword = { ^"from" | ^"where" | ^"order" }
+mainKeyword = { ^"from" | ^"lateral" | ^"where" | ^"group" | ^"order" }
 
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 COMMENT = _{ SIMPLE_COMMENT | BRACKETED_COMMENT }

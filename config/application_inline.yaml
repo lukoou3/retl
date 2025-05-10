@@ -47,6 +47,23 @@ transforms:
           get_json_object(text, '$.money') money
       from tbl
       where get_json_int(text, '$.score') = 200
+  - type: query
+    inputs: [ inline_source3 ]
+    outputs: [ subquery ]
+    sql: |
+      select
+        text,
+        raw,
+        raw.id,
+        raw.name,
+        raw.score,
+        string(raw.money)
+      from(
+        select 
+            text,
+            from_json(text, 'id bigint, name string, score int, money int') raw
+        from tbl
+      ) t
 
 sinks:
   - type: print
@@ -55,5 +72,11 @@ sinks:
     print_mode: stdout
     encoding:
       codec: json
+  - type: print
+    name: print_subquery
+    inputs: [ subquery ]
+    print_mode: stdout
+    encoding:
+      codec: json
 
-active_sinks: [print_sink]
+active_sinks: [print_subquery]

@@ -4,7 +4,7 @@ use log::{debug, info};
 use crate::Result;
 use crate::data::{empty_row, Value};
 use crate::expr::{Cast, Expr, If, In, InSet, Literal};
-use crate::logical_plan::LogicalPlan;
+use crate::logical_plan::{LogicalPlan, SubqueryAlias};
 use crate::physical_expr::create_physical_expr;
 use crate::tree_node::{Transformed, TreeNode};
 use crate::types::DataType;
@@ -98,3 +98,20 @@ impl OptimizerRule for OptimizeIn {
     }
 }
 
+#[derive(Debug)]
+pub struct EliminateSubqueryAliases;
+
+impl OptimizerRule for EliminateSubqueryAliases {
+    fn optimize(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        plan.transform_up(|plan| match plan {
+            LogicalPlan::SubqueryAlias(SubqueryAlias{child, .. }) => {
+                Ok(Transformed::yes(child.as_ref().clone()))
+            },
+            p => Ok(Transformed::no(p)),
+        })
+    }
+
+    fn name(&self) -> &str {
+        "EliminateSubqueryAliases"
+    }
+}
