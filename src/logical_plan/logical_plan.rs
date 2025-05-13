@@ -79,7 +79,7 @@ impl LogicalPlan {
                         Expr::Alias(Alias {child, name, expr_id}) =>
                             AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id),
                         Expr::AttributeReference(a) => a.clone(),
-                        Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.clone(), DataType::Int, 0),
+                        Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.last().unwrap().clone(), DataType::Int, 0),
                         _ => panic!("{}", format!("{:?} is not allowed in project list", e)),
                     }
                 }).collect()
@@ -90,7 +90,7 @@ impl LogicalPlan {
                 Expr::Alias(Alias {child, name, expr_id}) =>
                     vec![AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id)],
                 Expr::AttributeReference(a) => vec![a.clone()],
-                Expr::UnresolvedAttribute(a) => vec![AttributeReference::new_with_expr_id(a.clone(), DataType::Int, 0)],
+                Expr::UnresolvedAttribute(a) => vec![AttributeReference::new_with_expr_id(a.last().unwrap().clone(), DataType::Int, 0)],
                 e => panic!("{:?} is not allowed in expr", e),
             },
             LogicalPlan::Aggregate(Aggregate{aggregate_exprs, ..}) => {
@@ -99,7 +99,7 @@ impl LogicalPlan {
                         Expr::Alias(Alias {child, name, expr_id}) =>
                             AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id),
                         Expr::AttributeReference(a) => a.clone(),
-                        Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.clone(), DataType::Int, 0),
+                        Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.last().unwrap().clone(), DataType::Int, 0),
                         _ => panic!("{}", format!("{:?} is not allowed in aggregate exprs list", e)),
                     }
                 }).collect()
@@ -249,10 +249,11 @@ impl Generate {
 
     // 给输出添加表前缀，如果定义table_alias, 暂时不实现
     fn qualified_generator_output(&self) -> Vec<AttributeReference> {
+        // TODO
         self.generator_output.iter().map(|e| {
             match e {
                 Expr::AttributeReference(a) => a.clone(),
-                Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.clone(), DataType::Int, 0),
+                Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.last().unwrap().clone(), DataType::Int, 0),
                 _ => panic!("{}", format!("{:?} is not allowed in generator_output", e)),
             }
         }).collect()

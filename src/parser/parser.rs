@@ -166,7 +166,7 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
                 let table_name = parse_identifier(pairs.next().unwrap())?.to_string();
                 let col_names: Vec<_> = pairs.map(|pair| parse_identifier(pair).map(|i| i.to_string())).try_collect()?;
                 let generator = Expr::UnresolvedGenerator(UnresolvedGenerator{ name, arguments});
-                let generator_output: Vec<_> = col_names.into_iter().map(|name| Expr::UnresolvedAttribute(name)).collect();
+                let generator_output: Vec<_> = col_names.into_iter().map(|name| Expr::attr_quoted(name)).collect();
                 lateral_view = Some(Generate::new(generator, vec![], outer, Some(table_name), generator_output, Arc::new(LogicalPlan::UnresolvedRelation("".to_string()))));
             },
             Rule::aggregationClause => {
@@ -275,7 +275,13 @@ fn parse_primary_expression_ast(pair: Pair<Rule>) -> Result<Ast> {
             },
             Rule::dereferenceOp => {
                 let attr = parse_identifier(pair.into_inner().next().unwrap())?.to_string();
-                expr = Expr::UnresolvedExtractValue(UnresolvedExtractValue::new(Box::new(expr), Box::new(Expr::string_lit(attr))));
+                expr = match expr {
+                    Expr::UnresolvedAttribute(mut name_parts) => {
+                        name_parts.push(attr);
+                        Expr::UnresolvedAttribute(name_parts)
+                    },
+                    e => Expr::UnresolvedExtractValue(UnresolvedExtractValue::new(Box::new(e), Box::new(Expr::string_lit(attr))))
+                };
             },
             _ => return Err(format!("Expected a subscriptOp expression but found {:?}", pair))
         }
@@ -643,7 +649,7 @@ fn parse_string_constant(pair: Pair<Rule>) -> Result<Expr> {
 }
 
 fn parse_column_reference(pair: Pair<Rule>) -> Result<Expr> {
-    Ok(Expr::UnresolvedAttribute(parse_identifier(pair)?.to_string()))
+    Ok(Expr::attr_quoted(parse_identifier(pair)?))
 }
 
 

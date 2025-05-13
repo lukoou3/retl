@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use itertools::Itertools;
 use crate::Result;
 use crate::analysis::{type_coercion_rules, AnalyzerRule, GlobalAggregates, ResolveAliases, ResolveFunctions, ResolveGenerate, ResolveReferences, ResolveRelations};
 use crate::expr::Expr;
@@ -56,8 +57,8 @@ impl Analyzer {
                 p => {
                     p.map_expressions(|expr| {
                         expr.transform_up(|e| match e {
-                            Expr::UnresolvedAttribute(name) => {
-                                Err(format!("cannot resolve {} column", name))
+                            Expr::UnresolvedAttribute(name_parts) => {
+                                Err(format!("cannot resolve {} column", name_parts.iter().join(".")))
                             },
                             e => match e.check_input_data_types() {
                                 Ok(_) => Ok(Transformed::no(e)),

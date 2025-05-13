@@ -14,7 +14,7 @@ use crate::types::{AbstractDataType, DataType};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum Expr {
-    UnresolvedAttribute(String),
+    UnresolvedAttribute(Vec<String>),
     UnresolvedAlias(Box<Expr>),
     UnresolvedExtractValue(UnresolvedExtractValue),
     NoOp,
@@ -245,7 +245,7 @@ impl Expr {
 
     pub fn sql(&self) -> String {
         match self {
-            Expr::UnresolvedAttribute(name) => format!("'{}", name),
+            Expr::UnresolvedAttribute(name_parts) => name_parts.iter().join("."),
             Expr::UnresolvedAlias(child) => format!("UnresolvedAlias({})", child.sql()),
             Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) => format!("{}[{}]", child.sql(), extraction.sql()),
             Expr::NoOp => format!("{:?}", self),
@@ -295,6 +295,10 @@ impl Expr {
             Expr::Literal(v) => v.value,
             _ => Value::Null,
         }
+    }
+
+    pub fn attr_quoted(name: impl Into<String>) -> Expr {
+        Expr::UnresolvedAttribute(vec![name.into()])
     }
     
     pub fn alias(self, name: impl Into<String>) -> Expr {

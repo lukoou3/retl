@@ -52,41 +52,56 @@ pub struct ResolveReferences;
 impl ResolveReferences {
     pub fn resolve_expr(&self, expr: Expr, attr_dict: &HashMap<String, AttributeReference>) ->  Result<Transformed<Expr>> {
         expr.transform_up(|expr| {
-            match &expr {
-                Expr::UnresolvedAttribute(name) => {
+            match expr {
+                Expr::UnresolvedAttribute(name_parts) => {
+                    let name = name_parts[0].as_str();
+                    let nested_fields = &name_parts[1..];
                     match attr_dict.get(name) {
-                        Some(a) => Ok(Transformed::yes(Expr::AttributeReference(AttributeReference::new_with_expr_id(
-                            name.clone(), a.data_type.clone(), a.expr_id)))),
-                        None =>  Ok(Transformed::no(expr)),
+                        Some(a) => {
+                            let mut e = Expr::AttributeReference(AttributeReference::new_with_expr_id(name.clone(), a.data_type.clone(), a.expr_id));
+                            if nested_fields.is_empty() {
+                                Ok(Transformed::yes(e))
+                            } else {
+                                for nested_field in nested_fields {
+                                    e = extract_value(e, Expr::string_lit(nested_field))?;
+                                }
+                                Ok(Transformed::yes(e.alias(nested_fields.last().unwrap().clone())))
+                            }
+                        },
+                        None =>  Ok(Transformed::no(Expr::UnresolvedAttribute(name_parts))),
                     }
                 },
                 Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) if child.resolved() => {
-                    match child.data_type() {
-                        DataType::Array(_) => Ok(Transformed::yes(Expr::ScalarFunction(Box::new(GetArrayItem::new(child.clone(), extraction.clone()))))),
-                        DataType::Struct(fields) => match extraction.as_ref() {
-                            Expr::Literal(Literal{value, data_type}) if data_type == DataType::string_type() && !value.is_null() => {
-                                let name = value.get_string();
-                                let idx = fields.0.iter().position(|f| f.name == name);
-                                if let Some(ordinal) = idx {
-                                    let f = GetStructField::new(child.clone(), Box::new(Expr::int_lit(ordinal as i32)))?;
-                                    Ok(Transformed::yes(Expr::ScalarFunction(Box::new(f))))
-                                } else {
-                                    Err(format!("Can't find field {} in {}", name, child.data_type()))
-                                }
-                            },
-                            _ => {
-                                Err(format!("Field name should be String Literal, but it's {:?}", extraction))
-                            }
-                        },
-                        _ => {
-                            Err(format!("Can't extract value from {:?}, {:?}", child, extraction))
-                        }
-                    }
+                    extract_value(*child, *extraction).map(|e| Transformed::yes(e))
                 },
-                e if e.resolved() => Ok(Transformed::no(expr)),
-                e => Ok(Transformed::no(expr)),
+                e if e.resolved() => Ok(Transformed::no(e)),
+                e => Ok(Transformed::no(e)),
             }
         })
+    }
+}
+
+fn extract_value(child: Expr, extraction: Expr) -> Result<Expr> {
+    match child.data_type() {
+        DataType::Array(_) => Ok(Expr::ScalarFunction(Box::new(GetArrayItem::new(Box::new(child), Box::new(extraction))))),
+        DataType::Struct(fields) => match &extraction {
+            Expr::Literal(Literal{value, data_type}) if data_type == DataType::string_type() && !value.is_null() => {
+                let name = value.get_string();
+                let idx = fields.0.iter().position(|f| f.name == name);
+                if let Some(ordinal) = idx {
+                    let f = GetStructField::new(Box::new(child), Box::new(Expr::int_lit(ordinal as i32)))?;
+                    Ok(Expr::ScalarFunction(Box::new(f)))
+                } else {
+                    Err(format!("Can't find field {} in {}", name, child.data_type()))
+                }
+            },
+            _ => {
+                Err(format!("Field name should be String Literal, but it's {:?}", extraction))
+            }
+        },
+        _ => {
+            Err(format!("Can't extract value from {:?}, {:?}", child, extraction))
+        }
     }
 }
 
@@ -134,8 +149,8 @@ impl AnalyzerRule for ResolveGenerate {
                     let element_attrs = g.element_schema().to_attributes();
                     let mut names = Vec::new();
                     for e in &generate.generator_output {
-                        if let Expr::UnresolvedAttribute(name) = e {
-                            names.push(name.clone());
+                        if let Expr::UnresolvedAttribute(name_parts) = e {
+                            names.push(name_parts.iter().join("."));
                         } else {
                             return Err(format!("generator output is not unresolvedAttribute {:?}", e));
                         }
