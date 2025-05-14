@@ -53,16 +53,16 @@ transforms:
     sql: |
       select
         text,
-        raw,
+        t.raw,
         raw.id,
         raw.name,
         raw.score,
         string(raw.money)
       from(
         select 
-            text,
+            t.text,
             from_json(text, 'id bigint, name string, score int, money int') raw
-        from tbl
+        from tbl t
       ) t
 
 sinks:

@@ -191,7 +191,14 @@ fn parse_query_primary_ast(pair: Pair<Rule>) -> Result<Ast> {
 }
 
 fn parse_table_name_relation_ast(pair: Pair<Rule>) -> Result<Ast> {
-    Ok(Ast::Plan(LogicalPlan::UnresolvedRelation(pair.into_inner().next().unwrap().as_str().to_string())))
+    let mut pairs = pair.into_inner();
+    let name = parse_identifier(pairs.next().unwrap())?.to_string();
+    let mut p = LogicalPlan::UnresolvedRelation(name);
+    if let Some(pair) = pairs.next() {
+        let alias = parse_identifier(pair)?.to_string();
+        p = LogicalPlan::SubqueryAlias(SubqueryAlias::new(alias, Arc::new(p)));
+    }
+    Ok(Ast::Plan(p))
 }
 
 fn parse_subquery_alias_relation_ast(pair: Pair<Rule>) -> Result<Ast> {

@@ -69,10 +69,24 @@ transforms:
           protocol_stack_id
       from tbl lateral view outer path_file_unroll(protocol, app, '.') v as protocol_stack_id, app_name
 
+  - type: query
+    inputs: [ faker_protocol ]
+    outputs: [ query_protocol2 ]
+    sql: |
+      select 
+          id,
+          name,
+          age,
+          v.app,
+          v.protocol,
+          v.protocol app_name,
+          v.app protocol_stack_id
+      from tbl lateral view outer path_file_unroll(protocol, app, '.') v as protocol, app
+
 sinks:
   - type: print
     name: print_sink
-    inputs: [ query_protocol ]
+    inputs: [ query_protocol2 ]
     print_mode: log_info
     encoding:
       codec: json

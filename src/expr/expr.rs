@@ -528,28 +528,33 @@ pub struct AttributeReference {
     pub name: String,
     pub data_type: DataType,
     pub expr_id: u32,
+    pub qualifier: Vec<String>,
 }
 
 impl AttributeReference {
     pub fn new(name: impl Into<String>, data_type: DataType) -> Self {
         let expr_id = ExprIdGenerator::get_next_expr_id();
-        AttributeReference{name: name.into(), data_type, expr_id}
+        AttributeReference{name: name.into(), data_type, expr_id, qualifier: Vec::new()}
     }
 
     pub fn new_with_expr_id(name: impl Into<String>, data_type: DataType, expr_id: u32) -> Self {
-        AttributeReference{name: name.into(), data_type, expr_id}
+        AttributeReference{name: name.into(), data_type, expr_id, qualifier: Vec::new()}
     }
 
     pub fn with_expr_id(&self, expr_id: u32) -> Self {
-        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id }
+        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id, qualifier: self.qualifier.clone() }
     }
 
     pub fn with_name(&self, name: String) -> Self {
-        AttributeReference{ name, data_type: self.data_type.clone(), expr_id: self.expr_id }
+        AttributeReference{ name, data_type: self.data_type.clone(), expr_id: self.expr_id, qualifier: self.qualifier.clone() }
+    }
+
+    pub fn with_qualifier(&self, qualifier: Vec<String>) -> Self {
+        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id: self.expr_id, qualifier }
     }
 
     pub fn new_instance(&self) -> Self {
-        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id: ExprIdGenerator::get_next_expr_id() }
+        AttributeReference{ name: self.name.clone(), data_type: self.data_type.clone(), expr_id: ExprIdGenerator::get_next_expr_id(), qualifier: self.qualifier.clone() }
     }
 }
 
@@ -560,7 +565,7 @@ struct ExprIdGenerator {
 impl ExprIdGenerator {
     fn get_next_expr_id() -> u32 {
         static INSTANCE: ExprIdGenerator = ExprIdGenerator {
-            counter: std::sync::atomic::AtomicU32::new(0),
+            counter: std::sync::atomic::AtomicU32::new(1),
         };
         INSTANCE.counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     }

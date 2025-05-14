@@ -50,25 +50,51 @@ impl AnalyzerRule for ResolveRelations {
 pub struct ResolveReferences;
 
 impl ResolveReferences {
-    pub fn resolve_expr(&self, expr: Expr, attr_dict: &HashMap<String, AttributeReference>) ->  Result<Transformed<Expr>> {
+    fn match_qualifier_parts(&self,name_parts: &Vec<String>, dict: &HashMap<String, Vec<AttributeReference>>, qualified: &HashMap<(String, String), Vec<AttributeReference>>) -> (Vec<AttributeReference>, Vec<String>) {
+        if name_parts.len() >= 2 {
+            let name = &name_parts[1];
+            let key = (name_parts[0].to_lowercase(), name.to_lowercase());
+            if let Some(a) = qualified.get(&key) {
+                return (a.iter().map(|a| a.with_name(name.clone())).collect(), name_parts[2..].iter().map(|a| a.clone()).collect());
+            }
+        }
+        let name = &name_parts[0];
+        let key = name.to_lowercase();
+        let nested_fields = &name_parts[1..];
+        match dict.get(&key) {
+            Some(a) => {
+                (a.iter().map(|a| a.with_name(name.clone())).collect(), nested_fields.iter().map(|a| a.clone()).collect())
+            },
+            None => (Vec::new(), Vec::new()),
+        }
+    }
+
+    pub fn resolve_expr(&self, expr: Expr, dict: &HashMap<String, Vec<AttributeReference>>, qualified: &HashMap<(String, String), Vec<AttributeReference>>) ->  Result<Transformed<Expr>> {
         expr.transform_up(|expr| {
             match expr {
                 Expr::UnresolvedAttribute(name_parts) => {
-                    let name = name_parts[0].as_str();
-                    let nested_fields = &name_parts[1..];
-                    match attr_dict.get(name) {
-                        Some(a) => {
-                            let mut e = Expr::AttributeReference(AttributeReference::new_with_expr_id(name.clone(), a.data_type.clone(), a.expr_id));
-                            if nested_fields.is_empty() {
-                                Ok(Transformed::yes(e))
+                    let (candidates, nested_fields) = self.match_qualifier_parts(&name_parts, dict, qualified);
+                    if candidates.len() > 1 {
+                        let reference_names = candidates.into_iter().map(|a| {
+                            if a.qualifier.is_empty() {
+                                a.name.clone()
                             } else {
-                                for nested_field in nested_fields {
-                                    e = extract_value(e, Expr::string_lit(nested_field))?;
-                                }
-                                Ok(Transformed::yes(e.alias(nested_fields.last().unwrap().clone())))
+                                a.qualifier.iter().chain(vec![&a.name].into_iter()).join(".")
                             }
-                        },
-                        None =>  Ok(Transformed::no(Expr::UnresolvedAttribute(name_parts))),
+                        }).join(", ");
+                        Err(format!("Reference '{}' is ambiguous, could be: {}", name_parts.iter().join("."), reference_names))
+                    } else if candidates.len() == 0 {
+                        Ok(Transformed::no(Expr::UnresolvedAttribute(name_parts)))
+                    } else{
+                        let mut e = Expr::AttributeReference(candidates.into_iter().next().unwrap());
+                        if nested_fields.is_empty() {
+                            Ok(Transformed::yes(e))
+                        } else {
+                            for nested_field in &nested_fields {
+                                e = extract_value(e, Expr::string_lit(nested_field))?;
+                            }
+                            Ok(Transformed::yes(e.alias(nested_fields.last().unwrap().clone())))
+                        }
                     }
                 },
                 Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) if child.resolved() => {
@@ -112,8 +138,15 @@ impl AnalyzerRule for ResolveReferences {
             LogicalPlan::Generate(g) if g.generator.resolved() => Ok(Transformed::no(LogicalPlan::Generate(g))),
             LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child}) => {
                 let attributes = child.output();
-                let attr_dict:HashMap<String, AttributeReference> = attributes.into_iter().map(|attr| (attr.name.clone(), attr)).collect();
-                let g = self.resolve_expr(generator, &attr_dict)?;
+                let mut dict = HashMap::new();
+                let mut qualified = HashMap::new();
+                for attr in attributes {
+                    if attr.qualifier.len() > 0 {
+                        qualified.entry((attr.qualifier.last().unwrap().to_lowercase(), attr.name.to_lowercase())).or_insert_with(Vec::new).push(attr.clone());
+                    }
+                    dict.entry(attr.name.to_lowercase()).or_insert_with(Vec::new).push(attr);
+                }
+                let g = self.resolve_expr(generator, &dict, &qualified)?;
                 Ok(g.update_data(|generator| LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child})))
             },
             p => {
@@ -121,10 +154,18 @@ impl AnalyzerRule for ResolveReferences {
                 //println!("plan:{:?}", p);
                 let attributes = p.child_attributes();
                 //println!("attributes:{:?}", attributes);
-                //println!("");
-                let attr_dict:HashMap<String, AttributeReference> = attributes.into_iter().map(|attr| (attr.name.clone(), attr)).collect();
+                let mut dict = HashMap::new();
+                let mut qualified = HashMap::new();
+                for attr in attributes {
+                    if attr.qualifier.len() > 0 {
+                        qualified.entry((attr.qualifier.last().unwrap().to_lowercase(), attr.name.to_lowercase())).or_insert_with(Vec::new).push(attr.clone());
+                    }
+                    dict.entry(attr.name.to_lowercase()).or_insert_with(Vec::new).push(attr);
+                }
+                //println!("dict:{:?}", dict);
+                //println!("qualified:{:?}", qualified);
                 let transformed = p.map_expressions(|expr| {
-                    self.resolve_expr(expr, &attr_dict)
+                    self.resolve_expr(expr, &dict, &qualified)
                 })?;
                 Ok(transformed)
             }

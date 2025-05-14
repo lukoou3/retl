@@ -85,7 +85,7 @@ impl LogicalPlan {
                 }).collect()
             },
             LogicalPlan::Filter(Filter{child, ..}) => child.output(),
-            LogicalPlan::SubqueryAlias(SubqueryAlias{child, ..}) => child.output(),
+            LogicalPlan::SubqueryAlias(subquery_alias) => subquery_alias.output(),
             LogicalPlan::Expression(Expression{expr, ..}) => match expr {
                 Expr::Alias(Alias {child, name, expr_id}) =>
                     vec![AttributeReference::new_with_expr_id(name, child.data_type().clone(), *expr_id)],
@@ -181,6 +181,11 @@ impl SubqueryAlias {
     pub fn new(identifier: String, child: Arc<LogicalPlan>) -> Self {
         Self { identifier, child }
     }
+
+    pub fn output(&self) -> Vec<AttributeReference> {
+        let identifier = vec![self.identifier.clone()];
+        self.child.output().into_iter().map(|a| a.with_qualifier(identifier.clone())).collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
@@ -247,14 +252,19 @@ impl Generate {
         output
     }
 
-    // 给输出添加表前缀，如果定义table_alias, 暂时不实现
+    // 给输出添加表前缀，如果定义table_alias
     fn qualified_generator_output(&self) -> Vec<AttributeReference> {
-        // TODO
         self.generator_output.iter().map(|e| {
             match e {
                 Expr::AttributeReference(a) => a.clone(),
                 Expr::UnresolvedAttribute(a) => AttributeReference::new_with_expr_id(a.last().unwrap().clone(), DataType::Int, 0),
                 _ => panic!("{}", format!("{:?} is not allowed in generator_output", e)),
+            }
+        }).map(|a| {
+            if let Some(qualifier) = & self.qualifier {
+                a.with_qualifier(vec![qualifier.clone()])
+            } else {
+                a
             }
         }).collect()
     }
