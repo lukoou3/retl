@@ -79,8 +79,13 @@ atomicExpression  = {
     | cast
     | functionCall
     | constant
+    | star
     | columnReference
     | "(" ~ expression ~ ")"
+}
+star = {
+    ASTERISK
+    | qualifiedName ~ "." ~ ASTERISK
 }
 columnReference = { identifier }
 subscriptOp = { "[" ~ valueExpression ~ "]" }

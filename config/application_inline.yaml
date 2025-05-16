@@ -35,6 +35,13 @@ sources:
 
 transforms:
   - type: query
+    inputs: [ inline_source ]
+    outputs: [ inline_query ]
+    sql: |
+      select 
+          id + 1 id2, *, money + 1 as money2
+      from tbl
+  - type: query
     inputs: [ inline_source3 ]
     outputs: [ query ]
     sql: |
@@ -64,11 +71,26 @@ transforms:
             from_json(text, 'id bigint, name string, score int, money int') raw
         from tbl t
       ) t
-
+  - type: query
+    inputs: [ inline_source3 ]
+    outputs: [ query_star ]
+    sql: |
+      select
+        *,
+        raw.id,
+        raw.name,
+        raw.score,
+        string(raw.money)
+      from(
+        select 
+            t.text,
+            from_json(text, 'id bigint, name string, score int, money int') raw
+        from tbl t
+      ) t
 sinks:
   - type: print
     name: print_sink
-    inputs: [ query ]
+    inputs: [ inline_query ]
     print_mode: stdout
     encoding:
       codec: json
@@ -78,5 +100,10 @@ sinks:
     print_mode: stdout
     encoding:
       codec: json
-
-active_sinks: [print_subquery]
+  - type: print
+    name: print_query_star
+    inputs: [ query_star ]
+    print_mode: stdout
+    encoding:
+      codec: json
+active_sinks: [print_sink]

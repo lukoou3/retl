@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use crate::Result;
 use std::fmt::Debug;
+use std::sync::Arc;
 use itertools::Itertools;
 use crate::analysis::lookup_function;
 use crate::expr::*;
@@ -135,6 +136,26 @@ impl AnalyzerRule for ResolveReferences {
     fn analyze(&self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
         plan.transform_up(|plan| match plan {
             p if !p.children_resolved() => Ok(Transformed::no(p)),
+            LogicalPlan::Project(Project{project_list, child}) if project_list.iter().any(|e| contains_star(e)) => {
+                let mut new_project_list = Vec::new();
+                for expr in project_list {
+                    match &expr {
+                        Expr::UnresolvedAlias(e) => match e.as_ref() {
+                            Expr::UnresolvedStar(target) => {
+                                // expand
+                                let es = expand(child.clone(), target)?;
+                                for e in es {
+                                    new_project_list.push(e);
+                                }
+                            },
+                            _ => new_project_list.push(expr),
+                        },
+                        _ => new_project_list.push(expr),
+                    }
+                }
+                Ok(Transformed::yes(LogicalPlan::Project(Project{project_list: new_project_list, child})))
+            },
+            p if p.expressions().into_iter().any(|e| contains_star(e)) => Err(format!("Can't use star(*) in {:?}", p)),
             LogicalPlan::Generate(g) if g.generator.resolved() => Ok(Transformed::no(LogicalPlan::Generate(g))),
             LogicalPlan::Generate(Generate{generator, unrequired_child_index, outer, qualifier, generator_output, child}) => {
                 let attributes = child.output();
@@ -175,6 +196,37 @@ impl AnalyzerRule for ResolveReferences {
     fn name(&self) -> &str {
         "ResolveReferences"
     }
+}
+
+fn contains_star(expr: &Expr) -> bool {
+    let mut contains = false;
+    expr.apply(|expr| {
+        match expr {
+            Expr::UnresolvedStar(_) => {
+                contains = true;
+                Ok(TreeNodeRecursion::Stop)
+            },
+            _ => Ok(TreeNodeRecursion::Continue),
+        }
+    }).unwrap();
+    contains
+}
+
+fn expand(input: Arc<LogicalPlan>, name_parts: &Vec<String>) -> Result<Vec<Expr>> {
+    // If there is no table specified, use all input attributes.
+    if name_parts.is_empty() {
+        return Ok(input.output().into_iter().map(|attr| Expr::AttributeReference(attr)).collect());
+    }
+
+    let expanded_attributes:Vec<_> = input.output().into_iter().filter(|attr|
+        attr.qualifier.len() == name_parts.len() &&
+        attr.qualifier.iter().zip(name_parts.iter()).all(|(a, b)| a == b)
+    ).map(|attr| Expr::AttributeReference(attr)).collect();
+    if expanded_attributes.len() > 0 {
+        return Ok(expanded_attributes);
+    }
+
+    Err(format!("cannot resolve '{}.*' from {:?}", name_parts.iter().join("."), input.output()))
 }
 
 #[derive(Debug)]

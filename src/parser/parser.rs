@@ -74,6 +74,7 @@ pub fn parse_ast(mut pair: Pair<Rule>) -> Result<Ast> {
             Rule::namedExpressionSeq => return parse_named_expression_seq(pair).map(|x| Ast::Projects(x)),
             Rule::functionCall => return parse_function_call(pair).map(|x| Ast::Expression(x)),
             Rule::constant => return parse_constant(pair).map(|x| Ast::Expression(x)),
+            Rule::star => return parse_star(pair).map(|x| Ast::Expression(x)),
             Rule::columnReference => return parse_column_reference(pair).map(|x| Ast::Expression(x)),
             Rule::cast => return parse_cast(pair).map(|x| Ast::Expression(x)),
             Rule::searchedCase => return parse_searched_case(pair).map(|x| Ast::Expression(x)),
@@ -400,7 +401,14 @@ fn parse_function_call(pair: Pair<Rule>) -> Result<Expr> {
     let mut pairs = pair.into_inner();
     let name = parse_identifier(pairs.next().unwrap())?.to_string();
     let args_pair = pairs.next().unwrap();
-    let arguments:Vec<_> = args_pair.into_inner().map(parse_expression).try_collect()?;
+    let mut arguments:Vec<_> = args_pair.into_inner().map(parse_expression).try_collect()?;
+    // Transform count(*) into count(1).
+    if arguments.len() == 1 && name.to_lowercase() == "count" {
+        arguments = match & arguments[0]{
+            Expr::UnresolvedStar(target) if target.is_empty() => vec![Expr::int_lit(1)],
+            _ => arguments,
+        };
+    }
     Ok(Expr::UnresolvedFunction(UnresolvedFunction{name, arguments}))
 }
 
@@ -624,6 +632,17 @@ fn parse_constant(pair: Pair<Rule>) -> Result<Expr> {
         },
         Rule::STRING => parse_string_constant(pair),
         _ => Err(format!("Unexpected parse_constant {:?}", p))
+    }
+}
+
+fn parse_star(pair: Pair<Rule>) -> Result<Expr> {
+    let mut pairs:Vec<_> = pair.clone().into_inner().collect();
+    if pairs.len() <= 1 {
+        Ok(Expr::UnresolvedStar(Vec::new()))
+    } else {
+        let n = pairs.len() - 1;
+        let target: Vec<_> = pairs.into_iter().take(n).map(|pair| parse_identifier(pair).map(|i| i.to_string())).try_collect()?;
+        Ok(Expr::UnresolvedStar(target))
     }
 }
 

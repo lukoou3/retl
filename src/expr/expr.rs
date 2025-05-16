@@ -15,6 +15,7 @@ use crate::types::{AbstractDataType, DataType};
 #[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub enum Expr {
     UnresolvedAttribute(Vec<String>),
+    UnresolvedStar(Vec<String>),
     UnresolvedAlias(Box<Expr>),
     UnresolvedExtractValue(UnresolvedExtractValue),
     NoOp,
@@ -41,7 +42,7 @@ pub enum Expr {
 impl Expr {
     pub fn foldable(&self) -> bool {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_) | Expr::BoundReference(_) => false,
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedStar(_) | Expr::UnresolvedExtractValue(_) | Expr::UnresolvedFunction(_) | Expr::BoundReference(_) => false,
             Expr::UnresolvedGenerator(_) | Expr::Generator(_)=> false,
             // We should never fold named expressions in order to not remove the alias.
             Expr::AttributeReference(_) | Expr::Alias(_)  => false,
@@ -55,7 +56,7 @@ impl Expr {
 
     pub fn data_type(&self) -> &DataType {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedAlias(_) | Expr::UnresolvedExtractValue(_)
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedStar(_)  | Expr::UnresolvedAlias(_) | Expr::UnresolvedExtractValue(_)
             | Expr::UnresolvedFunction(_) | Expr::UnresolvedGenerator(_)  =>
                 panic!("UnresolvedExpr:{:?}", self),
             Expr::NoOp => DataType::null_type(),
@@ -89,7 +90,7 @@ impl Expr {
 
     pub fn resolved(&self) -> bool {
         match self {
-            Expr::UnresolvedAttribute(_) | Expr::UnresolvedAlias(_) | Expr::UnresolvedExtractValue(_)
+            Expr::UnresolvedAttribute(_) | Expr::UnresolvedStar(_)  | Expr::UnresolvedAlias(_) | Expr::UnresolvedExtractValue(_)
             | Expr::UnresolvedFunction(_) | Expr::UnresolvedGenerator(_)  =>
                 false,
             _ => self.children_resolved() && self.check_input_data_types().is_ok()
@@ -103,6 +104,7 @@ impl Expr {
     pub fn check_input_data_types(&self) -> Result<()> {
         match self {
             Expr::UnresolvedAttribute(_)
+             | Expr::UnresolvedStar(_)
              | Expr::UnresolvedAlias(_)
              | Expr::UnresolvedExtractValue(_)
              | Expr::UnresolvedFunction(_)
@@ -204,6 +206,7 @@ impl Expr {
     pub fn children(&self) -> Vec<&Expr> {
         match self {
             Expr::UnresolvedAttribute(_)
+            | Expr::UnresolvedStar(_)
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
             | Expr::NoOp
@@ -246,6 +249,11 @@ impl Expr {
     pub fn sql(&self) -> String {
         match self {
             Expr::UnresolvedAttribute(name_parts) => name_parts.iter().join("."),
+            Expr::UnresolvedStar(target) => if target.is_empty() {
+                "*".to_string()
+            } else {
+                format!("{}.*", target.iter().join("."))
+            },
             Expr::UnresolvedAlias(child) => format!("UnresolvedAlias({})", child.sql()),
             Expr::UnresolvedExtractValue(UnresolvedExtractValue{child, extraction}) => format!("{}[{}]", child.sql(), extraction.sql()),
             Expr::NoOp => format!("{:?}", self),

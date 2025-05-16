@@ -21,6 +21,7 @@ impl TreeNode for Expr {
     ) -> Result<Transformed<Self>> {
         Ok(match self {
             Expr::UnresolvedAttribute(_)
+            | Expr::UnresolvedStar(_)
             | Expr::BoundReference(_)
             | Expr::AttributeReference(_)
             | Expr::NoOp
