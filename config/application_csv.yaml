@@ -1,0 +1,50 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_source ]
+    schema: "struct<id:bigint, ts:timestamp, cate:string, client_ip:string, in_bytes:bigint, out_bytes:bigint, nuallable_int:int>"
+    rows_per_second: 1
+    number_of_rows: 100
+    fields: [
+      { "name": "id", "type": "int", "min": 1, "max": 1000000, "random": false },
+      { "name": "ts", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "cate", "type": "string", "options": [ "a", "a,b", null, "a,c", "d" ] },
+      { "name": "client_ip", "type": "ipv4", "start": "192.168.0.1", "end": "192.168.0.255" },
+      { "name": "in_bytes", "type": "int", "min": 100, "max": 10000 },
+      { "name": "out_bytes", "type": "int", "min": 100, "max": 10000 },
+      { "name": "nuallable_int", "type": "int", "min": 100, "max": 10000, "null_rate": 0.3 }
+    ]
+  - type: inline
+    outputs: [ inline_source ]
+    schema: "struct<id:bigint, ts:string, cate:string, client_ip:string, in_bytes:bigint, out_bytes:bigint, nuallable_int:int>"
+    data: |
+      [
+        "1,2025-05-21 13:50:47,d,192.168.0.254,7857,1906,2617",
+        "2,2025-05-21 13:50:48,\"a,c\",192.168.0.26,7553,4167,7366",
+        "3,2025-05-21 13:50:49,a,192.168.0.103,3190,244,",
+        "4,2025-05-21 13:50:50,,192.168.0.191,3945,679,",
+        "5,2025-05-21 13:50:51,d,192.168.0.61,4718,4908,6110"
+      ]
+    decoding:
+      codec: csv
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ faker_source ]
+    print_mode: stdout
+    encoding:
+      codec: csv
+  - type: print
+    name: print_inline_source
+    inputs: [ inline_source ]
+    print_mode: stdout
+    encoding:
+      codec: json
+
+#active_sinks: [print_sink]
+active_sinks: [print_inline_source]
