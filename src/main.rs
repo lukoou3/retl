@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::process::exit;
 use clap::{Parser, Subcommand};
 use log::{error, info};
 use flexi_logger::with_thread;
@@ -28,6 +29,8 @@ enum Commands {
         #[command(subcommand)]
         kafka_command: KafkaCommands
     },
+    /// Vector Remap Language CLI
+    Vrl(vrl::cli::Opts),
 }
 
 #[derive(Subcommand)]
@@ -162,6 +165,11 @@ fn main() {
         },
         Commands::Kafka { kafka_command} => {
             run_kafka_command(kafka_command);
+        },
+        Commands::Vrl(s) => {
+            let functions = vrl::stdlib::all();
+            let rst = vrl::cli::cmd::cmd(&s, functions);
+            exit(rst);
         },
     }
 }

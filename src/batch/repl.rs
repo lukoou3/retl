@@ -1,10 +1,12 @@
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use dirs::home_dir;
 use rustyline::config::Configurer;
-use rustyline::DefaultEditor;
+use rustyline::Editor;
 use rustyline::error::ReadlineError;
-use rustyline::history::History;
+use rustyline::history::{History, MemHistory};
 
 use crate::Result;
 use crate::batch::BatchSession;
@@ -48,13 +50,15 @@ pub fn run_sql_command(sql: Option<String>, filename: Option<String>) -> Result<
 }
 
 pub fn run_sql_repl() -> Result<()> {
-    let mut rl = DefaultEditor::new().map_err(|e| format!("Failed to create rustyline editor: {}", e))?;
+    let mut rl = Editor::<(), MemHistory>::new().map_err(|e| format!("Failed to create rustyline editor: {}", e))?;
+    //let mut rl = DefaultEditor::new().map_err(|e| format!("Failed to create rustyline editor: {}", e))?;
     let _ = rl.set_max_history_size(MAX_HISTORY_LINES);
     let mut history_file = home_dir().ok_or("Failed to get home directory")?;
     history_file.push(".rsql_history");
-    if history_file.exists() {
+    let _ = load_history(&mut rl.history_mut(), &history_file);
+    /*if history_file.exists() {
         let _ = rl.load_history(&history_file);
-    }
+    }*/
 
     let mut running = true;
     let mut buffer = String::new();
@@ -84,7 +88,8 @@ pub fn run_sql_repl() -> Result<()> {
                         running = false;
                         break;
                     } else if sql.eq_ignore_ascii_case("history") {
-                        for (i, entry) in rl.history().iter().enumerate() {
+                        let history = rl.history();
+                        for (i, entry) in history.into_iter().enumerate() {
                             println!("{}: {}", i + 1, entry);
                         }
                         continue;
@@ -112,9 +117,47 @@ pub fn run_sql_repl() -> Result<()> {
     }
 
     // 保存历史记录
-    let _ = rl.save_history(&history_file);
+    let _ = save_history(rl.history_mut(), &history_file);
+    //let _ = rl.save_history(&history_file);
 
     Ok(())
+}
+
+fn load_history(history: &mut MemHistory, path: &PathBuf) -> std::io::Result<()> {
+    if path.exists() {
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+        for line in reader.lines() {
+            let line = line?;
+            if !line.trim().is_empty() {
+                let _ = history.add(&unescape_newlines(&line));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn save_history(history: &MemHistory, path: &PathBuf) -> std::io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)?;
+    for entry in history.into_iter() {
+        writeln!(file, "{}", escape_newlines(entry))?;
+    }
+    file.flush()?;
+    Ok(())
+}
+
+// 将换行符转义为 \n，保存时使用
+fn escape_newlines(s: &str) -> String {
+    s.replace("\n", "\\n")
+}
+
+// 将 \n 转义还原为换行符，加载时使用
+fn unescape_newlines(s: &str) -> String {
+    s.replace("\\n", "\n")
 }
 
 /// Splits a SQL string into complete statements (without trailing semicolon) and a remaining part.
