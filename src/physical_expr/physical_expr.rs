@@ -102,6 +102,7 @@ mod tests {
             right: Box::new(Literal::new(Value::Int(10), DataType::Int)),
             f: Box::new(add_int)
         };
+        let expr: Box<dyn PhysicalExpr> = Box::new(expr);
         println!("{:?}", expr);
         let mut row1 = GenericRow::new(vec![
             Value::Int(101),
