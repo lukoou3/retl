@@ -3,7 +3,8 @@ use crate::Result;
 use crate::config::{TaskContext, TransformConfig, TransformProvider};
 use crate::logical_plan::LogicalPlan;
 use crate::sql_utils;
-use crate::transform::{get_process_operator_chain, QueryTransform, Transform};
+use crate::transform::{get_process_operator_chain, Transform};
+use crate::transform::query::QueryTransform;
 use crate::tree_node::{TreeNode};
 use crate::types::{Schema};
 

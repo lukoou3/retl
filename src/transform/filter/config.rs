@@ -4,7 +4,8 @@ use crate::expr::BoundReference;
 use crate::logical_plan::Filter;
 use crate::sql_utils;
 use crate::physical_expr::create_physical_expr;
-use crate::transform::{FilterTransform, Transform};
+use crate::transform::filter::FilterTransform;
+use crate::transform::Transform;
 use crate::types::Schema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

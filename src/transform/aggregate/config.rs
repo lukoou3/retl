@@ -4,7 +4,8 @@ use crate::config::{TaskContext, TransformConfig, TransformProvider};
 use crate::data::{Row};
 use crate::expr::{AttributeReference, Expr};
 use crate::logical_plan::LogicalPlan;
-use crate::transform::{TaskAggregateTransform, Transform, OutOperator, ProcessOperator, get_process_operator_chain};
+use crate::transform::{Transform, OutOperator, ProcessOperator, get_process_operator_chain};
+use crate::transform::aggregate::TaskAggregateTransform;
 use crate::types::Schema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
