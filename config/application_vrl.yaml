@@ -1,0 +1,41 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: inline
+    outputs: [ inline_text ]
+    schema: "text string"
+    data: |
+      [
+        {"id": 1, "name": "Alice", "score": 100, "money": 1000},
+        {"id": 2, "name": "Bob", "score": 200, "money": 2000},
+        {"id": 3, "name": "Charlie", "score": 300, "money": 3000}
+      ]
+    decoding:
+      codec: raw
+
+transforms:
+  - type: vrl
+    inputs: [ inline_text ]
+    outputs: [ vrl ]
+    input_columns: [text]
+    out_schema: "id bigint, name string, score int, money int, money2 int"
+    pipelines:
+      - type: remap
+        source: |
+          . = parse_json!(.text)
+          .money2 = int!(.money) + 1
+      - type: filter
+        source: mod(int!(.id), 2) == 1
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ vrl ]
+    print_mode: log_warn
+    encoding:
+      codec: json
+
+active_sinks: [print_sink]
