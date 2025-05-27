@@ -1,0 +1,101 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: inline
+    outputs: [ inline_text ]
+    schema: "text string"
+    data: |
+      [
+        {"os_type": 4, "os_plant": "IOS-M", "page_id": "Product_Main", "page_name": "pp.com/118065875", "page_param": "searchText=男表&lng=112.935037&lat=23.031227", "visit_time": "2025-05-01 08:12:45"}
+      ]
+    rows_per_second: 10
+    number_of_rows: 1
+    decoding:
+      codec: raw
+
+transforms:
+  - type: vrl
+    inputs: [ inline_text ]
+    outputs: [ vrl ]
+    input_columns: [text]
+    out_schema: "text string"
+    pipelines:
+      - type: remap
+        source: |
+          . = parse_json!(.text)
+          ."if(os_type=4, 'IOS', 'ANDROID')" = if .os_type == 4 { "IOS" } else { "ANDROID" }
+          ."if(os_type in (3, 4), 'IOS', 'ANDROID')" = if includes([3, 4], .os_type) { "IOS" } else { "ANDROID" }
+          .case_when = if .os_type == 1 {
+            "ANDROID"
+          } else if .os_type == 2{
+            "ANDROID-M"
+          } else if .os_type == 3{
+            "IOS"
+          } else if .os_type == 4{
+            "IOS-M"
+          } else {
+            "OTHER"
+          }
+          .nvl = int(.os_type2) ?? 0
+          .coalesce = int(.os_type2) ?? int(.os_type) ?? 0
+          ."5 + 3" = 5 + 3
+          ."5 - 3" = 5 - 3
+          ."5 * 3" = 5 * 3
+          ."5 / 3" = 5 / 3
+          ."mod(5, 3)" = mod(5, 3)
+          ."5 == 3" = 5 == 3
+          ."5 != 3" = 5 != 3
+          ."5 > 3" = 5 > 3
+          ."5 >= 3" = 5 >= 3
+          ."5 < 3" = 5 < 3
+          ."5 <= 3" = 5 <= 3
+          ."5 > 3 && 5 < 3" = 5 > 3 && 5 < 3
+          ."5 > 3 || 5 < 3" = 5 > 3 || 5 < 3
+          ."!(5 < 3)" = !(5 < 3)
+          ."includes([1,2,3], 3)" = includes([1,2,3], 3)
+          # 也可以设置初始值
+          #.page_id = string(.page_id) ?? ""
+          ."length(.page_id)" = length(.page_id) ?? 0
+          ."strip_whitespace(.page_id)" = strip_whitespace(.page_id) ?? null
+          ."downcase(.page_id)" = downcase(.page_id) ?? null
+          ."upcase(.page_id)" = upcase(.page_id) ?? null
+          ."slice(.page_id, 0, 10)" = slice(.page_id, 0, 10) ?? null
+          .".os_plant + '|' + .page_id" = (string(.os_plant) ?? "") + "|" + (string(.page_id) ?? "")
+          .page_param = string(.page_param) ?? ""
+          .page_name = string(.page_name) ?? ""
+          ."split(.page_param, '&')" = split(.page_param, "&")
+          ."replace(.page_param, '&', '#')" = replace(.page_param, "&", "#")
+          ."contains(.page_name, 'pp.com')" = contains(.page_name, "pp.com")
+          ."match(.page_name, 'pp.com/[0-9]+')" = match(.page_name, r'pp.com/[0-9]+')
+          ."parse_regex(.page_name, r'pp.com/([0-9]+)').1" = parse_regex(.page_name, r'pp.com/([0-9]+)', true)."1" ?? ""
+          ."parse_query_string(.page_param).searchText" = parse_query_string(.page_param).searchText
+           .aes_encrypt = {
+             encrypted_message, err = encrypt("abc", "AES-128-CBC-PKCS7", "fd6b639dbcff0c2a", "77b07a672d57d64c")
+             if err == null {
+               encode_base64(encrypted_message)
+             }else{
+               null
+             }
+           }
+           .aes_decrypt = {
+             ciphertext, err = decode_base64("y+49jBd/xd6Kz4pfoQIBbA==")
+             if err == null {
+               decrypt(ciphertext, "AES-128-CBC-PKCS7", "fd6b639dbcff0c2a", "77b07a672d57d64c") ?? null
+             }else{
+               null
+             }
+           }
+          .text = encode_json(., true)
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ vrl ]
+    print_mode: stdout
+    encoding:
+      codec: raw
+
+active_sinks: [print_sink]
