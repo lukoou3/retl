@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+// [START java_declaration]
+// option java_multiple_files = true;
+option java_package = "com.lk.setl.sql.format.protobuf";
+option java_outer_classname = "Proto3TypesProtos";
+// [END java_declaration]
+
+message StructMessage {
+  int64 id = 1;
+  string name = 2;
+  int32 age = 3;
+  double score = 4;
+  optional int64 optional_id = 5;
+  optional int32 optional_age = 6;
+}
+
+message Proto3Types {
+  enum NestedEnum {
+    NOTHING = 0;
+    FIRST = 1;
+    SECOND = 2;
+  }
+
+  int64 int64 = 1;
+  int32 int32 = 2;
+  string text = 3;
+  bytes bytes = 4;
+  NestedEnum enum_val = 5;
+  StructMessage message = 6;
+
+  optional int64 optional_int64 = 7;
+  optional int32 optional_int32 = 8;
+  optional string optional_text = 9;
+  optional bytes optional_bytes = 10;
+  optional NestedEnum optional_enum_val = 11;
+  optional StructMessage optional_message = 12;
+
+  repeated int64 repeated_int64 = 13;
+  repeated int32 repeated_int32 = 14;
+  repeated StructMessage repeated_message = 15;
+}

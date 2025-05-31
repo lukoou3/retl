@@ -30,6 +30,7 @@ enum Commands {
         kafka_command: KafkaCommands
     },
     /// Vector Remap Language CLI
+    #[cfg(feature = "vrl")]
     Vrl(vrl::cli::Opts),
 }
 
@@ -166,6 +167,7 @@ fn main() {
         Commands::Kafka { kafka_command} => {
             run_kafka_command(kafka_command);
         },
+        #[cfg(feature = "vrl")]
         Commands::Vrl(s) => {
             let functions = vrl::stdlib::all();
             let rst = vrl::cli::cmd::cmd(&s, functions);

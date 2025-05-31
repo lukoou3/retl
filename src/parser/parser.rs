@@ -337,7 +337,9 @@ fn parse_struct_data_type(pair: Pair<Rule>) -> Result<DataType> {
 }
 
 fn parse_primitive_data_type(pair: Pair<Rule>) -> Result<DataType> {
-    match parse_identifier(pair)? {
+    let tp = parse_identifier(pair)?.to_string();
+    let tp_lower = tp.to_lowercase();
+    match tp_lower.as_str() {
         "boolean" => Ok(DataType::Boolean),
         "int" | "integer" => Ok(DataType::Int),
         "bigint" | "long" => Ok(DataType::Long),
@@ -347,7 +349,7 @@ fn parse_primitive_data_type(pair: Pair<Rule>) -> Result<DataType> {
         "date" => Ok(DataType::Date),
         "timestamp" => Ok(DataType::Timestamp),
         "binary" => Ok(DataType::Binary),
-        pair => Err(format!("not supported data type: {:?}", pair))
+        _ => Err(format!("not supported data type: {}", tp))
     }
 }
 
