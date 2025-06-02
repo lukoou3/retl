@@ -32,6 +32,7 @@ csv = "1.3"
 rmpv = "1.3"
 rmp = "0.8"
 prost-reflect = "0.14"
+apache-avro = "0.17.0"
 typetag = "0.2"
 config = { version = "0.15.8", features = ["yaml"] }
 # simd-json = "0.14.3"

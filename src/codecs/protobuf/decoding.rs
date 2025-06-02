@@ -107,6 +107,7 @@ fn create_ele_converter(data_type: &DataType, fd: &FieldDescriptor)  -> Result<B
         },
         Kind::Bool => match data_type {
             DataType::Boolean => Box::new(BoolToBooleanConverter),
+            DataType::String => Box::new(BoolToStringConverter),
             _ => return Err(not_match_err(data_type, fd)),
         },
         Kind::String => match data_type {
