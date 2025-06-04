@@ -1,0 +1,37 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  - type: faker
+    outputs: [ faker_object_stat ]
+    schema: "struct<timestamp:timestamp,object_id:bigint,item_id:bigint,device_id:string,device_group:string,data_center:string,vsys_id:int,in_bytes:bigint,out_bytes:bigint,bytes:bigint,new_in_sessions:bigint,new_out_sessions:bigint,sessions:bigint>"
+    rows_per_second: 1
+    fields: [
+      { "name": "timestamp", "type": "timestamp", "timestamp_type": "datetime" },
+      { "name": "object_id", "type": "long", "min": 1, "max": 20 },
+      { "name": "item_id", "type": "long", "min": 1, "max": 5 },
+      { "name": "device_id", "type": "string", "options": [ "001", "002" ] },
+      { "name": "device_group", "type": "string", "options": [ "group-mock" ] },
+      { "name": "data_center", "type": "string", "options": [ "center-mock" ] },
+      { "name": "vsys_id", "type": "int", "options": [1] },
+      { "name": "in_bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "out_bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "bytes", "type": "long", "min": 100, "max": 10000 },
+      { "name": "new_in_sessions", "type": "long", "min": 1, "max": 10 },
+      { "name": "new_out_sessions", "type": "long", "min": 1, "max": 5 },
+      { "name": "sessions", "type": "long", "min": 1, "max": 15 }
+    ]
+
+sinks:
+  # 需要先启动`nc -luk 9999`，用来发送数据，windows使用`nc -lu -p 9999`命令。如果接收到的UDP数据包不包含换行符，nc会将数据暂存在缓冲区，直到收到换行符或触发刷新条件（如按回车）。
+  - type: udp
+    name: udp_sink
+    inputs: [ faker_object_stat ]
+    hostname: 127.0.0.1
+    port: 9999
+    encoding:
+      codec: json
+
+active_sinks: [ udp_sink ]

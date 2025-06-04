@@ -1,0 +1,25 @@
+env:
+  application:
+    name: test
+    parallelism: 1
+
+sources:
+  # {"id":"1","name":"bb","age":1300}
+  # {"id":"1", "name":"aa", "age":30}
+  # 需要启动`nc -u 127.0.0.1 9999`，用来发送数据，windows使用`nc -u 127.0.0.1 9999`命令
+  - type: udp
+    outputs: [ udp_source ]
+    schema: "id bigint, name string, age int"
+    port: 9999
+    decoding:
+      codec: json
+
+sinks:
+  - type: print
+    name: print_sink
+    inputs: [ udp_source ]
+    print_mode: stdout
+    encoding:
+      codec: json
+
+active_sinks: [ print_sink ]

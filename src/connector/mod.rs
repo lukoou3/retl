@@ -15,6 +15,7 @@ mod mysql;
 mod postgres;
 mod inline;
 mod socket;
+mod udp;
 
 pub use source::*;
 pub use sink::*;
